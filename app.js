@@ -9,7 +9,7 @@ import {
 
 import {
   getAuth, onAuthStateChanged,
-  signInWithEmailAndPassword, createUserWithEmailAndPassword,
+  GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult,
   signOut
 } from "https://www.gstatic.com/firebasejs/10.7.2/firebase-auth.js";
 
@@ -992,7 +992,7 @@ function renderTracking(){
   if(!u){
     if(box) box.style.display = "";
     if(logoutBtn) logoutBtn.style.display = "none";
-    headEl.innerHTML = '<div class="muted">Ingresá con tu correo para ver tus pasajeros asignados.</div>';
+    headEl.innerHTML = '<div class="muted">Ingresá con Google para ver tus pasajeros asignados.</div>';
     listEl.innerHTML = "";
     if(statusEl) statusEl.textContent = "";
     if($$("trackingDriverFilter")) { $$("trackingDriverFilter").disabled = true; $$("trackingDriverFilter").innerHTML = '<option value="">(Solo cuando estés logueado)</option>'; }
@@ -1125,37 +1125,35 @@ async function updatePassengerTracking(passengerId, trackingStatus, trackingNote
 }
 
 function wireTrackingUI(){
-  if($$("btnLogin")){
-    $$("btnLogin").addEventListener("click", async ()=>{
-      const email = ($$("authEmail").value||"").trim().toLowerCase();
-      const pass = ($$("authPassword").value||"").trim();
-      if(!email || !pass) return alert("Completá correo y contraseña");
+  const statusEl = $$("authStatus");
+
+  if($$("btnGoogleLogin")){
+    $$("btnGoogleLogin").addEventListener("click", async ()=>{
       try{
-        await signInWithEmailAndPassword(auth, email, pass);
+        const provider = new GoogleAuthProvider();
+        provider.setCustomParameters({ prompt: "select_account" });
+
+        // Popup first; if blocked/fails, fallback to redirect (better for mobile)
+        try{
+          await signInWithPopup(auth, provider);
+        }catch(e){
+          console.warn("Popup login failed, trying redirect", e);
+          if(statusEl) statusEl.textContent = "Abriendo login con Google...";
+          await signInWithRedirect(auth, provider);
+        }
       }catch(e){
+        console.warn(e);
         alert(e?.message || String(e));
       }
     });
   }
-  if($$("btnRegister")){
-    $$("btnRegister").addEventListener("click", async ()=>{
-      const email = ($$("authEmail").value||"").trim().toLowerCase();
-      const pass = ($$("authPassword").value||"").trim();
-      if(!email || !pass) return alert("Completá correo y contraseña");
-      try{
-        await createUserWithEmailAndPassword(auth, email, pass);
-        // Al registrarse, intentar vincular con driver por email (si existe)
-        toast("Registrado. Si tu correo coincide con un chofer cargado, se habilita tu tracking.");
-      }catch(e){
-        alert(e?.message || String(e));
-      }
-    });
-  }
+
   if($$("btnLogout")){
     $$("btnLogout").addEventListener("click", async ()=>{
       await signOut(auth);
     });
   }
+
   if($$("trackingDriverFilter")){
     $$("trackingDriverFilter").addEventListener("change", ()=> renderTracking());
   }
@@ -1184,6 +1182,28 @@ function resolveAuthRole(){
   // Sync UI
   if($$("eventId")) $$("eventId").value = STATE.eventId;
   if($$("eventSelect")) renderEventSelect();
+  // Tracking Auth (Google)
+  wireTrackingUI();
+
+  // Handle redirect results (mobile)
+  try{ await getRedirectResult(auth); }catch(e){ /* ignore */ }
+
+  onAuthStateChanged(auth, async (user)=>{
+    STATE.auth.user = user || null;
+
+    // Always refresh drivers before resolving role (needs drivers.email)
+    try{ await loadDrivers(); }catch(e){}
+
+    if(user){
+      resolveAuthRole();
+    }else{
+      STATE.auth.isAdmin = false;
+      STATE.auth.driver = null;
+    }
+    renderTracking();
+  });
+
+
 
   await refreshAll();
 })();
