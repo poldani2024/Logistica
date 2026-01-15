@@ -30,7 +30,7 @@ const auth = getAuth();
 
 // Admin allowlist (emails en minúscula). Podés editar esta lista.
 const ADMIN_EMAILS = [
-  // "admin@tu-dominio.com",
+  "pedro.l.oldani@gmail.com",
 ];
 
 function isAdminEmail(email){
