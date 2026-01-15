@@ -30,9 +30,9 @@ body{
 .title{font-weight:700;font-size:18px}
 .subtitle{color:var(--muted);font-size:12px}
 
-.event{display:flex;gap:8px;align-items:end}
-.event label{color:var(--muted);font-size:12px;display:block}
-.event input{
+.event{display:flex;gap:10px;align-items:flex-end;padding:12px 18px;border-bottom:1px solid var(--line);background:rgba(11,16,32,.9);backdrop-filter:blur(10px)}
+.event .field span{color:var(--muted);font-size:12px}
+.event input, .event select{
   width:140px;
   padding:10px;
   border-radius:10px;
@@ -79,7 +79,7 @@ body{
 @media(max-width:900px){
   .grid{grid-template-columns:1fr}
   .grid2{grid-template-columns:1fr}
-  .event{display:none}
+  .event{display:flex}
 }
 
 .card{
@@ -162,3 +162,13 @@ tr:hover td{background:rgba(255,255,255,.03)}
 .field label{font-size:12px;color:var(--muted)}
 .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
 .log{margin-top:10px;font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;color:var(--muted);white-space:pre-wrap}
+
+/* --- Mobile: que el selector de evento SIEMPRE se vea y ocupe ancho --- */
+@media(max-width:640px){
+  .topbar{padding:14px 14px}
+  .event{padding:12px 14px;flex-wrap:wrap;gap:8px}
+  .event .field{flex:1;min-width:220px}
+  #eventSelect{width:100%}
+  #btnReloadEvents{width:100%}
+  .tabs{overflow:auto}
+}
