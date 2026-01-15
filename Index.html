@@ -31,6 +31,7 @@
     <button class="tab" data-view="drivers">Choferes</button>
     <button class="tab" data-view="passengers">Jóvenes</button>
     <button class="tab" data-view="assignments">Asignaciones</button>
+    <button class="tab" data-view="tracking">Tracking</button>
     <button class="tab" data-view="import">Importar</button>
     <button class="tab" data-view="settings">Config</button>
   </nav>
@@ -193,6 +194,54 @@
         </div>
       </div>
     </section>
+
+
+    <!-- TRACKING -->
+    <section id="view-tracking" class="view">
+      <div class="card">
+        <div class="rowBetween">
+          <div>
+            <div class="cardTitle">Tracking de pasajeros</div>
+            <div class="muted">Choferes actualizan el estado de sus pasajeros. Admin puede ver todos.</div>
+          </div>
+          <div class="row">
+            <button class="btnSecondary" id="btnLogout" style="display:none;">Salir</button>
+          </div>
+        </div>
+
+        <div id="trackingAuthBox" class="grid2" style="margin-top:12px;">
+          <div>
+            <div class="cardTitle small">Ingresar / Registrar chofer</div>
+            <div class="muted">Usá tu correo y una contraseña (Email/Password en Firebase Auth).</div>
+            <div class="field"><label>Correo</label><input id="authEmail" placeholder="chofer@correo.com" autocomplete="username"></div>
+            <div class="field"><label>Contraseña</label><input id="authPassword" type="password" placeholder="••••••••" autocomplete="current-password"></div>
+            <div class="actions">
+              <button class="btn" id="btnLogin">Ingresar</button>
+              <button class="btnSecondary" id="btnRegister">Registrar</button>
+            </div>
+            <div class="muted" id="authStatus"></div>
+          </div>
+
+          <div>
+            <div class="cardTitle small">Modo Admin</div>
+            <div class="muted">Si tu correo está marcado como Admin, vas a poder filtrar por chofer.</div>
+            <div class="field">
+              <label>Ver por chofer</label>
+              <select id="trackingDriverFilter" disabled>
+                <option value="">(Solo cuando estés logueado)</option>
+              </select>
+            </div>
+            <div class="muted">Estados: Pendiente • En tránsito • En destino • Ausente</div>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div id="trackingHeader" class="muted"></div>
+        <div id="trackingList" class="listWrap" style="margin-top:10px;"></div>
+      </div>
+    </section>
+
 
     <!-- IMPORT -->
     <section id="view-import" class="view">

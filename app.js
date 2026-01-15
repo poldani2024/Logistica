@@ -7,16 +7,36 @@ import {
   runTransaction
 } from "https://www.gstatic.com/firebasejs/10.7.2/firebase-firestore.js";
 
+import {
+  getAuth, onAuthStateChanged,
+  signInWithEmailAndPassword, createUserWithEmailAndPassword,
+  signOut
+} from "https://www.gstatic.com/firebasejs/10.7.2/firebase-auth.js";
+
 let STATE = {
   eventId: "event1",
   drivers: [],
   passengers: [],
   assignments: [], // docs: {id, driverId, passengerIds[]}
   events: [],
+  auth: { user: null, isAdmin: false, driver: null },
 };
 
 const $ = (id) => document.getElementById(id);
 const $$ = (id) => document.getElementById(id);
+
+
+const auth = getAuth();
+
+// Admin allowlist (emails en minúscula). Podés editar esta lista.
+const ADMIN_EMAILS = [
+  // "admin@tu-dominio.com",
+];
+
+function isAdminEmail(email){
+  const e = (email||"").trim().toLowerCase();
+  return ADMIN_EMAILS.includes(e);
+}
 
 
 function toast(msg){
@@ -130,6 +150,7 @@ async function refreshAll(){
   renderPassengersTable();
   renderAssignments();
   renderDashboard();
+  if(typeof renderTracking==="function") renderTracking();
 }
 
 $("btnRefreshDashboard").addEventListener("click", refreshAll);
@@ -203,6 +224,10 @@ function assignedCount(driverId){
 
 function passengerById(id){ return STATE.passengers.find(p=>p.id===id); }
 function driverById(id){ return STATE.drivers.find(d=>d.id===id); }
+function driverByEmail(email){
+  const e = (email||"").trim().toLowerCase();
+  return STATE.drivers.find(d => (d.email||"").trim().toLowerCase() === e) || null;
+}
 
 /* -------------------- DASHBOARD -------------------- */
 function renderDashboard(){
@@ -262,7 +287,7 @@ function renderDriversTable(){
   <table>
     <thead>
       <tr>
-        <th>Chofer</th><th>Tel</th><th>Zona</th><th>Cap</th><th>Ocupación</th><th></th>
+        <th>Chofer</th><th>Tel</th><th>Correo</th><th>Zona</th><th>Cap</th><th>Ocupación</th><th></th>
       </tr>
     </thead>
     <tbody>
@@ -273,6 +298,7 @@ function renderDriversTable(){
         <tr>
           <td><strong>${escapeHtml(fullName(d))}</strong></td>
           <td>${escapeHtml(d.phone||"")}</td>
+          <td>${escapeHtml(d.email||"")}</td>
           <td><span class="tag">${escapeHtml(d.zone||"")}</span></td>
           <td>${cap}</td>
           <td>${used}/${cap}</td>
@@ -294,7 +320,7 @@ function renderDriversTable(){
 
 function renderDriverDetailForm(driver){
   const isNew = !driver;
-  const d = driver || { firstName:"", lastName:"", phone:"", zone:"", capacity:4, active:true };
+  const d = driver || { firstName:"", lastName:"", phone:"", email:"", zone:"", capacity:4, active:true, role:"driver" };
 
   const a = driver ? driverAssignment(driver.id) : null;
   const passengerIds = a?.passengerIds || [];
@@ -314,6 +340,7 @@ function renderDriverDetailForm(driver){
         <div class="field"><label>Nombre</label><input id="d_firstName" value="${escapeHtml(d.firstName)}"></div>
         <div class="field"><label>Apellido</label><input id="d_lastName" value="${escapeHtml(d.lastName)}"></div>
         <div class="field"><label>Teléfono</label><input id="d_phone" value="${escapeHtml(d.phone)}"></div>
+        <div class="field"><label>Correo</label><input id="d_email" value="${escapeHtml(d.email||"")}" placeholder="chofer@correo.com"></div>
         <div class="field"><label>Zona</label><input id="d_zone" value="${escapeHtml(d.zone)}" placeholder="Centro / Norte / Sur..."></div>
         <div class="field"><label>Capacidad</label><input id="d_capacity" type="number" min="1" max="20" value="${escapeHtml(String(d.capacity ?? 4))}"></div>
         <div class="actions">
@@ -367,9 +394,11 @@ function renderDriverDetailForm(driver){
       firstName: $("d_firstName").value.trim(),
       lastName: $("d_lastName").value.trim(),
       phone: $("d_phone").value.trim(),
+      email: ($("d_email") ? $("d_email").value.trim().toLowerCase() : ""),
       zone: $("d_zone").value.trim(),
       capacity: Number($("d_capacity").value || 4),
       active: true,
+      role: (driver && driver.role) ? driver.role : "driver",
       eventId: STATE.eventId,
       updatedAt: serverTimestamp(),
     };
@@ -881,6 +910,7 @@ $("btnImportDrivers").addEventListener("click", async ()=>{
       firstName: (r.firstName||"").trim(),
       lastName: (r.lastName||"").trim(),
       phone: (r.phone||"").trim(),
+      email: (r.email||"").trim().toLowerCase(),
       zone: (r.zone||"").trim(),
       capacity: Number((r.capacity||"").trim() || 4),
       active: true,
@@ -912,6 +942,235 @@ $("btnDangerClearEvent").addEventListener("click", async ()=>{
   $("importLog").textContent = delLog.join("\n") || "No había nada";
   await refreshAll();
 });
+
+
+/* -------------------- TRACKING (auth + statuses) -------------------- */
+const TRACKING_STATUSES = ["Pendiente","En tránsito","En destino","Ausente"];
+
+// Ensure passenger has tracking fields
+function passengerTracking(p){
+  return {
+    status: p.trackingStatus || (p.status==="assigned" ? "Pendiente" : "Pendiente"),
+    note: p.trackingNote || "",
+    updatedAt: p.trackingUpdatedAt || null,
+    updatedBy: p.trackingUpdatedBy || null,
+  };
+}
+
+function canEditPassenger(p){
+  const u = STATE.auth.user;
+  if(!u) return false;
+  if(STATE.auth.isAdmin) return true;
+  // driver can edit only if assigned to them
+  const d = STATE.auth.driver;
+  return !!d && p.assignedDriverId === d.id;
+}
+
+function visiblePassengersForTracking(){
+  const u = STATE.auth.user;
+  if(!u) return [];
+  if(STATE.auth.isAdmin){
+    const filter = $$("trackingDriverFilter") ? $$("trackingDriverFilter").value : "";
+    if(filter) return STATE.passengers.filter(p => p.assignedDriverId === filter);
+    return STATE.passengers.filter(p => p.status==="assigned" && p.assignedDriverId);
+  }
+  const d = STATE.auth.driver;
+  if(!d) return [];
+  return STATE.passengers.filter(p => p.assignedDriverId === d.id);
+}
+
+function renderTracking(){
+  const box = $$("trackingAuthBox");
+  const listEl = $$("trackingList");
+  const headEl = $$("trackingHeader");
+  const logoutBtn = $$("btnLogout");
+  const statusEl = $$("authStatus");
+
+  if(!listEl || !headEl) return;
+
+  const u = STATE.auth.user;
+  if(!u){
+    if(box) box.style.display = "";
+    if(logoutBtn) logoutBtn.style.display = "none";
+    headEl.innerHTML = '<div class="muted">Ingresá con tu correo para ver tus pasajeros asignados.</div>';
+    listEl.innerHTML = "";
+    if(statusEl) statusEl.textContent = "";
+    if($$("trackingDriverFilter")) { $$("trackingDriverFilter").disabled = true; $$("trackingDriverFilter").innerHTML = '<option value="">(Solo cuando estés logueado)</option>'; }
+    return;
+  }
+
+  if(box) box.style.display = "";
+  if(logoutBtn) logoutBtn.style.display = "";
+
+  const role = STATE.auth.isAdmin ? "Admin" : "Chofer";
+  const driverName = STATE.auth.driver ? fullName(STATE.auth.driver) : "-";
+  headEl.innerHTML = `
+    <div class="rowBetween">
+      <div>
+        <div><strong>Logueado:</strong> ${escapeHtml(u.email||"")} • <span class="tag">${role}</span></div>
+        <div class="muted">${STATE.auth.isAdmin ? "Podés ver todos o filtrar por chofer." : `Chofer: ${escapeHtml(driverName)}`}</div>
+      </div>
+      <div class="muted">Evento: <strong>${escapeHtml(STATE.eventId)}</strong></div>
+    </div>
+  `;
+
+  // Fill driver filter for admin
+  const df = $$("trackingDriverFilter");
+  if(df){
+    if(STATE.auth.isAdmin){
+      df.disabled = false;
+      const current = df.value || "";
+      df.innerHTML = '<option value="">Todos los choferes</option>' + STATE.drivers.map(d=>`<option value="${d.id}">${escapeHtml(fullName(d))} • ${escapeHtml(d.email||"")}</option>`).join("");
+      df.value = current;
+    }else{
+      df.disabled = true;
+      df.innerHTML = '<option value="">(Solo Admin)</option>';
+    }
+  }
+
+  const list = visiblePassengersForTracking();
+  if(!list.length){
+    listEl.innerHTML = '<div class="muted">No hay pasajeros para mostrar.</div>';
+    return;
+  }
+
+  listEl.innerHTML = list.map(p=>{
+    const tr = passengerTracking(p);
+    const driver = p.assignedDriverId ? driverById(p.assignedDriverId) : null;
+    const editable = canEditPassenger(p);
+
+    const opts = TRACKING_STATUSES.map(s=>`<option value="${escapeHtml(s)}" ${tr.status===s?"selected":""}>${escapeHtml(s)}</option>`).join("");
+    return `
+      <div class="item" data-track="${p.id}">
+        <div class="itemHeader">
+          <div>
+            <div class="itemTitle">${escapeHtml(fullName(p))}</div>
+            <div class="muted">${escapeHtml(p.phone||"")} • ${escapeHtml(p.address||"")} • <span class="tag">${escapeHtml(p.zone||"")}</span></div>
+            ${STATE.auth.isAdmin ? `<div class="muted">Chofer: <strong>${driver ? escapeHtml(fullName(driver)) : "-"}</strong></div>` : ""}
+          </div>
+          <div class="pill">${escapeHtml(tr.status)}</div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="grid2" style="gap:10px;">
+          <div class="field">
+            <label>Estado</label>
+            <select class="trackStatus" ${editable ? "" : "disabled"}>${opts}</select>
+          </div>
+          <div class="field">
+            <label>Nota</label>
+            <input class="trackNote" ${editable ? "" : "disabled"} value="${escapeHtml(tr.note)}" placeholder="Ej: No responde, salió tarde...">
+          </div>
+        </div>
+
+        <div class="rowBetween" style="margin-top:10px;">
+          <div class="muted">${tr.updatedAt ? "Actualizado" : "Sin cambios"}</div>
+          <button class="btnSecondary btnSaveTrack" ${editable ? "" : "disabled"}>Guardar</button>
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  listEl.querySelectorAll(".item[data-track]").forEach(card=>{
+    const pid = card.dataset.track;
+    const btn = card.querySelector(".btnSaveTrack");
+    const sel = card.querySelector(".trackStatus");
+    const note = card.querySelector(".trackNote");
+    if(btn){
+      btn.addEventListener("click", async ()=>{
+        try{
+          await updatePassengerTracking(pid, sel.value, note.value);
+          await loadPassengers(); // refresh list
+          renderTracking();
+          toast("Tracking guardado");
+        }catch(e){
+          alert(e?.message || String(e));
+        }
+      });
+    }
+  });
+}
+
+async function updatePassengerTracking(passengerId, trackingStatus, trackingNote){
+  const passengerRef = doc(db,"passengers", passengerId);
+
+  const status = (trackingStatus||"Pendiente").trim();
+  const note = (trackingNote||"").trim();
+
+  await runTransaction(db, async (tx)=>{
+    const snap = await tx.get(passengerRef);
+    if(!snap.exists()) throw new Error("Pasajero no existe");
+    const p = snap.data();
+
+    if(p.eventId !== STATE.eventId) throw new Error("EventId no coincide");
+
+    // permisos lógicos (además de Rules)
+    const u = STATE.auth.user;
+    if(!u) throw new Error("No autenticado");
+
+    if(!STATE.auth.isAdmin){
+      const d = STATE.auth.driver;
+      if(!d) throw new Error("No sos chofer válido");
+      if(p.assignedDriverId !== d.id) throw new Error("No podés editar pasajeros de otro chofer");
+    }
+
+    tx.update(passengerRef, {
+      trackingStatus: status,
+      trackingNote: note,
+      trackingUpdatedAt: serverTimestamp(),
+      trackingUpdatedBy: (u.email||"").toLowerCase(),
+    });
+  });
+}
+
+function wireTrackingUI(){
+  if($$("btnLogin")){
+    $$("btnLogin").addEventListener("click", async ()=>{
+      const email = ($$("authEmail").value||"").trim().toLowerCase();
+      const pass = ($$("authPassword").value||"").trim();
+      if(!email || !pass) return alert("Completá correo y contraseña");
+      try{
+        await signInWithEmailAndPassword(auth, email, pass);
+      }catch(e){
+        alert(e?.message || String(e));
+      }
+    });
+  }
+  if($$("btnRegister")){
+    $$("btnRegister").addEventListener("click", async ()=>{
+      const email = ($$("authEmail").value||"").trim().toLowerCase();
+      const pass = ($$("authPassword").value||"").trim();
+      if(!email || !pass) return alert("Completá correo y contraseña");
+      try{
+        await createUserWithEmailAndPassword(auth, email, pass);
+        // Al registrarse, intentar vincular con driver por email (si existe)
+        toast("Registrado. Si tu correo coincide con un chofer cargado, se habilita tu tracking.");
+      }catch(e){
+        alert(e?.message || String(e));
+      }
+    });
+  }
+  if($$("btnLogout")){
+    $$("btnLogout").addEventListener("click", async ()=>{
+      await signOut(auth);
+    });
+  }
+  if($$("trackingDriverFilter")){
+    $$("trackingDriverFilter").addEventListener("change", ()=> renderTracking());
+  }
+}
+
+function resolveAuthRole(){
+  const u = STATE.auth.user;
+  if(!u) return;
+  const email = (u.email||"").toLowerCase();
+  const driver = driverByEmail(email);
+  const admin = isAdminEmail(email) || (driver && driver.role === "admin");
+  STATE.auth.isAdmin = !!admin;
+  STATE.auth.driver = driver || null;
+}
+
 
 /* -------------------- START -------------------- */
 (async function init(){
