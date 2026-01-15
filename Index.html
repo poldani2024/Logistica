@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Logística Evento</title>
   <link rel="stylesheet" href="./styles.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+
 </head>
 <body>
   <header class="topbar">
@@ -25,6 +27,7 @@
 
   <nav class="tabs">
     <button class="tab active" data-view="dashboard">Dashboard</button>
+    <button class="tab" data-view="map">Mapa</button>
     <button class="tab" data-view="drivers">Choferes</button>
     <button class="tab" data-view="passengers">Jóvenes</button>
     <button class="tab" data-view="assignments">Asignaciones</button>
@@ -62,6 +65,37 @@
           <button class="btn" id="btnRefreshDashboard">Refrescar</button>
         </div>
         <div id="pendingByZone" class="tableWrap"></div>
+      </div>
+    </section>
+    <section id="view-map" class="view">
+      <div class="card">
+        <div class="rowBetween">
+          <div>
+            <div class="cardTitle">Mapa (Gran Rosario)</div>
+            <div class="muted">Pasajeros: verde = asignado, rojo = pendiente.</div>
+          </div>
+    
+          <div class="row">
+            <button class="btnSecondary" id="btnGeocodePassengers">
+              Geocodificar jóvenes sin coordenadas
+            </button>
+            <button class="btn" id="btnRefreshMap">Refrescar</button>
+          </div>
+        </div>
+    
+        <div class="filters">
+          <select id="mapZoneFilter">
+            <option value="">Todas las zonas</option>
+          </select>
+    
+          <select id="mapShow">
+            <option value="all">Mostrar: todo</option>
+            <option value="passengers">Solo pasajeros</option>
+            <option value="drivers">Solo choferes</option>
+          </select>
+        </div>
+    
+        <div id="map" style="height: 560px; border-radius:16px; border:1px solid var(--line);"></div>
       </div>
     </section>
 
@@ -218,6 +252,7 @@
   <footer class="footer muted">
     Hecho para asignación simple por zona • Sin login (modo abierto)
   </footer>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <script type="module" src="./firebase-init.js"></script>
   <script type="module" src="./csv.js"></script>
