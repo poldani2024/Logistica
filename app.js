@@ -12,18 +12,12 @@ let STATE = {
   drivers: [],
   passengers: [],
   assignments: [], // docs: {id, driverId, passengerIds[]}
+  events: [],
 };
 
 const $ = (id) => document.getElementById(id);
-
-// Optional get (returns null if not present)
 const $$ = (id) => document.getElementById(id);
 
-// View helper
-function isViewActive(viewName){
-  const el = $$(`view-${viewName}`);
-  return !!el && el.classList.contains("active");
-}
 
 function toast(msg){
   const el = $("copyHint");
@@ -39,16 +33,89 @@ document.querySelectorAll(".tab").forEach(btn=>{
     const view = btn.dataset.view;
     document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
     $(`view-${view}`).classList.add("active");
-
-    // If map view, render it (Leaflet must be loaded via index.html)
-    if(view === "map" && typeof renderMap === "function"){
-      try { renderMap(); } catch(e){ console.warn("Map render error", e); }
-    }
   });
 });
 
 /* -------------------- EVENT ID -------------------- */
-$("btnSetEvent").addEventListener("click", async ()=>{
+
+/* -------------------- EVENTS (dropdown) -------------------- */
+// Uses collection "events". Each document id is the eventId.
+// Suggested fields: { name, date } (date can be string or timestamp)
+async function loadEvents(){
+  const ref = collection(db, "events");
+  let qy = ref;
+  // Try to order by date desc, if field exists; otherwise falls back.
+  try{
+    qy = query(ref, orderBy("date", "desc"));
+  }catch(_e){
+    qy = ref;
+  }
+  const snap = await getDocs(qy);
+  STATE.events = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  renderEventSelect();
+}
+
+function renderEventSelect(){
+  const sel = $$("eventSelect");
+  if(!sel) return; // UI not present, keep using text eventId
+
+  if(!STATE.events || STATE.events.length === 0){
+    sel.innerHTML = '<option value="">(Sin eventos)</option>';
+    return;
+  }
+
+  sel.innerHTML = STATE.events.map(ev=>{
+    const name = ev.name || ev.title || ev.id;
+    // If date is a Firestore Timestamp, show YYYY-MM-DD-ish
+    let dateTxt = "";
+    if(ev.date){
+      if(typeof ev.date === "string") dateTxt = ev.date;
+      else if(typeof ev.date?.toDate === "function"){
+        const d = ev.date.toDate();
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth()+1).padStart(2,"0");
+        const dd = String(d.getDate()).padStart(2,"0");
+        dateTxt = `${yyyy}-${mm}-${dd}`;
+      }
+    }
+    const label = dateTxt ? `${name} — ${dateTxt}` : `${name}`;
+    return `<option value="${escapeHtml(ev.id)}">${escapeHtml(label)}</option>`;
+  }).join("");
+
+  const saved = localStorage.getItem("selectedEventId");
+  const currentText = $$("eventId") ? $$("eventId").value.trim() : "";
+  const preferred = saved || STATE.eventId || currentText || STATE.events[0].id;
+  const exists = STATE.events.some(e => e.id === preferred);
+  const finalId = exists ? preferred : STATE.events[0].id;
+
+  sel.value = finalId;
+  STATE.eventId = finalId;
+
+  // Keep old text input (if exists) in sync
+  if($$("eventId")) $$("eventId").value = finalId;
+}
+
+// UI listeners (optional)
+if($$("eventSelect")){
+  $$("eventSelect").addEventListener("change", async (e)=>{
+    const v = e.target.value;
+    if(!v) return;
+    STATE.eventId = v;
+    localStorage.setItem("selectedEventId", v);
+    if($$("eventId")) $$("eventId").value = v;
+    await refreshAll();
+    toast("Evento aplicado");
+  });
+}
+if($$("btnReloadEvents")){
+  $$("btnReloadEvents").addEventListener("click", async ()=>{
+    await loadEvents();
+    await refreshAll();
+    toast("Eventos recargados");
+  });
+}
+
+if($$("btnSetEvent")) $("btnSetEvent").addEventListener("click", async ()=>{
   const v = $("eventId").value.trim();
   STATE.eventId = v || "event1";
   await refreshAll();
@@ -63,39 +130,12 @@ async function refreshAll(){
   renderPassengersTable();
   renderAssignments();
   renderDashboard();
-  if(isViewActive("map") && typeof renderMap === "function"){
-    try { renderMap(); } catch(e){ console.warn("Map render error", e); }
-  }
 }
 
 $("btnRefreshDashboard").addEventListener("click", refreshAll);
 $("btnRefreshDrivers").addEventListener("click", loadDriversAndRender);
 $("btnRefreshPassengers").addEventListener("click", loadPassengersAndRender);
 $("btnRefreshAssignments").addEventListener("click", loadAssignmentsAndRender);
-
-// -------------------- MAP (optional UI) --------------------
-if($$("btnRefreshMap")){
-  $$("btnRefreshMap").addEventListener("click", async ()=>{
-    await refreshAll();
-    if(typeof renderMap === "function") renderMap();
-  });
-}
-if($$("mapZoneFilter")) $$("mapZoneFilter").addEventListener("change", ()=>{ if(typeof renderMap==="function") renderMap(); });
-if($$("mapShow")) $$("mapShow").addEventListener("change", ()=>{ if(typeof renderMap==="function") renderMap(); });
-
-if($$("btnGeocodePassengers")){
-  $$("btnGeocodePassengers").addEventListener("click", async ()=>{
-    try{
-      await geocodeMissingPassengers({ max: 20, delayMs: 1100 });
-      await loadPassengers();
-      if(typeof renderMap==="function") renderMap();
-      toast("Geocoding hecho (hasta 20 por tanda)");
-    }catch(e){
-      console.warn(e);
-      alert(e?.message || String(e));
-    }
-  });
-}
 
 async function loadDriversAndRender(){ await loadDrivers(); renderZones(); renderDriversTable(); renderDashboard(); }
 async function loadPassengersAndRender(){ await loadPassengers(); renderZones(); renderPassengersTable(); renderDashboard(); }
@@ -135,11 +175,10 @@ function uniqZones(){
 function renderZones(){
   const zones = uniqZones();
   const selects = [
-    $$("driverZoneFilter"),
-    $$("passengerZoneFilter"),
-    $$("assignmentZoneFilter"),
-    $$("mapZoneFilter"),
-  ].filter(Boolean);
+    $("driverZoneFilter"),
+    $("passengerZoneFilter"),
+    $("assignmentZoneFilter"),
+  ];
   selects.forEach(sel=>{
     const current = sel.value;
     sel.innerHTML = `<option value="">Todas las zonas</option>` + zones.map(z=>`<option value="${escapeHtml(z)}">${escapeHtml(z)}</option>`).join("");
@@ -874,327 +913,18 @@ $("btnDangerClearEvent").addEventListener("click", async ()=>{
   await refreshAll();
 });
 
-
-/* -------------------- MAP (Leaflet + OSM) -------------------- */
-/*
-Requisitos en index.html:
-- Leaflet CSS en <head>
-- Leaflet JS (no module) antes de app.js
-- Vista con: <div id="map"></div> y controles:
-  btnRefreshMap, btnGeocodePassengers, mapZoneFilter, mapShow (opcionales)
-*/
-
-// Estado del mapa
-let MAP = {
-  map: null,
-  layers: [],
-  zoneLayers: [],
-  inited: false,
-};
-
-// Zonas aproximadas según tus límites (para sombreado/etiquetas del mapa)
-// Centro: Del Valle (N) – Pellegrini (Oeste del Centro) / Oroño (Sur del Centro) – Belgrano/Río (E)
-// Norte: Del Valle hacia Baigorria + ribera
-// Sur: Oroño hacia Saladillo + ribera
-// Oeste: al oeste de Pellegrini/Oroño, subiendo hasta límite con Funes/Roldán (aprox)
-// Este: franja ribereña (Belgrano / Av. de la Costa – Río)
-const ZONES = {
-  "Centro": {
-    color: "#6aa9ff",
-    polygon: [
-      // NW (aprox Del Valle & Oroño)
-      [-32.9295, -60.6562],
-      // NE (aprox Del Valle & Belgrano/Costanera)
-      [-32.9295, -60.6225],
-      // SE (aprox Pellegrini & Belgrano/Costanera)
-      [-32.9551, -60.6225],
-      // SW (Oroño & Pellegrini) coordenada oficial PT01 como ancla
-      [-32.9551, -60.6562],
-    ],
-    center: [-32.9423, -60.6392],
-  },
-
-  "Norte": {
-    color: "#8be28b",
-    polygon: [
-      // SW (Del Valle hacia el oeste / FFCC Mitre aprox)
-      [-32.9295, -60.7050],
-      // SE (Del Valle hacia ribera)
-      [-32.9295, -60.6225],
-      // NE (límite norte municipal hacia ribera)
-      [-32.8600, -60.6100],
-      // NW (límite norte municipal hacia oeste)
-      [-32.8600, -60.7350],
-    ],
-    center: [-32.8920, -60.6700],
-  },
-
-  "Sur": {
-    color: "#ffb36a",
-    polygon: [
-      // NW (Bv Oroño hacia oeste)
-      [-32.9551, -60.7050],
-      // NE (Bv Oroño hacia ribera)
-      [-32.9551, -60.6225],
-      // SE (Arroyo Saladillo / límite sur hacia ribera)
-      [-33.0200, -60.6100],
-      // SW (Arroyo Saladillo / límite sur hacia oeste)
-      [-33.0200, -60.7400],
-    ],
-    center: [-32.9900, -60.6750],
-  },
-
-  "Oeste": {
-    color: "#d1a6ff",
-    polygon: [
-      // Este (borde con Centro/Oeste por Pellegrini en la parte central, lo aproximamos como "franja")
-      [-32.8600, -60.7050],
-      [-32.8600, -60.7800], // hacia Funes/Roldán aprox
-      [-33.0200, -60.7900],
-      [-33.0200, -60.7050],
-    ],
-    center: [-32.9450, -60.7550],
-  },
-
-  "Este": {
-    color: "#ffd66a",
-    polygon: [
-      // franja costera aproximada: Belgrano/Costa -> Río Paraná
-      [-32.8600, -60.6350],
-      [-32.8600, -60.5600],
-      [-33.0200, -60.5600],
-      [-33.0200, -60.6350],
-    ],
-    center: [-32.9450, -60.5950],
-  },
-};
-
-
-function zoneOf(item){
-  const z = (item.zone||"").trim();
-  return ZONES[z] ? z : null;
-}
-
-function fallbackLatLng(item){
-  const z = zoneOf(item);
-  if(z) return ZONES[z].center;
-  return [-32.9468, -60.6393]; // Rosario
-}
-
-function circleIcon(color){
-  return L.divIcon({
-    className: "",
-    html: `<div style="
-      width:14px;height:14px;border-radius:50%;
-      background:${color};
-      border:2px solid rgba(255,255,255,.9);
-      box-shadow:0 2px 8px rgba(0,0,0,.35);
-    "></div>`,
-    iconSize: [14,14],
-    iconAnchor: [7,7],
-  });
-}
-
-function driverIcon(color){
-  return L.divIcon({
-    className: "",
-    html: `<div style="
-      width:16px;height:16px;border-radius:4px;
-      background:${color};
-      border:2px solid rgba(255,255,255,.9);
-      box-shadow:0 2px 8px rgba(0,0,0,.35);
-    "></div>`,
-    iconSize: [16,16],
-    iconAnchor: [8,8],
-  });
-}
-
-function initMapIfNeeded(){
-  if(MAP.inited) return;
-
-  const mapEl = $$("map");
-  if(!mapEl) return; // si todavía no agregaste la vista en index.html
-
-  if(typeof L === "undefined"){
-    console.warn("Leaflet (L) no está cargado. Agregá el script de Leaflet en index.html antes de app.js");
-    return;
-  }
-
-  MAP.map = L.map("map").setView([-32.9468, -60.6393], 11);
-
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 19,
-    attribution: "&copy; OpenStreetMap",
-  }).addTo(MAP.map);
-
-  // Zonas
-  Object.entries(ZONES).forEach(([name, z])=>{
-    const poly = L.polygon(z.polygon, {
-      color: z.color,
-      weight: 2,
-      fillColor: z.color,
-      fillOpacity: 0.08,
-    }).addTo(MAP.map);
-
-    poly.bindTooltip(name, { sticky:true });
-    MAP.zoneLayers.push(poly);
-
-    // etiqueta en el centro
-    L.marker(z.center, {
-      icon: L.divIcon({
-        className: "",
-        html: `<div style="color:rgba(233,236,245,.9);font-weight:800;
-          background:rgba(15,23,48,.65);border:1px solid rgba(34,48,92,.8);
-          padding:4px 8px;border-radius:999px;font-size:12px;">
-          ${name}
-        </div>`,
-      })
-    }).addTo(MAP.map);
-  });
-
-  MAP.inited = true;
-}
-
-function clearMapLayers(){
-  if(!MAP.map) return;
-  MAP.layers.forEach(l => MAP.map.removeLayer(l));
-  MAP.layers = [];
-}
-
-function renderMap(){
-  initMapIfNeeded();
-  if(!MAP.map) return;
-
-  clearMapLayers();
-
-  const zf = $$("mapZoneFilter") ? $$("mapZoneFilter").value : "";
-  const show = $$("mapShow") ? $$("mapShow").value : "all";
-
-  // PASAJEROS
-  if(show === "all" || show === "passengers"){
-    STATE.passengers.forEach(p=>{
-      if(zf && (p.zone||"") !== zf) return;
-
-      const isAssigned = p.status === "assigned" && p.assignedDriverId;
-      const color = isAssigned ? "#2fd16f" : "#ff4d5e";
-
-      const lat = (typeof p.lat === "number") ? p.lat : null;
-      const lng = (typeof p.lng === "number") ? p.lng : null;
-      const [clat, clng] = (lat!=null && lng!=null) ? [lat,lng] : fallbackLatLng(p);
-
-      const m = L.marker([clat, clng], { icon: circleIcon(color) }).addTo(MAP.map);
-
-      const driver = p.assignedDriverId ? driverById(p.assignedDriverId) : null;
-
-      m.bindPopup(`
-        <div style="font-weight:800">${escapeHtml(fullName(p))}</div>
-        <div>Tel: ${escapeHtml(p.phone||"-")}</div>
-        <div>Dir: ${escapeHtml(p.address||"-")}</div>
-        <div>Zona: ${escapeHtml(p.zone||"-")}</div>
-        <div>Estado: ${isAssigned ? "Asignado" : "Pendiente"}</div>
-        <div>Chofer: ${driver ? escapeHtml(fullName(driver)) : "-"}</div>
-        ${lat==null || lng==null ? `<div style="color:#aeb7d4;margin-top:6px;">📍 Sin coordenadas (usando centro de zona)</div>` : ""}
-      `);
-
-      MAP.layers.push(m);
-    });
-  }
-
-  // CHOFERES
-  if(show === "all" || show === "drivers"){
-    STATE.drivers.forEach(d=>{
-      if(zf && (d.zone||"") !== zf) return;
-
-      const zname = zoneOf(d);
-      const zcolor = zname ? ZONES[zname].color : "#9aa7c7";
-
-      const lat = (typeof d.lat === "number") ? d.lat : null;
-      const lng = (typeof d.lng === "number") ? d.lng : null;
-      const [clat, clng] = (lat!=null && lng!=null) ? [lat,lng] : fallbackLatLng(d);
-
-      const used = assignedCount(d.id);
-      const cap = Number(d.capacity)||4;
-
-      const m = L.marker([clat, clng], { icon: driverIcon(zcolor) }).addTo(MAP.map);
-
-      m.bindPopup(`
-        <div style="font-weight:800">Chofer: ${escapeHtml(fullName(d))}</div>
-        <div>Tel: ${escapeHtml(d.phone||"-")}</div>
-        <div>Zona: ${escapeHtml(d.zone||"-")}</div>
-        <div>Ocupación: ${used}/${cap}</div>
-      `);
-
-      MAP.layers.push(m);
-    });
-  }
-}
-
-/* -------------------- GEOCODING (Nominatim/OSM) -------------------- */
-// Convierte dirección -> lat/lng. Gratis pero con límites: no spamear.
-async function geocodeAddressRosario(address){
-  const q = `${address}, Rosario, Santa Fe, Argentina`;
-  const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`;
-
-  const res = await fetch(url, { headers: { "Accept": "application/json" }});
-  if(!res.ok) throw new Error(`Geocode HTTP ${res.status}`);
-  const data = await res.json();
-  if(!Array.isArray(data) || data.length === 0) return null;
-
-  const lat = Number(data[0].lat);
-  const lng = Number(data[0].lon);
-  if(Number.isNaN(lat) || Number.isNaN(lng)) return null;
-
-  return { lat, lng };
-}
-
-function sleep(ms){ return new Promise(r=>setTimeout(r, ms)); }
-
-// Geocodifica pasajeros sin lat/lng y guarda en Firestore.
-// Corre en tandas (max) para respetar límites.
-async function geocodeMissingPassengers({ max = 20, delayMs = 1100 } = {}){
-  const missing = STATE.passengers
-    .filter(p => p.eventId === STATE.eventId)
-    .filter(p => typeof p.lat !== "number" || typeof p.lng !== "number")
-    .slice(0, max);
-
-  for(const p of missing){
-    try{
-      if(!p.address || !p.address.trim()){
-        await updateDoc(doc(db, "passengers", p.id), {
-          geocodeStatus: "not_found",
-          geocodeUpdatedAt: serverTimestamp(),
-        });
-        continue;
-      }
-
-      const result = await geocodeAddressRosario(p.address.trim());
-      if(!result){
-        await updateDoc(doc(db, "passengers", p.id), {
-          geocodeStatus: "not_found",
-          geocodeUpdatedAt: serverTimestamp(),
-        });
-      }else{
-        await updateDoc(doc(db, "passengers", p.id), {
-          lat: result.lat,
-          lng: result.lng,
-          geocodeStatus: "ok",
-          geocodeUpdatedAt: serverTimestamp(),
-        });
-      }
-    }catch(err){
-      await updateDoc(doc(db, "passengers", p.id), {
-        geocodeStatus: "error",
-        geocodeUpdatedAt: serverTimestamp(),
-      });
-      console.warn("Geocode error", p.id, err);
-    }
-
-    await sleep(delayMs);
-  }
-}
-
 /* -------------------- START -------------------- */
 (async function init(){
-  STATE.eventId = $("eventId").value.trim() || "event1";
+  // Try events dropdown if present; otherwise fall back to text input.
+  try{ await loadEvents(); }catch(e){ console.warn("loadEvents failed", e); }
+
+  const saved = localStorage.getItem("selectedEventId");
+  const fromInput = $$("eventId") ? $$("eventId").value.trim() : "";
+  STATE.eventId = saved || fromInput || STATE.eventId || "event1";
+
+  // Sync UI
+  if($$("eventId")) $$("eventId").value = STATE.eventId;
+  if($$("eventSelect")) renderEventSelect();
+
   await refreshAll();
 })();
