@@ -1,17 +1,22 @@
-// Firebase v9+ (modular) via CDN
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.2/firebase-app.js";
-import { getFirestore } from "https://www.gstatic.com/firebasejs/10.7.2/firebase-firestore.js";
+<script type="module">
+  // Import the functions you need from the SDKs you need
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
+  // TODO: Add SDKs for Firebase products that you want to use
+  // https://firebase.google.com/docs/web/setup#available-libraries
 
-// ✅ REEMPLAZÁ ESTE OBJETO por tu firebaseConfig real:
-export const firebaseConfig = {
-  apiKey: "REEMPLAZAR",
-  authDomain: "REEMPLAZAR",
-  projectId: "REEMPLAZAR",
-  storageBucket: "REEMPLAZAR",
-  messagingSenderId: "REEMPLAZAR",
-  appId: "REEMPLAZAR",
-};
+  // Your web app's Firebase configuration
+  const firebaseConfig = {
+    apiKey: "AIzaSyATJicgCiFF3d_EUUw5GQbzPox5M2uSkcw",
+    authDomain: "logistica-d964e.firebaseapp.com",
+    projectId: "logistica-d964e",
+    storageBucket: "logistica-d964e.firebasestorage.app",
+    messagingSenderId: "8417668413",
+    appId: "1:8417668413:web:22b7b111e797949616a954"
+  };
 
-// Init
-export const app = initializeApp(firebaseConfig);
+  // Initialize Firebase
+  const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
+</script>
+
+
