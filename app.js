@@ -1404,8 +1404,13 @@ function resolveAuthRole(){
 
 /* -------------------- START -------------------- */
 (async function init(){
+  // 1) Conectar botón de login (si no se llama, el click no hace nada)
+  wireTrackingUI();
+
+  // 2) Completar login si vino por redirect (mobile)
   try{ await getRedirectResult(auth); }catch(e){}
-  // Try events dropdown if present; otherwise fall back to text input.
+
+  // 3) Cargar eventos
   try{ await loadEvents(); }catch(e){ console.warn("loadEvents failed", e); }
 
   const saved = localStorage.getItem("selectedEventId");
@@ -1416,5 +1421,25 @@ function resolveAuthRole(){
   if($$("eventId")) $$("eventId").value = STATE.eventId;
   if($$("eventSelect")) renderEventSelect();
 
+  // 4) Escuchar cambios de login
+  onAuthStateChanged(auth, async (user)=>{
+    STATE.auth.user = user || null;
+
+    // Si cambia el login, recalculamos rol (admin/chofer)
+    try{ await loadDrivers(); }catch(e){}
+
+    if(user){
+      resolveAuthRole();
+    }else{
+      STATE.auth.isAdmin = false;
+      STATE.auth.driver = null;
+    }
+
+    renderTracking();
+  });
+
+  // 5) Cargar todo
   await refreshAll();
+  renderTracking();
 })();
+
