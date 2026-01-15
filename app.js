@@ -327,7 +327,7 @@ function renderDriversTable(){
 
 function renderDriverDetailForm(driver){
   const isNew = !driver;
-  const d = driver || { firstName:"", lastName:"", phone:"", email:"", zone:"", capacity:4, active:true, role:"driver" };
+  const d = driver || { firstName:"", lastName:"", phone:"", email:"", address:"", localidad:"Rosario", lat:null, lng:null, zone:"", capacity:4, active:true, role:"driver" };
 
   const a = driver ? driverAssignment(driver.id) : null;
   const passengerIds = a?.passengerIds || [];
@@ -348,6 +348,12 @@ function renderDriverDetailForm(driver){
         <div class="field"><label>Apellido</label><input id="d_lastName" value="${escapeHtml(d.lastName)}"></div>
         <div class="field"><label>Teléfono</label><input id="d_phone" value="${escapeHtml(d.phone)}"></div>
         <div class="field"><label>Correo</label><input id="d_email" value="${escapeHtml(d.email||"")}" placeholder="chofer@correo.com"></div>
+        <div class="field"><label>Domicilio</label><input id="d_address" value="${escapeHtml(d.address||"")}" placeholder="Calle y número"></div>
+        <div class="field"><label>Localidad</label>
+          <select id="d_localidad">
+            ${["Rosario","Funes","Roldan","San Lorenzo"].map(l=>`<option value="${l}" ${((d.localidad||"Rosario")===l)?"selected":""}>${l}</option>`).join("")}
+          </select>
+        </div>
         <div class="field"><label>Zona</label><input id="d_zone" value="${escapeHtml(d.zone)}" placeholder="Centro / Norte / Sur..."></div>
         <div class="field"><label>Capacidad</label><input id="d_capacity" type="number" min="1" max="20" value="${escapeHtml(String(d.capacity ?? 4))}"></div>
         <div class="actions">
@@ -402,13 +408,46 @@ function renderDriverDetailForm(driver){
       lastName: $("d_lastName").value.trim(),
       phone: $("d_phone").value.trim(),
       email: ($("d_email") ? $("d_email").value.trim().toLowerCase() : ""),
+      address: ($("d_address") ? $("d_address").value.trim() : ""),
+      localidad: ($("d_localidad") ? $("d_localidad").value : "Rosario"),
       zone: $("d_zone").value.trim(),
       capacity: Number($("d_capacity").value || 4),
       active: true,
       role: (driver && driver.role) ? driver.role : "driver",
       eventId: STATE.eventId,
       updatedAt: serverTimestamp(),
-    };
+    }
+
+    // Auto-geocodificar chofer si hay domicilio (no requiere que el usuario haga nada)
+    // Si el domicilio/localidad cambian, recalculamos lat/lng.
+    const prevAddr = (driver?.address||"").trim();
+    const prevLoc = (driver?.localidad||"Rosario").trim();
+    const addrNow = (payload.address||"").trim();
+    const locNow = (payload.localidad||"Rosario").trim();
+    if(addrNow){
+      const changed = (addrNow !== prevAddr) || (locNow !== prevLoc) || (driver?.lat==null) || (driver?.lng==null);
+      if(changed){
+        try{
+          const q = `${addrNow}, ${locNow}, Santa Fe, Argentina`;
+          const geo = await geocodeQuery(q);
+          if(geo){
+            payload.lat = geo.lat;
+            payload.lng = geo.lng;
+            payload.geocodedQuery = q;
+            payload.geocodedAt = serverTimestamp();
+          }
+        }catch(e){
+          console.warn("geocode driver fail", e);
+        }
+      }else{
+        payload.lat = driver.lat ?? null;
+        payload.lng = driver.lng ?? null;
+      }
+    }else{
+      payload.lat = driver?.lat ?? null;
+      payload.lng = driver?.lng ?? null;
+    }
+;
 
     if(isNew){
       payload.createdAt = serverTimestamp();
@@ -898,6 +937,29 @@ function downloadTextFile(filename, content){
 }
 
 
+
+/* -------------------- GEO HELPERS -------------------- */
+function haversineKm(lat1, lon1, lat2, lon2){
+  const R = 6371;
+  const toRad = (x)=> x * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+}
+
+async function geocodeQuery(q){
+  const url = "https://nominatim.openstreetmap.org/search?format=json&limit=1&q=" + encodeURIComponent(q);
+  const res = await fetch(url, { headers: { "Accept": "application/json" }});
+  const data = await res.json();
+  if(data && data[0]) return { lat:Number(data[0].lat), lng:Number(data[0].lon) };
+  return null;
+}
+
 /* -------------------- MAP (Leaflet) -------------------- */
 // Requires Leaflet loaded in Index.html (leaflet.js + leaflet.css)
 let MAP = {
@@ -1034,10 +1096,15 @@ function renderMap(){
     STATE.drivers.forEach(d=>{
       if(zoneFilter && (d.zone||"") !== zoneFilter) return;
 
-      const poly = ZONE_POLYS[d.zone];
-      if(!poly) return;
-      const lat = poly.reduce((a,c)=>a+c[0],0)/poly.length;
-      const lng = poly.reduce((a,c)=>a+c[1],0)/poly.length;
+      // Use real coords if present; otherwise fall back to zone centroid
+      let lat = (d.lat!=null ? Number(d.lat) : null);
+      let lng = (d.lng!=null ? Number(d.lng) : null);
+      if(lat==null || lng==null){
+        const poly = ZONE_POLYS[d.zone];
+        if(!poly) return;
+        lat = poly.reduce((a,c)=>a+c[0],0)/poly.length;
+        lng = poly.reduce((a,c)=>a+c[1],0)/poly.length;
+      }
 
       const icon = L.divIcon({
         className: "markerDot",
@@ -1145,6 +1212,8 @@ $("btnImportDrivers").addEventListener("click", async ()=>{
       lastName: (r.lastName||"").trim(),
       phone: (r.phone||"").trim(),
       email: (r.email||"").trim().toLowerCase(),
+      address: (r.address||"").trim(),
+      localidad: (r.localidad||"Rosario").trim() || "Rosario",
       zone: (r.zone||"").trim(),
       capacity: Number((r.capacity||"").trim() || 4),
       active: true,
