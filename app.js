@@ -9,7 +9,7 @@ import {
 
 import {
   getAuth, onAuthStateChanged,
-  GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult,
+  signInWithEmailAndPassword, createUserWithEmailAndPassword,
   signOut
 } from "https://www.gstatic.com/firebasejs/10.7.2/firebase-auth.js";
 
@@ -53,9 +53,13 @@ document.querySelectorAll(".tab").forEach(btn=>{
     const view = btn.dataset.view;
     document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
     $(`view-${view}`).classList.add("active");
+
+    // Map needs resize when shown
+    if(view === "map"){
+      try{ renderMap(); }catch(e){ console.warn(e); }
+    }
   });
 });
-
 /* -------------------- EVENT ID -------------------- */
 
 /* -------------------- EVENTS (dropdown) -------------------- */
@@ -151,6 +155,7 @@ async function refreshAll(){
   renderAssignments();
   renderDashboard();
   if(typeof renderTracking==="function") renderTracking();
+  if(typeof renderMap==="function") renderMap();
 }
 
 $("btnRefreshDashboard").addEventListener("click", refreshAll);
@@ -199,10 +204,12 @@ function renderZones(){
     $("driverZoneFilter"),
     $("passengerZoneFilter"),
     $("assignmentZoneFilter"),
-  ];
+    $("mapZoneFilter"),
+  ].filter(Boolean);
   selects.forEach(sel=>{
     const current = sel.value;
-    sel.innerHTML = `<option value="">Todas las zonas</option>` + zones.map(z=>`<option value="${escapeHtml(z)}">${escapeHtml(z)}</option>`).join("");
+    const firstLabel = (sel.id==="mapZoneFilter") ? "Todas las zonas" : "Todas las zonas";
+    sel.innerHTML = `<option value="">${firstLabel}</option>` + zones.map(z=>`<option value="${escapeHtml(z)}">${escapeHtml(z)}</option>`).join("");
     sel.value = current;
   });
 }
@@ -479,7 +486,7 @@ function renderPassengersTable(){
   const list = STATE.passengers.filter(p=>{
     if(zf && (p.zone||"") !== zf) return false;
     if(sf && (p.status||"unassigned") !== sf) return false;
-    const hay = `${p.firstName||""} ${p.lastName||""} ${p.phone||""} ${p.address||""} ${p.zone||""}`.toLowerCase();
+    const hay = `${p.firstName||""} ${p.lastName||""} ${p.phone||""} ${p.address||""} ${p.zone||""} ${p.localidad||""}`.toLowerCase();
     return !q || hay.includes(q);
   });
 
@@ -487,7 +494,7 @@ function renderPassengersTable(){
   <table>
     <thead>
       <tr>
-        <th>Joven</th><th>Tel</th><th>Dirección</th><th>Zona</th><th>Estado</th><th>Chofer</th><th></th>
+        <th>Joven</th><th>Tel</th><th>Dirección</th><th>Localidad</th><th>Zona</th><th>Estado</th><th>Chofer</th><th></th>
       </tr>
     </thead>
     <tbody>
@@ -498,6 +505,7 @@ function renderPassengersTable(){
           <td><strong>${escapeHtml(fullName(p))}</strong></td>
           <td>${escapeHtml(p.phone||"")}</td>
           <td>${escapeHtml(p.address||"")}</td>
+          <td>${escapeHtml(p.localidad||"Rosario")}</td>
           <td><span class="tag">${escapeHtml(p.zone||"")}</span></td>
           <td>${p.status==="assigned" ? `<span class="pill">Asignado</span>` : `<span class="pill">Pendiente</span>`}</td>
           <td>${driver ? escapeHtml(fullName(driver)) : "-"}</td>
@@ -519,7 +527,7 @@ function renderPassengersTable(){
 
 function renderPassengerDetailForm(passenger){
   const isNew = !passenger;
-  const p = passenger || { firstName:"", lastName:"", phone:"", address:"", zone:"", status:"unassigned", assignedDriverId:null };
+  const p = passenger || { firstName:"", lastName:"", phone:"", address:"", zone:"", localidad:"Rosario", status:"unassigned", assignedDriverId:null, lat:null, lng:null };
 
   const driver = p.assignedDriverId ? driverById(p.assignedDriverId) : null;
 
@@ -530,6 +538,11 @@ function renderPassengerDetailForm(passenger){
         <div class="field"><label>Apellido</label><input id="p_lastName" value="${escapeHtml(p.lastName)}"></div>
         <div class="field"><label>Teléfono</label><input id="p_phone" value="${escapeHtml(p.phone)}"></div>
         <div class="field"><label>Dirección</label><input id="p_address" value="${escapeHtml(p.address)}"></div>
+        <div class="field"><label>Localidad</label>
+          <select id="p_localidad">
+            ${["Rosario","Funes","Roldan","San Lorenzo"].map(l=>`<option value="${l}" ${((p.localidad||"Rosario")===l)?"selected":""}>${l}</option>`).join("")}
+          </select>
+        </div>
         <div class="field"><label>Zona</label><input id="p_zone" value="${escapeHtml(p.zone)}"></div>
 
         <div class="muted">Estado: <strong>${escapeHtml(p.status || "unassigned")}</strong></div>
@@ -556,6 +569,7 @@ function renderPassengerDetailForm(passenger){
       lastName: $("p_lastName").value.trim(),
       phone: $("p_phone").value.trim(),
       address: $("p_address").value.trim(),
+      localidad: ($("p_localidad") ? $("p_localidad").value : "Rosario"),
       zone: $("p_zone").value.trim(),
       eventId: STATE.eventId,
       updatedAt: serverTimestamp(),
@@ -564,6 +578,9 @@ function renderPassengerDetailForm(passenger){
     if(isNew){
       payload.status = "unassigned";
       payload.assignedDriverId = null;
+      payload.assignedDriverEmail = null;
+      payload.lat = null;
+      payload.lng = null;
       payload.createdAt = serverTimestamp();
       await addDoc(collection(db,"passengers"), payload);
       toast("Joven creado");
@@ -686,6 +703,7 @@ async function assignPassenger(driverId, passengerId){
     tx.update(passengerRef, {
       status: "assigned",
       assignedDriverId: driverId,
+      assignedDriverEmail: (d.email||"").trim().toLowerCase(),
       updatedAt: serverTimestamp(),
     });
   });
@@ -718,7 +736,11 @@ async function unassignPassenger(driverId, passengerId){
     if(p.assignedDriverId === driverId){
       tx.update(passengerRef, {
         status: "unassigned",
-        assignedDriverId: null,
+      assignedDriverId: null,
+      assignedDriverEmail: null,
+      lat: null,
+      lng: null,
+        assignedDriverEmail: null,
         updatedAt: serverTimestamp(),
       });
     }
@@ -875,6 +897,217 @@ function downloadTextFile(filename, content){
   URL.revokeObjectURL(url);
 }
 
+
+/* -------------------- MAP (Leaflet) -------------------- */
+// Requires Leaflet loaded in Index.html (leaflet.js + leaflet.css)
+let MAP = {
+  map: null,
+  passengersLayer: null,
+  driversLayer: null,
+  zonesLayer: null
+};
+
+const LOCALIDADES = ["Rosario","Funes","Roldan","San Lorenzo"];
+
+// Rough bounds for Gran Rosario (approx)
+const GRAN_ROSARIO_CENTER = [-32.95, -60.66];
+const GRAN_ROSARIO_BOUNDS = [
+  [-33.20, -60.95], // SW
+  [-32.70, -60.45]  // NE
+];
+
+// Simple zone polygons (approximation). You can refine later.
+const ZONE_POLYS = {
+  "Centro": [[-32.97,-60.70],[-32.97,-60.62],[-32.92,-60.62],[-32.92,-60.70]],
+  "Norte":  [[-32.92,-60.74],[-32.92,-60.58],[-32.82,-60.58],[-32.82,-60.74]],
+  "Sur":    [[-33.08,-60.74],[-33.08,-60.58],[-32.97,-60.58],[-32.97,-60.74]],
+  "Oeste":  [[-33.08,-60.95],[-33.08,-60.74],[-32.82,-60.74],[-32.82,-60.95]],
+  "Este":   [[-33.08,-60.62],[-33.08,-60.50],[-32.82,-60.50],[-32.82,-60.62]]
+};
+
+function initMapIfNeeded(){
+  const el = $("map");
+  if(!el) return;
+
+  if(MAP.map) return;
+
+  if(typeof L === "undefined"){
+    console.warn("Leaflet no cargó. Revisá leaflet.js en Index.html");
+    return;
+  }
+
+  MAP.map = L.map("map", {
+    preferCanvas: true
+  }).setView(GRAN_ROSARIO_CENTER, 11);
+
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: "&copy; OpenStreetMap"
+  }).addTo(MAP.map);
+
+  MAP.zonesLayer = L.layerGroup().addTo(MAP.map);
+  MAP.passengersLayer = L.layerGroup().addTo(MAP.map);
+  MAP.driversLayer = L.layerGroup().addTo(MAP.map);
+
+  // Zones overlay
+  drawZones();
+
+  // UI buttons
+  if($("btnRefreshMap")){
+    $("btnRefreshMap").addEventListener("click", ()=>{
+      renderMap();
+      toast("Mapa refrescado");
+    });
+  }
+  if($("mapZoneFilter")){
+    $("mapZoneFilter").addEventListener("change", renderMap);
+  }
+  if($("mapShow")){
+    $("mapShow").addEventListener("change", renderMap);
+  }
+  if($("btnGeocodePassengers")){
+    $("btnGeocodePassengers").addEventListener("click", geocodeMissingPassengers);
+  }
+}
+
+function drawZones(){
+  if(!MAP.zonesLayer) return;
+  MAP.zonesLayer.clearLayers();
+
+  Object.entries(ZONE_POLYS).forEach(([name, coords])=>{
+    const poly = L.polygon(coords, { weight: 1, fillOpacity: 0.05 });
+    poly.bindTooltip(name, { sticky:true });
+    poly.addTo(MAP.zonesLayer);
+  });
+}
+
+function zoneFromPassenger(p){
+  return (p.zone||"").trim();
+}
+
+function renderMap(){
+  initMapIfNeeded();
+  if(!MAP.map) return;
+
+  // Important: if view was hidden, Leaflet needs a size refresh
+  setTimeout(()=>{ try{ MAP.map.invalidateSize(); }catch(_e){} }, 60);
+
+  MAP.passengersLayer.clearLayers();
+  MAP.driversLayer.clearLayers();
+
+  const zoneFilter = $("mapZoneFilter") ? $("mapZoneFilter").value : "";
+  const show = $("mapShow") ? $("mapShow").value : "all";
+
+  // Passengers
+  if(show === "all" || show === "passengers"){
+    STATE.passengers.forEach(p=>{
+      if(zoneFilter && zoneFromPassenger(p) !== zoneFilter) return;
+      if(p.lat == null || p.lng == null) return;
+
+      const assigned = (p.status === "assigned" && !!p.assignedDriverId);
+      const icon = L.divIcon({
+        className: "markerDot",
+        html: `<div style="width:12px;height:12px;border-radius:50%;background:${assigned ? "#24c26a" : "#ff4d4f"};border:2px solid white;box-shadow:0 2px 8px rgba(0,0,0,.25)"></div>`,
+        iconSize: [12,12],
+        iconAnchor: [6,6]
+      });
+
+      const m = L.marker([p.lat, p.lng], { icon });
+      const driver = p.assignedDriverId ? driverById(p.assignedDriverId) : null;
+      const html = `
+        <div style="min-width:220px">
+          <strong>${escapeHtml(fullName(p))}</strong><br/>
+          ${escapeHtml(p.phone||"")}<br/>
+          ${escapeHtml(p.address||"")}<br/>
+          ${escapeHtml(p.localidad||"Rosario")} • <span class="tag">${escapeHtml(p.zone||"")}</span><br/>
+          Estado: <strong>${assigned ? "Asignado" : "Pendiente"}</strong><br/>
+          Chofer: ${driver ? escapeHtml(fullName(driver)) : "-"}
+        </div>
+      `;
+      m.bindPopup(html);
+      m.addTo(MAP.passengersLayer);
+    });
+  }
+
+  // Drivers (placed at zone centroid for now)
+  if(show === "all" || show === "drivers"){
+    STATE.drivers.forEach(d=>{
+      if(zoneFilter && (d.zone||"") !== zoneFilter) return;
+
+      const poly = ZONE_POLYS[d.zone];
+      if(!poly) return;
+      const lat = poly.reduce((a,c)=>a+c[0],0)/poly.length;
+      const lng = poly.reduce((a,c)=>a+c[1],0)/poly.length;
+
+      const icon = L.divIcon({
+        className: "markerDot",
+        html: `<div style="width:14px;height:14px;border-radius:4px;background:#2f76ff;border:2px solid white;box-shadow:0 2px 8px rgba(0,0,0,.25)"></div>`,
+        iconSize: [14,14],
+        iconAnchor: [7,7]
+      });
+
+      const used = assignedCount(d.id);
+      const cap = Number(d.capacity)||4;
+
+      const m = L.marker([lat,lng], { icon });
+      m.bindPopup(`
+        <div style="min-width:220px">
+          <strong>Chofer: ${escapeHtml(fullName(d))}</strong><br/>
+          ${escapeHtml(d.phone||"")}<br/>
+          ${escapeHtml(d.email||"")}<br/>
+          Zona: <span class="tag">${escapeHtml(d.zone||"")}</span><br/>
+          Ocupación: <strong>${used}/${cap}</strong>
+        </div>
+      `);
+      m.addTo(MAP.driversLayer);
+    });
+  }
+}
+
+async function geocodeMissingPassengers(){
+  const toGeocode = STATE.passengers.filter(p => (p.lat==null || p.lng==null) && (p.address||"").trim());
+  if(!toGeocode.length){
+    alert("No hay jóvenes sin coordenadas (o sin dirección).");
+    return;
+  }
+
+  const max = Math.min(25, toGeocode.length);
+  if(!confirm(`Vas a geocodificar ${max} jóvenes (máx 25 por intento para no saturar). ¿Continuar?`)) return;
+
+  let ok = 0;
+  for(let i=0; i<max; i++){
+    const p = toGeocode[i];
+    const localidad = (p.localidad || "Rosario").trim() || "Rosario";
+    const q = `${p.address}, ${localidad}, Santa Fe, Argentina`;
+
+    try{
+      const url = "https://nominatim.openstreetmap.org/search?format=json&limit=1&q=" + encodeURIComponent(q);
+      const res = await fetch(url, { headers: { "Accept": "application/json" }});
+      const data = await res.json();
+      if(data && data[0]){
+        const lat = Number(data[0].lat);
+        const lng = Number(data[0].lon);
+        await updateDoc(doc(db,"passengers", p.id), {
+          lat, lng,
+          geocodedQuery: q,
+          geocodedAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+        ok++;
+      }
+    }catch(e){
+      console.warn("geocode fail", e);
+    }
+
+    // polite delay
+    await new Promise(r=>setTimeout(r, 1100));
+  }
+
+  toast(`Geocodificados: ${ok}`);
+  await loadPassengers();
+  renderMap();
+}
+
 /* -------------------- IMPORT CSV -------------------- */
 $("btnImportPassengers").addEventListener("click", async ()=>{
   const text = $("csvPassengers").value;
@@ -886,6 +1119,7 @@ $("btnImportPassengers").addEventListener("click", async ()=>{
       lastName: (r.lastName||"").trim(),
       phone: (r.phone||"").trim(),
       address: (r.address||"").trim(),
+      localidad: (r.localidad||"Rosario").trim() || "Rosario",
       zone: (r.zone||"").trim(),
       status: "unassigned",
       assignedDriverId: null,
@@ -992,7 +1226,7 @@ function renderTracking(){
   if(!u){
     if(box) box.style.display = "";
     if(logoutBtn) logoutBtn.style.display = "none";
-    headEl.innerHTML = '<div class="muted">Ingresá con Google para ver tus pasajeros asignados.</div>';
+    headEl.innerHTML = '<div class="muted">Ingresá con tu correo para ver tus pasajeros asignados.</div>';
     listEl.innerHTML = "";
     if(statusEl) statusEl.textContent = "";
     if($$("trackingDriverFilter")) { $$("trackingDriverFilter").disabled = true; $$("trackingDriverFilter").innerHTML = '<option value="">(Solo cuando estés logueado)</option>'; }
@@ -1125,39 +1359,37 @@ async function updatePassengerTracking(passengerId, trackingStatus, trackingNote
 }
 
 function wireTrackingUI(){
-  const statusEl = $$("authStatus");
-
-  if($$("btnGoogleLogin")){
-  $$("btnGoogleLogin").addEventListener("click", async ()=>{
-    try{
-      const provider = new GoogleAuthProvider();
-      provider.setCustomParameters({ prompt: "select_account" });
-
-      const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-
-      if(isMobile){
-        // Mejor para mobile: evita problemas de COOP/COEP con popups
-        await signInWithRedirect(auth, provider);
-        return;
+  if($$("btnLogin")){
+    $$("btnLogin").addEventListener("click", async ()=>{
+      const email = ($$("authEmail").value||"").trim().toLowerCase();
+      const pass = ($$("authPassword").value||"").trim();
+      if(!email || !pass) return alert("Completá correo y contraseña");
+      try{
+        await signInWithEmailAndPassword(auth, email, pass);
+      }catch(e){
+        alert(e?.message || String(e));
       }
-
-      // Desktop: popup
-      await signInWithPopup(auth, provider);
-
-    }catch(e){
-      console.warn(e);
-      alert(e?.message || String(e));
-    }
-  });
-}
-
-
+    });
+  }
+  if($$("btnRegister")){
+    $$("btnRegister").addEventListener("click", async ()=>{
+      const email = ($$("authEmail").value||"").trim().toLowerCase();
+      const pass = ($$("authPassword").value||"").trim();
+      if(!email || !pass) return alert("Completá correo y contraseña");
+      try{
+        await createUserWithEmailAndPassword(auth, email, pass);
+        // Al registrarse, intentar vincular con driver por email (si existe)
+        toast("Registrado. Si tu correo coincide con un chofer cargado, se habilita tu tracking.");
+      }catch(e){
+        alert(e?.message || String(e));
+      }
+    });
+  }
   if($$("btnLogout")){
     $$("btnLogout").addEventListener("click", async ()=>{
       await signOut(auth);
     });
   }
-
   if($$("trackingDriverFilter")){
     $$("trackingDriverFilter").addEventListener("change", ()=> renderTracking());
   }
@@ -1186,28 +1418,6 @@ function resolveAuthRole(){
   // Sync UI
   if($$("eventId")) $$("eventId").value = STATE.eventId;
   if($$("eventSelect")) renderEventSelect();
-  // Tracking Auth (Google)
-  wireTrackingUI();
-
-  // Handle redirect results (mobile)
-  try{ await getRedirectResult(auth); }catch(e){ /* ignore */ }
-
-  onAuthStateChanged(auth, async (user)=>{
-    STATE.auth.user = user || null;
-
-    // Always refresh drivers before resolving role (needs drivers.email)
-    try{ await loadDrivers(); }catch(e){}
-
-    if(user){
-      resolveAuthRole();
-    }else{
-      STATE.auth.isAdmin = false;
-      STATE.auth.driver = null;
-    }
-    renderTracking();
-  });
-
-
 
   await refreshAll();
 })();

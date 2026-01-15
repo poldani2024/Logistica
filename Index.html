@@ -212,9 +212,12 @@
         <div id="trackingAuthBox" class="grid2" style="margin-top:12px;">
           <div>
             <div class="cardTitle small">Ingresar / Registrar chofer</div>
-            <div class="muted">Ingresá con tu cuenta de Google (Gmail). El correo debe coincidir con el correo cargado en el chofer.</div>
-            <div class="actions" style="margin-top:10px;">
-              <button class="btn" id="btnGoogleLogin">Ingresar con Google</button>
+            <div class="muted">Usá tu correo y una contraseña (Email/Password en Firebase Auth).</div>
+            <div class="field"><label>Correo</label><input id="authEmail" placeholder="chofer@correo.com" autocomplete="username"></div>
+            <div class="field"><label>Contraseña</label><input id="authPassword" type="password" placeholder="••••••••" autocomplete="current-password"></div>
+            <div class="actions">
+              <button class="btn" id="btnLogin">Ingresar</button>
+              <button class="btnSecondary" id="btnRegister">Registrar</button>
             </div>
             <div class="muted" id="authStatus"></div>
           </div>
@@ -246,8 +249,8 @@
         <div class="cardTitle">Importar CSV</div>
         <div class="muted">
           Pegá CSV con encabezados.
-          <br>Pasajeros: <code>firstName,lastName,phone,address,zone</code>
-          <br>Choferes: <code>firstName,lastName,phone,zone,capacity</code>
+          <br>Pasajeros: <code>firstName,lastName,phone,address,zone,localidad</code>
+          <br>Choferes: <code>firstName,lastName,phone,email,zone,capacity</code>
         </div>
 
         <div class="grid2">
@@ -256,7 +259,7 @@
               <div class="cardTitle small">Pasajeros</div>
               <button class="btn" id="btnImportPassengers">Importar pasajeros</button>
             </div>
-            <textarea id="csvPassengers" rows="10" placeholder="firstName,lastName,phone,address,zone&#10;Juan,Pérez,341...,San Martín 123,Centro"></textarea>
+            <textarea id="csvPassengers" rows="10" placeholder="firstName,lastName,phone,address,zone,localidad&#10;Juan,Pérez,341...,San Martín 123,Centro,Rosario"></textarea>
           </div>
 
           <div>
@@ -264,7 +267,7 @@
               <div class="cardTitle small">Choferes</div>
               <button class="btn" id="btnImportDrivers">Importar choferes</button>
             </div>
-            <textarea id="csvDrivers" rows="10" placeholder="firstName,lastName,phone,zone,capacity&#10;Ana,Gómez,341...,Norte,4"></textarea>
+            <textarea id="csvDrivers" rows="10" placeholder="firstName,lastName,phone,email,zone,capacity&#10;Ana,Gómez,341...,ana@gmail.com,Norte,4"></textarea>
           </div>
         </div>
 
