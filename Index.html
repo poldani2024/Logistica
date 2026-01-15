@@ -210,17 +210,27 @@
         </div>
 
         <div id="trackingAuthBox" class="grid2" style="margin-top:12px;">
-          <div>
-            <div class="cardTitle small">Ingresar / Registrar chofer</div>
-            <div class="muted">Usá tu correo y una contraseña (Email/Password en Firebase Auth).</div>
-            <div class="field"><label>Correo</label><input id="authEmail" placeholder="chofer@correo.com" autocomplete="username"></div>
-            <div class="field"><label>Contraseña</label><input id="authPassword" type="password" placeholder="••••••••" autocomplete="current-password"></div>
-            <div class="actions">
-              <button class="btn" id="btnLogin">Ingresar</button>
-              <button class="btnSecondary" id="btnRegister">Registrar</button>
-            </div>
-            <div class="muted" id="authStatus"></div>
-          </div>
+  <div>
+    <div class="cardTitle small">Ingresar chofer</div>
+    <div class="muted">Ingresá con tu cuenta de Google. El correo debe coincidir con el correo cargado en el chofer.</div>
+    <div class="actions" style="margin-top:10px;">
+      <button class="btn" id="btnGoogleLogin">Ingresar con Google</button>
+    </div>
+    <div class="muted" id="authStatus"></div>
+  </div>
+
+  <div>
+    <div class="cardTitle small">Modo Admin</div>
+    <div class="muted">Si tu correo está marcado como Admin, vas a poder filtrar por chofer.</div>
+    <div class="field">
+      <label>Ver por chofer</label>
+      <select id="trackingDriverFilter" disabled>
+        <option value="">(Solo cuando estés logueado)</option>
+      </select>
+    </div>
+    <div class="muted">Estados: Pendiente • En tránsito • En destino • Ausente</div>
+  </div>
+</div>
 
           <div>
             <div class="cardTitle small">Modo Admin</div>

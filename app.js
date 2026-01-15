@@ -9,7 +9,7 @@ import {
 
 import {
   getAuth, onAuthStateChanged,
-  signInWithEmailAndPassword, createUserWithEmailAndPassword,
+  GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult,
   signOut
 } from "https://www.gstatic.com/firebasejs/10.7.2/firebase-auth.js";
 
@@ -1359,37 +1359,33 @@ async function updatePassengerTracking(passengerId, trackingStatus, trackingNote
 }
 
 function wireTrackingUI(){
-  if($$("btnLogin")){
-    $$("btnLogin").addEventListener("click", async ()=>{
-      const email = ($$("authEmail").value||"").trim().toLowerCase();
-      const pass = ($$("authPassword").value||"").trim();
-      if(!email || !pass) return alert("Completá correo y contraseña");
+  const statusEl = $$("authStatus");
+
+  if($$("btnGoogleLogin")){
+    $$("btnGoogleLogin").addEventListener("click", async ()=>{
       try{
-        await signInWithEmailAndPassword(auth, email, pass);
+        const provider = new GoogleAuthProvider();
+        provider.setCustomParameters({ prompt: "select_account" });
+        const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+        if(isMobile){
+          if(statusEl) statusEl.textContent = "Abriendo login con Google...";
+          await signInWithRedirect(auth, provider);
+          return;
+        }
+        await signInWithPopup(auth, provider);
       }catch(e){
+        console.warn(e);
         alert(e?.message || String(e));
       }
     });
   }
-  if($$("btnRegister")){
-    $$("btnRegister").addEventListener("click", async ()=>{
-      const email = ($$("authEmail").value||"").trim().toLowerCase();
-      const pass = ($$("authPassword").value||"").trim();
-      if(!email || !pass) return alert("Completá correo y contraseña");
-      try{
-        await createUserWithEmailAndPassword(auth, email, pass);
-        // Al registrarse, intentar vincular con driver por email (si existe)
-        toast("Registrado. Si tu correo coincide con un chofer cargado, se habilita tu tracking.");
-      }catch(e){
-        alert(e?.message || String(e));
-      }
-    });
-  }
+
   if($$("btnLogout")){
     $$("btnLogout").addEventListener("click", async ()=>{
       await signOut(auth);
     });
   }
+
   if($$("trackingDriverFilter")){
     $$("trackingDriverFilter").addEventListener("change", ()=> renderTracking());
   }
@@ -1408,6 +1404,7 @@ function resolveAuthRole(){
 
 /* -------------------- START -------------------- */
 (async function init(){
+  try{ await getRedirectResult(auth); }catch(e){}
   // Try events dropdown if present; otherwise fall back to text input.
   try{ await loadEvents(); }catch(e){ console.warn("loadEvents failed", e); }
 
