@@ -1128,25 +1128,29 @@ function wireTrackingUI(){
   const statusEl = $$("authStatus");
 
   if($$("btnGoogleLogin")){
-    $$("btnGoogleLogin").addEventListener("click", async ()=>{
-      try{
-        const provider = new GoogleAuthProvider();
-        provider.setCustomParameters({ prompt: "select_account" });
+  $$("btnGoogleLogin").addEventListener("click", async ()=>{
+    try{
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: "select_account" });
 
-        // Popup first; if blocked/fails, fallback to redirect (better for mobile)
-        try{
-          await signInWithPopup(auth, provider);
-        }catch(e){
-          console.warn("Popup login failed, trying redirect", e);
-          if(statusEl) statusEl.textContent = "Abriendo login con Google...";
-          await signInWithRedirect(auth, provider);
-        }
-      }catch(e){
-        console.warn(e);
-        alert(e?.message || String(e));
+      const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+      if(isMobile){
+        // Mejor para mobile: evita problemas de COOP/COEP con popups
+        await signInWithRedirect(auth, provider);
+        return;
       }
-    });
-  }
+
+      // Desktop: popup
+      await signInWithPopup(auth, provider);
+
+    }catch(e){
+      console.warn(e);
+      alert(e?.message || String(e));
+    }
+  });
+}
+
 
   if($$("btnLogout")){
     $$("btnLogout").addEventListener("click", async ()=>{
