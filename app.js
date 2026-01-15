@@ -892,59 +892,83 @@ let MAP = {
   inited: false,
 };
 
-// Zonas aproximadas Rosario / Gran Rosario (ajustables)
+// Zonas aproximadas según tus límites (para sombreado/etiquetas del mapa)
+// Centro: Del Valle (N) – Pellegrini (Oeste del Centro) / Oroño (Sur del Centro) – Belgrano/Río (E)
+// Norte: Del Valle hacia Baigorria + ribera
+// Sur: Oroño hacia Saladillo + ribera
+// Oeste: al oeste de Pellegrini/Oroño, subiendo hasta límite con Funes/Roldán (aprox)
+// Este: franja ribereña (Belgrano / Av. de la Costa – Río)
 const ZONES = {
   "Centro": {
     color: "#6aa9ff",
     polygon: [
-      [-32.958, -60.683],
-      [-32.958, -60.615],
-      [-32.925, -60.615],
-      [-32.925, -60.683],
+      // NW (aprox Del Valle & Oroño)
+      [-32.9295, -60.6562],
+      // NE (aprox Del Valle & Belgrano/Costanera)
+      [-32.9295, -60.6225],
+      // SE (aprox Pellegrini & Belgrano/Costanera)
+      [-32.9551, -60.6225],
+      // SW (Oroño & Pellegrini) coordenada oficial PT01 como ancla
+      [-32.9551, -60.6562],
     ],
-    center: [-32.942, -60.650],
+    center: [-32.9423, -60.6392],
   },
+
   "Norte": {
     color: "#8be28b",
     polygon: [
-      [-32.925, -60.710],
-      [-32.925, -60.580],
-      [-32.860, -60.580],
-      [-32.860, -60.710],
+      // SW (Del Valle hacia el oeste / FFCC Mitre aprox)
+      [-32.9295, -60.7050],
+      // SE (Del Valle hacia ribera)
+      [-32.9295, -60.6225],
+      // NE (límite norte municipal hacia ribera)
+      [-32.8600, -60.6100],
+      // NW (límite norte municipal hacia oeste)
+      [-32.8600, -60.7350],
     ],
-    center: [-32.892, -60.645],
+    center: [-32.8920, -60.6700],
   },
+
   "Sur": {
     color: "#ffb36a",
     polygon: [
-      [-33.020, -60.710],
-      [-33.020, -60.580],
-      [-32.958, -60.580],
-      [-32.958, -60.710],
+      // NW (Bv Oroño hacia oeste)
+      [-32.9551, -60.7050],
+      // NE (Bv Oroño hacia ribera)
+      [-32.9551, -60.6225],
+      // SE (Arroyo Saladillo / límite sur hacia ribera)
+      [-33.0200, -60.6100],
+      // SW (Arroyo Saladillo / límite sur hacia oeste)
+      [-33.0200, -60.7400],
     ],
-    center: [-32.990, -60.645],
+    center: [-32.9900, -60.6750],
   },
+
   "Oeste": {
     color: "#d1a6ff",
     polygon: [
-      [-33.020, -60.740],
-      [-33.020, -60.683],
-      [-32.860, -60.683],
-      [-32.860, -60.740],
+      // Este (borde con Centro/Oeste por Pellegrini en la parte central, lo aproximamos como "franja")
+      [-32.8600, -60.7050],
+      [-32.8600, -60.7800], // hacia Funes/Roldán aprox
+      [-33.0200, -60.7900],
+      [-33.0200, -60.7050],
     ],
-    center: [-32.940, -60.715],
+    center: [-32.9450, -60.7550],
   },
+
   "Este": {
     color: "#ffd66a",
     polygon: [
-      [-33.020, -60.615],
-      [-33.020, -60.540],
-      [-32.860, -60.540],
-      [-32.860, -60.615],
+      // franja costera aproximada: Belgrano/Costa -> Río Paraná
+      [-32.8600, -60.6350],
+      [-32.8600, -60.5600],
+      [-33.0200, -60.5600],
+      [-33.0200, -60.6350],
     ],
-    center: [-32.940, -60.585],
+    center: [-32.9450, -60.5950],
   },
 };
+
 
 function zoneOf(item){
   const z = (item.zone||"").trim();
