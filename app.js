@@ -936,11 +936,19 @@ $("btnDangerClearEvent").addEventListener("click", async ()=>{
     // Load events now that we are authenticated
     try{ await loadEvents(); }catch(e){ console.warn("loadEvents failed", e); }
 
-    const saved = localStorage.getItem("selectedEventId");
-    const fromInput = $$("eventId") ? $$("eventId").value.trim() : "";
-    STATE.eventId = saved || fromInput || STATE.eventId || "event1";
+    
+    if (STATE.events && STATE.events.length) {
+      const saved = localStorage.getItem("selectedEventId");
+    
+      const found = saved
+        ? STATE.events.find(e => e.id === saved)
+        : null;
+    
+      STATE.eventId = found
+        ? found.id
+        : STATE.events[0].id;
+    }
 
-    if($$("eventId")) $$("eventId").value = STATE.eventId;
     if($$("eventSelect")) renderEventSelect();
 
     // Load data and resolve role
