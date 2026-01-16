@@ -1,16 +1,5 @@
-import {
-db } from "./firebase-init.js";
+import { db } from "./firebase-init.js";
 import { parseCSV } from "./csv.js";
-
-
-function escapeHtml(s){
-  return String(s ?? "")
-    .replaceAll("&","&amp;")
-    .replaceAll("<","&lt;")
-    .replaceAll(">","&gt;")
-    .replaceAll('"',"&quot;")
-    .replaceAll("'","&#039;");
-}
 
 import {
   collection, doc, addDoc, setDoc, getDoc, getDocs, deleteDoc, updateDoc,
@@ -33,13 +22,6 @@ let STATE = {
   auth: { user: null, isAdmin: false, driver: null },
 };
 
-function driverByEmail(email){
-  const e = String(email||"").trim().toLowerCase();
-  if(!e) return null;
-  return (STATE.drivers||[]).find(d => String(d.email||"").trim().toLowerCase() === e) || null;
-}
-
-
 const $ = (id) => document.getElementById(id);
 const $$ = (id) => document.getElementById(id);
 
@@ -52,11 +34,971 @@ const ADMIN_EMAILS = [
 ];
 
 function isAdminEmail(email){
-  const e = String(email||"").trim().toLowerCase();
-  return !!e && ADMIN_EMAILS.map(x=>String(x).trim().toLowerCase()).includes(e);
+  const e = (email||"").trim().toLowerCase();
+  return ADMIN_EMAILS.includes(e);
 }
 
 
+function toast(msg){
+  const el = $("copyHint");
+  if(el){ el.textContent = msg; setTimeout(()=> el.textContent="", 2200); }
+  else alert(msg);
+}
+
+/* -------------------- NAV -------------------- */
+document.querySelectorAll(".tab").forEach(btn=>{
+  btn.addEventListener("click", ()=>{
+    document.querySelectorAll(".tab").forEach(b=>b.classList.remove("active"));
+    btn.classList.add("active");
+    const view = btn.dataset.view;
+    document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
+    $(`view-${view}`).classList.add("active");
+
+    // Map needs resize when shown
+    if(view === "map"){
+      try{ renderMap(); }catch(e){ console.warn(e); }
+    }
+  });
+});
+/* -------------------- EVENT ID -------------------- */
+
+/* -------------------- EVENTS (dropdown) -------------------- */
+// Uses collection "events". Each document id is the eventId.
+// Suggested fields: { name, date } (date can be string or timestamp)
+async function loadEvents(){
+  const ref = collection(db, "events");
+  let qy = ref;
+  // Try to order by date desc, if field exists; otherwise falls back.
+  try{
+    qy = query(ref, orderBy("date", "desc"));
+  }catch(_e){
+    qy = ref;
+  }
+  const snap = await getDocs(qy);
+  STATE.events = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  renderEventSelect();
+}
+
+function renderEventSelect(){
+  const sel = $$("eventSelect");
+  if(!sel) return; // UI not present, keep using text eventId
+
+  if(!STATE.events || STATE.events.length === 0){
+    sel.innerHTML = '<option value="">(Sin eventos)</option>';
+    return;
+  }
+
+  sel.innerHTML = STATE.events.map(ev=>{
+    const name = ev.name || ev.title || ev.id;
+    // If date is a Firestore Timestamp, show YYYY-MM-DD-ish
+    let dateTxt = "";
+    if(ev.date){
+      if(typeof ev.date === "string") dateTxt = ev.date;
+      else if(typeof ev.date?.toDate === "function"){
+        const d = ev.date.toDate();
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth()+1).padStart(2,"0");
+        const dd = String(d.getDate()).padStart(2,"0");
+        dateTxt = `${yyyy}-${mm}-${dd}`;
+      }
+    }
+    const label = dateTxt ? `${name} — ${dateTxt}` : `${name}`;
+    return `<option value="${escapeHtml(ev.id)}">${escapeHtml(label)}</option>`;
+  }).join("");
+
+  const saved = localStorage.getItem("selectedEventId");
+  const currentText = $$("eventId") ? $$("eventId").value.trim() : "";
+  const preferred = saved || STATE.eventId || currentText || STATE.events[0].id;
+  const exists = STATE.events.some(e => e.id === preferred);
+  const finalId = exists ? preferred : STATE.events[0].id;
+
+  sel.value = finalId;
+  STATE.eventId = finalId;
+
+  // Keep old text input (if exists) in sync
+  if($$("eventId")) $$("eventId").value = finalId;
+}
+
+function getEventDestination(){
+  const ev = (STATE.events||[]).find(e=>e.id===STATE.eventId);
+  if(!ev) return null;
+  if(typeof ev.lat === "number" && typeof ev.lng === "number"){
+    return { lat: ev.lat, lng: ev.lng, domicilioEvento: ev.domicilioEvento||"", localidadEvento: ev.localidadEvento||"" };
+  }
+  return null;
+}
+
+
+// UI listeners (optional)
+if($$("eventSelect")){
+  $$("eventSelect").addEventListener("change", async (e)=>{
+    const v = e.target.value;
+    if(!v) return;
+    STATE.eventId = v;
+    localStorage.setItem("selectedEventId", v);
+    if($$("eventId")) $$("eventId").value = v;
+    await refreshAll();
+    toast("Evento aplicado");
+  });
+}
+if($$("btnReloadEvents")){
+  $$("btnReloadEvents").addEventListener("click", async ()=>{
+    await loadEvents();
+    await refreshAll();
+    toast("Eventos recargados");
+  });
+}
+
+if($$("btnSetEvent")) $("btnSetEvent").addEventListener("click", async ()=>{
+  const v = $("eventId").value.trim();
+  STATE.eventId = v || "event1";
+  await refreshAll();
+  toast("Event aplicado");
+});
+
+/* -------------------- LOAD + REFRESH -------------------- */
+async function refreshAll(){
+  await Promise.all([loadDrivers(), loadPassengers(), loadAssignments()]);
+  renderZones();
+  renderDriversTable();
+  renderPassengersTable();
+  renderAssignments();
+  renderDashboard();
+  if(typeof renderTracking==="function") renderTracking();
+  if(typeof renderMap==="function") renderMap();
+}
+
+$("btnRefreshDashboard").addEventListener("click", refreshAll);
+$("btnRefreshDrivers").addEventListener("click", loadDriversAndRender);
+$("btnRefreshPassengers").addEventListener("click", loadPassengersAndRender);
+$("btnRefreshAssignments").addEventListener("click", loadAssignmentsAndRender);
+
+async function loadDriversAndRender(){ await loadDrivers(); renderZones(); renderDriversTable(); renderDashboard(); }
+async function loadPassengersAndRender(){ await loadPassengers(); renderZones(); renderPassengersTable(); renderDashboard(); }
+async function loadAssignmentsAndRender(){ await loadAssignments(); renderAssignments(); renderDashboard(); }
+
+async function loadDrivers(){
+  const ref = collection(db, "drivers");
+  const qy = query(ref, where("eventId","==",STATE.eventId), orderBy("lastName","asc"));
+  const snap = await getDocs(qy);
+  STATE.drivers = snap.docs.map(d=> ({ id:d.id, ...d.data() }));
+}
+
+async function loadPassengers(){
+  const ref = collection(db, "passengers");
+  const qy = query(ref, where("eventId","==",STATE.eventId), orderBy("lastName","asc"));
+  const snap = await getDocs(qy);
+  STATE.passengers = snap.docs.map(d=> ({ id:d.id, ...d.data() }));
+}
+
+async function loadAssignments(){
+  const ref = collection(db, "assignments");
+  const qy = query(ref, where("eventId","==",STATE.eventId));
+  const snap = await getDocs(qy);
+  STATE.assignments = snap.docs.map(d=> ({ id:d.id, ...d.data() }));
+}
+
+/* -------------------- HELPERS -------------------- */
+function uniqZones(){
+  const zones = new Set();
+  [...STATE.drivers, ...STATE.passengers].forEach(x=>{
+    const z = (x.zone||"").trim();
+    if(z) zones.add(z);
+  });
+  return Array.from(zones).sort((a,b)=>a.localeCompare(b));
+}
+
+function renderZones(){
+  const zones = uniqZones();
+  const selects = [
+    $("driverZoneFilter"),
+    $("passengerZoneFilter"),
+    $("assignmentZoneFilter"),
+    $("mapZoneFilter"),
+  ].filter(Boolean);
+  selects.forEach(sel=>{
+    const current = sel.value;
+    const firstLabel = (sel.id==="mapZoneFilter") ? "Todas las zonas" : "Todas las zonas";
+    sel.innerHTML = `<option value="">${firstLabel}</option>` + zones.map(z=>`<option value="${escapeHtml(z)}">${escapeHtml(z)}</option>`).join("");
+    sel.value = current;
+  });
+}
+
+function escapeHtml(s){
+  return (s??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");
+}
+
+function fullName(x){ return `${x.lastName||""} ${x.firstName||""}`.trim(); }
+
+function driverAssignment(driverId){
+  return STATE.assignments.find(a=>a.driverId === driverId) || null;
+}
+
+function assignedCount(driverId){
+  const a = driverAssignment(driverId);
+  return (a?.passengerIds?.length) ? a.passengerIds.length : 0;
+}
+
+function passengerById(id){ return STATE.passengers.find(p=>p.id===id); }
+function driverById(id){ return STATE.drivers.find(d=>d.id===id); }
+function driverByEmail(email){
+  const e = (email||"").trim().toLowerCase();
+  return STATE.drivers.find(d => (d.email||"").trim().toLowerCase() === e) || null;
+}
+
+/* -------------------- DASHBOARD -------------------- */
+function renderDashboard(){
+  const passengers = STATE.passengers.length;
+  const drivers = STATE.drivers.length;
+  const assigned = STATE.passengers.filter(p=>p.status==="assigned").length;
+  const pending = passengers - assigned;
+
+  const capTotal = STATE.drivers.reduce((acc,d)=> acc + (Number(d.capacity)||4), 0);
+  const capUsed = STATE.drivers.reduce((acc,d)=> acc + assignedCount(d.id), 0);
+
+  $("statPassengers").textContent = passengers;
+  $("statPassengers2").textContent = `${assigned} asignados • ${pending} pendientes`;
+
+  $("statDrivers").textContent = drivers;
+  $("statDrivers2").textContent = `${capTotal} lugares totales`;
+
+  $("statCapacity").textContent = `${capUsed}/${capTotal}`;
+  $("statCapacity2").textContent = `${capTotal-capUsed} lugares libres`;
+
+  // pendientes por zona
+  const map = new Map();
+  STATE.passengers.filter(p=>p.status!=="assigned").forEach(p=>{
+    const z = (p.zone||"Sin zona");
+    map.set(z, (map.get(z)||0) + 1);
+  });
+
+  const rows = Array.from(map.entries()).sort((a,b)=>b[1]-a[1]);
+  const html = `
+    <table>
+      <thead><tr><th>Zona</th><th>Pendientes</th></tr></thead>
+      <tbody>
+        ${rows.map(([z,c])=>`<tr><td>${escapeHtml(z)}</td><td>${c}</td></tr>`).join("")}
+      </tbody>
+    </table>
+  `;
+  $("pendingByZone").innerHTML = html;
+}
+
+/* -------------------- DRIVERS UI -------------------- */
+$("driverSearch").addEventListener("input", renderDriversTable);
+$("driverZoneFilter").addEventListener("change", renderDriversTable);
+
+$("btnNewDriver").addEventListener("click", ()=> renderDriverDetailForm(null));
+
+function renderDriversTable(){
+  const q = ($("driverSearch").value||"").toLowerCase();
+  const zf = $("driverZoneFilter").value;
+
+  const list = STATE.drivers.filter(d=>{
+    if(zf && (d.zone||"") !== zf) return false;
+    const hay = `${d.firstName||""} ${d.lastName||""} ${d.phone||""} ${d.zone||""}`.toLowerCase();
+    return !q || hay.includes(q);
+  });
+
+  const html = `
+  <table>
+    <thead>
+      <tr>
+        <th>Chofer</th><th>Tel</th><th>Correo</th><th>Zona</th><th>Cap</th><th>Ocupación</th><th></th>
+      </tr>
+    </thead>
+    <tbody>
+      ${list.map(d=>{
+        const cap = Number(d.capacity)||4;
+        const used = assignedCount(d.id);
+        return `
+        <tr>
+          <td><strong>${escapeHtml(fullName(d))}</strong></td>
+          <td>${escapeHtml(d.phone||"")}</td>
+          <td>${escapeHtml(d.email||"")}</td>
+          <td><span class="tag">${escapeHtml(d.zone||"")}</span></td>
+          <td>${cap}</td>
+          <td>${used}/${cap}</td>
+          <td><button class="btnSecondary" data-driver="${d.id}">Ver</button></td>
+        </tr>`;
+      }).join("")}
+    </tbody>
+  </table>`;
+  $("driversTable").innerHTML = html;
+
+  $("driversTable").querySelectorAll("button[data-driver]").forEach(b=>{
+    b.addEventListener("click", ()=>{
+      const id = b.dataset.driver;
+      const d = driverById(id);
+      renderDriverDetailForm(d);
+    });
+  });
+}
+
+function renderDriverDetailForm(driver){
+  const isNew = !driver;
+  const d = driver || { firstName:"", lastName:"", phone:"", email:"", address:"", localidad:"Rosario", lat:null, lng:null, zone:"", capacity:4, active:true, role:"driver" };
+
+  const a = driver ? driverAssignment(driver.id) : null;
+  const passengerIds = a?.passengerIds || [];
+  const passengers = passengerIds.map(pid=> passengerById(pid)).filter(Boolean);
+
+  const cap = Number(d.capacity)||4;
+  const used = driver ? assignedCount(driver.id) : 0;
+  const free = cap - used;
+
+  const candidates = driver
+    ? STATE.passengers.filter(p => (p.status!=="assigned") && ((p.zone||"") === (d.zone||"")))
+    : [];
+
+  $("driverDetail").innerHTML = `
+    <div class="grid2">
+      <div>
+        <div class="field"><label>Nombre</label><input id="d_firstName" value="${escapeHtml(d.firstName)}"></div>
+        <div class="field"><label>Apellido</label><input id="d_lastName" value="${escapeHtml(d.lastName)}"></div>
+        <div class="field"><label>Teléfono</label><input id="d_phone" value="${escapeHtml(d.phone)}"></div>
+        <div class="field"><label>Correo</label><input id="d_email" value="${escapeHtml(d.email||"")}" placeholder="chofer@correo.com"></div>
+        <div class="field"><label>Domicilio</label><input id="d_address" value="${escapeHtml(d.address||"")}" placeholder="Calle y número"></div>
+        <div class="field"><label>Localidad</label>
+          <select id="d_localidad">
+            ${["Rosario","Funes","Roldan","San Lorenzo","Pueblo Esther","Granadero Baigorria","Villa Gobernador Gálvez"].map(l=>`<option value="${l}" ${((d.localidad||"Rosario")===l)?"selected":""}>${l}</option>`).join("")}
+          </select>
+        </div>
+        <div class="field"><label>Zona</label><input id="d_zone" value="${escapeHtml(d.zone)}" placeholder="Centro / Norte / Sur..."></div>
+        <div class="field"><label>Capacidad</label><input id="d_capacity" type="number" min="1" max="20" value="${escapeHtml(String(d.capacity ?? 4))}"></div>
+        <div class="actions">
+          <button class="btn" id="btnSaveDriver">${isNew ? "Crear" : "Guardar"}</button>
+          ${isNew ? "" : `<button class="btnDanger" id="btnDeleteDriver">Eliminar</button>`}
+        </div>
+      </div>
+
+      <div>
+        ${isNew ? `<div class="muted">Creá el chofer para poder asignar pasajeros.</div>` : `
+          <div class="rowBetween">
+            <div>
+              <div class="cardTitle small">Asignados (${used}/${cap})</div>
+              <div class="muted">Libres: ${free} • Zona: ${escapeHtml(d.zone||"")}</div>
+            </div>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="cardTitle small">Lista</div>
+          ${passengers.length ? passengers.map(p=>`
+            <div class="rowBetween" style="padding:8px 0;border-bottom:1px solid var(--line);">
+              <div>
+                <div><strong>${escapeHtml(fullName(p))}</strong> <span class="tag">${escapeHtml(p.zone||"")}</span></div>
+                <div class="muted">${escapeHtml(p.phone||"")} • ${escapeHtml(p.address||"")}</div>
+              </div>
+              <button class="btnDanger" data-unassign="${p.id}">Quitar</button>
+            </div>
+          `).join("") : `<div class="muted">No hay pasajeros asignados.</div>`}
+
+          <div class="divider"></div>
+
+          <div class="cardTitle small">Agregar (pendientes de la misma zona)</div>
+          <div class="muted">${candidates.length} candidatos</div>
+          <div style="margin-top:8px;">
+            <select id="selCandidate" ${free<=0 ? "disabled":""} style="width:100%;">
+              ${candidates.map(p=>`<option value="${p.id}">${escapeHtml(fullName(p))} • ${escapeHtml(p.address||"")}</option>`).join("")}
+            </select>
+          </div>
+          <div class="actions">
+            <button class="btn" id="btnAssign" ${free<=0 ? "disabled":""}>Asignar</button>
+            <button class="btnSecondary" id="btnAutoFill" ${free<=0 ? "disabled":""}>Auto-completar (${free} libres)</button>
+          </div>
+        `}
+      </div>
+    </div>
+  `;
+
+  $("btnSaveDriver").addEventListener("click", async ()=>{
+    const payload = {
+      firstName: $("d_firstName").value.trim(),
+      lastName: $("d_lastName").value.trim(),
+      phone: $("d_phone").value.trim(),
+      email: ($("d_email") ? $("d_email").value.trim().toLowerCase() : ""),
+      address: ($("d_address") ? $("d_address").value.trim() : ""),
+      localidad: ($("d_localidad") ? $("d_localidad").value : "Rosario"),
+      zone: $("d_zone").value.trim(),
+      capacity: Number($("d_capacity").value || 4),
+      active: true,
+      role: (driver && driver.role) ? driver.role : "driver",
+      eventId: STATE.eventId,
+      updatedAt: serverTimestamp(),
+    }
+
+    // Auto-geocodificar chofer si hay domicilio (no requiere que el usuario haga nada)
+    // Si el domicilio/localidad cambian, recalculamos lat/lng.
+    const prevAddr = (driver?.address||"").trim();
+    const prevLoc = (driver?.localidad||"Rosario").trim();
+    const addrNow = (payload.address||"").trim();
+    const locNow = (payload.localidad||"Rosario").trim();
+    if(addrNow){
+      const changed = (addrNow !== prevAddr) || (locNow !== prevLoc) || (driver?.lat==null) || (driver?.lng==null);
+      if(changed){
+        try{
+          const q = `${addrNow}, ${locNow}, Santa Fe, Argentina`;
+          const geo = await geocodeQuery(q);
+          if(geo){
+            payload.lat = geo.lat;
+            payload.lng = geo.lng;
+            payload.geocodedQuery = q;
+            payload.geocodedAt = serverTimestamp();
+          }
+        }catch(e){
+          console.warn("geocode driver fail", e);
+        }
+      }else{
+        payload.lat = driver.lat ?? null;
+        payload.lng = driver.lng ?? null;
+      }
+    }else{
+      payload.lat = driver?.lat ?? null;
+      payload.lng = driver?.lng ?? null;
+    }
+;
+
+    if(isNew){
+      payload.createdAt = serverTimestamp();
+      await addDoc(collection(db,"drivers"), payload);
+      toast("Chofer creado");
+    }else{
+      await updateDoc(doc(db,"drivers",driver.id), payload);
+      toast("Chofer guardado");
+    }
+    await loadDriversAndRender();
+  });
+
+  if(!isNew){
+    $("btnDeleteDriver").addEventListener("click", async ()=>{
+      if(!confirm("¿Eliminar chofer? (No borra automáticamente asignaciones)")) return;
+      await deleteDoc(doc(db,"drivers",driver.id));
+      toast("Chofer eliminado");
+      await refreshAll();
+      $("driverDetail").textContent = "Seleccioná un chofer para ver/editar y asignar pasajeros.";
+    });
+
+    // unassign
+    $("driverDetail").querySelectorAll("button[data-unassign]").forEach(b=>{
+      b.addEventListener("click", async ()=>{
+        const pid = b.dataset.unassign;
+        await unassignPassenger(driver.id, pid);
+        await refreshAll();
+        renderDriverDetailForm(driverById(driver.id));
+      });
+    });
+
+    // assign one
+    $("btnAssign").addEventListener("click", async ()=>{
+      const pid = $("selCandidate").value;
+      if(!pid) return;
+      try{
+        await assignPassenger(driver.id, pid);
+        await refreshAll();
+        renderDriverDetailForm(driverById(driver.id));
+      }catch(e){
+        alert(e.message || String(e));
+      }
+    });
+
+    // autofill
+    $("btnAutoFill").addEventListener("click", async ()=>{
+      const freeSlots = (Number(driver.capacity)||4) - assignedCount(driver.id);
+      const cand = STATE.passengers
+        .filter(p=>p.status!=="assigned" && (p.zone||"")===(driver.zone||""))
+        .slice(0, freeSlots);
+
+      for(const p of cand){
+        try{ await assignPassenger(driver.id, p.id); }
+        catch(e){ console.warn(e); }
+      }
+      await refreshAll();
+      renderDriverDetailForm(driverById(driver.id));
+      toast("Auto-completar listo");
+    });
+  }
+}
+
+/* -------------------- PASSENGERS UI -------------------- */
+$("passengerSearch").addEventListener("input", renderPassengersTable);
+$("passengerZoneFilter").addEventListener("change", renderPassengersTable);
+$("passengerStatusFilter").addEventListener("change", renderPassengersTable);
+
+$("btnNewPassenger").addEventListener("click", ()=> renderPassengerDetailForm(null));
+
+function renderPassengersTable(){
+  const q = ($("passengerSearch").value||"").toLowerCase();
+  const zf = $("passengerZoneFilter").value;
+  const sf = $("passengerStatusFilter").value;
+
+  const list = STATE.passengers.filter(p=>{
+    if(zf && (p.zone||"") !== zf) return false;
+    if(sf && (p.status||"unassigned") !== sf) return false;
+    const hay = `${p.firstName||""} ${p.lastName||""} ${p.phone||""} ${p.address||""} ${p.zone||""} ${p.localidad||""}`.toLowerCase();
+    return !q || hay.includes(q);
+  });
+
+  const html = `
+  <table>
+    <thead>
+      <tr>
+        <th>Joven</th><th>Tel</th><th>Dirección</th><th>Localidad</th><th>Zona</th><th>Estado</th><th>Chofer</th><th></th>
+      </tr>
+    </thead>
+    <tbody>
+      ${list.map(p=>{
+        const driver = p.assignedDriverId ? driverById(p.assignedDriverId) : null;
+        return `
+        <tr>
+          <td><strong>${escapeHtml(fullName(p))}</strong></td>
+          <td>${escapeHtml(p.phone||"")}</td>
+          <td>${escapeHtml(p.address||"")}</td>
+          <td>${escapeHtml(p.localidad||"Rosario")}</td>
+          <td><span class="tag">${escapeHtml(p.zone||"")}</span></td>
+          <td>${p.status==="assigned" ? `<span class="pill">Asignado</span>` : `<span class="pill">Pendiente</span>`}</td>
+          <td>${driver ? escapeHtml(fullName(driver)) : "-"}</td>
+          <td><button class="btnSecondary" data-passenger="${p.id}">Ver</button></td>
+        </tr>`;
+      }).join("")}
+    </tbody>
+  </table>`;
+  $("passengersTable").innerHTML = html;
+
+  $("passengersTable").querySelectorAll("button[data-passenger]").forEach(b=>{
+    b.addEventListener("click", ()=>{
+      const id = b.dataset.passenger;
+      const p = passengerById(id);
+      renderPassengerDetailForm(p);
+    });
+  });
+}
+
+function renderPassengerDetailForm(passenger){
+  const isNew = !passenger;
+  const p = passenger || { firstName:"", lastName:"", phone:"", address:"", zone:"", localidad:"Rosario", status:"unassigned", assignedDriverId:null, lat:null, lng:null };
+
+  const driver = p.assignedDriverId ? driverById(p.assignedDriverId) : null;
+
+  $("passengerDetail").innerHTML = `
+    <div class="grid2">
+      <div>
+        <div class="field"><label>Nombre</label><input id="p_firstName" value="${escapeHtml(p.firstName)}"></div>
+        <div class="field"><label>Apellido</label><input id="p_lastName" value="${escapeHtml(p.lastName)}"></div>
+        <div class="field"><label>Teléfono</label><input id="p_phone" value="${escapeHtml(p.phone)}"></div>
+        <div class="field"><label>Dirección</label><input id="p_address" value="${escapeHtml(p.address)}"></div>
+        <div class="field"><label>Localidad</label>
+          <select id="p_localidad">
+            ${["Rosario",
+                "Funes",
+                "Roldan",
+                "San Lorenzo",
+                "Pueblo Esther",
+                "Granadero Baigorria",
+                "Villa Gobernador Gálvez"].map(l=>`<option value="${l}" ${((p.localidad||"Rosario")===l)?"selected":""}>${l}</option>`).join("")}
+          </select>
+        </div>
+        <div class="field"><label>Zona</label><input id="p_zone" value="${escapeHtml(p.zone)}"></div>
+
+        <div class="muted">Estado: <strong>${escapeHtml(p.status || "unassigned")}</strong></div>
+        <div class="muted">Chofer: <strong>${driver ? escapeHtml(fullName(driver)) : "-"}</strong></div>
+
+        <div class="actions">
+          <button class="btn" id="btnSavePassenger">${isNew ? "Crear" : "Guardar"}</button>
+          ${isNew ? "" : `<button class="btnDanger" id="btnDeletePassenger">Eliminar</button>`}
+          ${(!isNew && p.status==="assigned" && p.assignedDriverId) ? `<button class="btnDanger" id="btnUnassignHere">Quitar asignación</button>` : ""}
+        </div>
+      </div>
+
+      <div>
+        ${(!isNew && p.status!=="assigned") ? renderQuickAssignBox(p) : `
+          <div class="muted">Si querés asignar rápido, ponelo “pendiente” y asigná desde el chofer (recomendado).</div>
+        `}
+      </div>
+    </div>
+  `;
+
+  $("btnSavePassenger").addEventListener("click", async ()=>{
+    const payload = {
+      firstName: $("p_firstName").value.trim(),
+      lastName: $("p_lastName").value.trim(),
+      phone: $("p_phone").value.trim(),
+      address: $("p_address").value.trim(),
+      localidad: ($("p_localidad") ? $("p_localidad").value : "Rosario"),
+      zone: $("p_zone").value.trim(),
+      eventId: STATE.eventId,
+      updatedAt: serverTimestamp(),
+    };
+
+    if(isNew){
+      payload.status = "unassigned";
+      payload.assignedDriverId = null;
+      payload.assignedDriverEmail = null;
+      payload.lat = null;
+      payload.lng = null;
+      payload.createdAt = serverTimestamp();
+      await addDoc(collection(db,"passengers"), payload);
+      toast("Joven creado");
+    }else{
+      await updateDoc(doc(db,"passengers",passenger.id), payload);
+      toast("Joven guardado");
+    }
+    await loadPassengersAndRender();
+  });
+
+  if(!isNew){
+    $("btnDeletePassenger").addEventListener("click", async ()=>{
+      if(!confirm("¿Eliminar joven?")) return;
+      // si estaba asignado, intentar sacarlo de la asignación
+      if(passenger.status==="assigned" && passenger.assignedDriverId){
+        await unassignPassenger(passenger.assignedDriverId, passenger.id);
+      }
+      await deleteDoc(doc(db,"passengers",passenger.id));
+      toast("Joven eliminado");
+      await refreshAll();
+      $("passengerDetail").textContent = "Seleccioná un joven para ver/editar.";
+    });
+
+    const unBtn = $("btnUnassignHere");
+    if(unBtn){
+      unBtn.addEventListener("click", async ()=>{
+        await unassignPassenger(passenger.assignedDriverId, passenger.id);
+        await refreshAll();
+        renderPassengerDetailForm(passengerById(passenger.id));
+      });
+    }
+
+    const qa = $("btnQuickAssign");
+    if(qa){
+      qa.addEventListener("click", async ()=>{
+        const driverId = $("selQuickDriver").value;
+        if(!driverId) return;
+        try{
+          await assignPassenger(driverId, passenger.id);
+          await refreshAll();
+          renderPassengerDetailForm(passengerById(passenger.id));
+        }catch(e){
+          alert(e.message || String(e));
+        }
+      });
+    }
+  }
+}
+
+function renderQuickAssignBox(p){
+  const driversSameZone = STATE.drivers
+    .filter(d=> (d.zone||"") === (p.zone||""))
+    .map(d=>{
+      const cap = Number(d.capacity)||4;
+      const used = assignedCount(d.id);
+      return { d, used, cap };
+    })
+    .filter(x=> x.used < x.cap);
+
+  return `
+    <div class="cardTitle small">Asignación rápida (misma zona)</div>
+    <div class="muted">Solo muestra choferes con lugar libre.</div>
+    <div style="margin-top:8px;">
+      <select id="selQuickDriver" style="width:100%;">
+        ${driversSameZone.map(x=>`
+          <option value="${x.d.id}">
+            ${escapeHtml(fullName(x.d))} • ${x.used}/${x.cap}
+          </option>
+        `).join("")}
+      </select>
+    </div>
+    <div class="actions">
+      <button class="btn" id="btnQuickAssign" ${driversSameZone.length? "" : "disabled"}>Asignar</button>
+    </div>
+  `;
+}
+
+/* -------------------- ASSIGN / UNASSIGN (transaction) -------------------- */
+async function assignPassenger(driverId, passengerId){
+  const driverRef = doc(db,"drivers",driverId);
+  const passengerRef = doc(db,"passengers",passengerId);
+
+  // buscamos/creamos assignment doc para este driver + event
+  const assignmentRef = await ensureAssignmentDoc(driverId);
+
+  await runTransaction(db, async (tx)=>{
+    const driverSnap = await tx.get(driverRef);
+    if(!driverSnap.exists()) throw new Error("Chofer no existe");
+
+    const passengerSnap = await tx.get(passengerRef);
+    if(!passengerSnap.exists()) throw new Error("Pasajero no existe");
+
+    const d = driverSnap.data();
+    const p = passengerSnap.data();
+
+    if(p.eventId !== STATE.eventId || d.eventId !== STATE.eventId){
+      throw new Error("EventId no coincide");
+    }
+    if(p.status === "assigned" && p.assignedDriverId){
+      throw new Error("Ese pasajero ya está asignado");
+    }
+
+    const aSnap = await tx.get(assignmentRef);
+    const a = aSnap.exists() ? aSnap.data() : { passengerIds:[] };
+
+    const cap = Number(d.capacity)||4;
+    const ids = Array.isArray(a.passengerIds) ? a.passengerIds : [];
+    if(ids.length >= cap) throw new Error("Chofer lleno (capacidad alcanzada)");
+
+    // update assignment
+    const newIds = [...ids, passengerId];
+    tx.set(assignmentRef, {
+      eventId: STATE.eventId,
+      driverId,
+      passengerIds: newIds,
+      updatedAt: serverTimestamp(),
+    }, { merge:true });
+
+    // update passenger
+    tx.update(passengerRef, {
+      status: "assigned",
+      assignedDriverId: driverId,
+      assignedDriverEmail: (d.email||"").trim().toLowerCase(),
+      updatedAt: serverTimestamp(),
+    });
+  });
+
+  toast("Asignado");
+}
+
+async function unassignPassenger(driverId, passengerId){
+  const passengerRef = doc(db,"passengers",passengerId);
+  const assignmentRef = await ensureAssignmentDoc(driverId);
+
+  await runTransaction(db, async (tx)=>{
+    const pSnap = await tx.get(passengerRef);
+    if(!pSnap.exists()) return;
+    const p = pSnap.data();
+
+    const aSnap = await tx.get(assignmentRef);
+    const a = aSnap.exists() ? aSnap.data() : { passengerIds:[] };
+    const ids = Array.isArray(a.passengerIds) ? a.passengerIds : [];
+    const newIds = ids.filter(id=>id!==passengerId);
+
+    tx.set(assignmentRef, {
+      eventId: STATE.eventId,
+      driverId,
+      passengerIds: newIds,
+      updatedAt: serverTimestamp(),
+    }, { merge:true });
+
+    // solo si coincide chofer
+    if(p.assignedDriverId === driverId){
+      tx.update(passengerRef, {
+        status: "unassigned",
+      assignedDriverId: null,
+      assignedDriverEmail: null,
+      lat: null,
+      lng: null,
+        assignedDriverEmail: null,
+        updatedAt: serverTimestamp(),
+      });
+    }
+  });
+
+  toast("Quitado");
+}
+
+async function ensureAssignmentDoc(driverId){
+  // assignmentId determinístico: `${eventId}_${driverId}`
+  const id = `${STATE.eventId}_${driverId}`;
+  const ref = doc(db,"assignments", id);
+  const snap = await getDoc(ref);
+  if(!snap.exists()){
+    await setDoc(ref, { eventId: STATE.eventId, driverId, passengerIds: [], createdAt: serverTimestamp() });
+  }
+  return ref;
+}
+
+/* -------------------- ASSIGNMENTS VIEW -------------------- */
+$("assignmentSearch").addEventListener("input", renderAssignments);
+$("assignmentZoneFilter").addEventListener("change", renderAssignments);
+$("btnCopyWA").addEventListener("click", async ()=>{
+  await navigator.clipboard.writeText($("waText").value || "");
+  toast("Copiado");
+});
+
+$("btnExportCSV").addEventListener("click", ()=>{
+  const csv = exportAssignmentsCSV();
+  downloadTextFile(`asignaciones_${STATE.eventId}.csv`, csv);
+});
+
+function renderAssignments(){
+  const zf = $("assignmentZoneFilter").value;
+  const q = ($("assignmentSearch").value||"").toLowerCase();
+
+  // armar lista por driver
+  const items = STATE.drivers
+    .filter(d=> !zf || (d.zone||"")===zf)
+    .map(d=>{
+      const a = driverAssignment(d.id);
+      const pids = a?.passengerIds || [];
+      const plist = pids.map(pid=> passengerById(pid)).filter(Boolean);
+      return { d, plist };
+    });
+
+  const filtered = items.filter(it=>{
+    if(!q) return true;
+    const hay = `${fullName(it.d)} ${it.d.phone||""} ${it.d.zone||""} ` +
+      it.plist.map(p=>`${fullName(p)} ${p.phone||""} ${p.address||""}`).join(" ");
+    return hay.toLowerCase().includes(q);
+  });
+
+  $("assignmentsList").innerHTML = filtered.map(it=>{
+    const cap = Number(it.d.capacity)||4;
+    const used = it.plist.length;
+    return `
+      <div class="item" data-driver="${it.d.id}">
+        <div class="itemHeader">
+          <div>
+            <div class="itemTitle">${escapeHtml(fullName(it.d))}</div>
+            <div class="muted">${escapeHtml(it.d.phone||"")} • <span class="tag">${escapeHtml(it.d.zone||"")}</span></div>
+          </div>
+          <div class="pill">${used}/${cap}</div>
+        </div>
+        <div class="divider"></div>
+        ${it.plist.length ? it.plist.map(p=>`
+          <div class="rowBetween" style="padding:6px 0;">
+            <div>
+              <strong>${escapeHtml(fullName(p))}</strong>
+              <div class="muted">${escapeHtml(p.phone||"")} • ${escapeHtml(p.address||"")}</div>
+            </div>
+            <button class="btnDanger" data-unassign2="${it.d.id}|${p.id}">Quitar</button>
+          </div>
+        `).join("") : `<div class="muted">Sin asignados.</div>`}
+      </div>
+    `;
+  }).join("");
+
+  // click para generar WhatsApp
+  $("assignmentsList").querySelectorAll(".item[data-driver]").forEach(el=>{
+    el.addEventListener("click", (e)=>{
+      // evitar que el click en "Quitar" dispare el WA
+      if(e.target?.dataset?.unassign2) return;
+      const id = el.dataset.driver;
+      $("waText").value = makeWhatsAppText(id);
+      toast("Texto listo");
+    });
+  });
+
+  // quitar desde vista
+  $("assignmentsList").querySelectorAll("button[data-unassign2]").forEach(b=>{
+    b.addEventListener("click", async (e)=>{
+      e.stopPropagation();
+      const [did,pid] = b.dataset.unassign2.split("|");
+      await unassignPassenger(did, pid);
+      await refreshAll();
+    });
+  });
+}
+
+function makeWhatsAppText(driverId){
+  const d = driverById(driverId);
+  const a = driverAssignment(driverId);
+  const pids = a?.passengerIds || [];
+  const plist = pids.map(pid=> passengerById(pid)).filter(Boolean);
+
+  const lines = [];
+  lines.push(`Chofer: ${fullName(d)} (${d.phone||"-"})`);
+  lines.push(`Zona: ${d.zone||"-"} • Pasajeros: ${plist.length}/${Number(d.capacity)||4}`);
+  lines.push("");
+  plist.forEach((p,i)=>{
+    lines.push(`${i+1}) ${fullName(p)} • ${p.phone||"-"}`);
+    lines.push(`   ${p.address||"-"} • Zona: ${p.zone||"-"}`);
+  });
+  if(!plist.length) lines.push("(Sin asignados)");
+  return lines.join("\n");
+}
+
+function exportAssignmentsCSV(){
+  // driver -> passenger rows
+  const header = ["driverLastName","driverFirstName","driverPhone","driverZone","passengerLastName","passengerFirstName","passengerPhone","passengerAddress","passengerZone"];
+  const rows = [];
+
+  STATE.drivers.forEach(d=>{
+    const a = driverAssignment(d.id);
+    const pids = a?.passengerIds || [];
+    if(!pids.length){
+      rows.push([d.lastName||"", d.firstName||"", d.phone||"", d.zone||"", "", "", "", "", ""]);
+      return;
+    }
+    pids.forEach(pid=>{
+      const p = passengerById(pid);
+      rows.push([
+        d.lastName||"", d.firstName||"", d.phone||"", d.zone||"",
+        p?.lastName||"", p?.firstName||"", p?.phone||"", p?.address||"", p?.zone||""
+      ]);
+    });
+  });
+
+  const esc = (v)=> `"${String(v??"").replaceAll('"','""')}"`;
+  return [header.join(","), ...rows.map(r=>r.map(esc).join(","))].join("\n");
+}
+
+function downloadTextFile(filename, content){
+  const blob = new Blob([content], {type:"text/plain;charset=utf-8"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+
+
+/* -------------------- GEO HELPERS -------------------- */
+function haversineKm(lat1, lon1, lat2, lon2){
+  const R = 6371;
+  const toRad = (x)=> x * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+}
+
+function hasLatLng(x){
+  return x && typeof x.lat === "number" && typeof x.lng === "number" && !isNaN(x.lat) && !isNaN(x.lng);
+}
+
+
+async function geocodeQuery(q){
+  const url = "https://nominatim.openstreetmap.org/search?format=json&limit=1&q=" + encodeURIComponent(q);
+  const res = await fetch(url, { headers: { "Accept": "application/json" }});
+  const data = await res.json();
+  if(data && data[0]) return { lat:Number(data[0].lat), lng:Number(data[0].lon) };
+  return null;
+}
+
+/* -------------------- MAP (Leaflet) -------------------- */
+// Requires Leaflet loaded in Index.html (leaflet.js + leaflet.css)
+let MAP = {
+  map: null,
+  passengersLayer: null,
+  driversLayer: null,
+  zonesLayer: null
+};
+
+const LOCALIDADES = [
+  "Rosario",
+  "Funes",
+  "Roldan",
+  "San Lorenzo",
+  "Pueblo Esther",
+  "Granadero Baigorria",
+  "Villa Gobernador Gálvez"
+];
 
 // Rough bounds for Gran Rosario (approx)
 const GRAN_ROSARIO_CENTER = [-32.95, -60.66];
@@ -75,8 +1017,6 @@ const ZONE_POLYS = {
 };
 
 function initMapIfNeeded(){
-  if(typeof MAP === "undefined") return;
-
   const el = $("map");
   if(!el) return;
 
@@ -137,8 +1077,6 @@ function zoneFromPassenger(p){
 }
 
 function renderMap(){
-  if(typeof MAP === "undefined") return;
-
   initMapIfNeeded();
   if(!MAP.map) return;
 
@@ -562,26 +1500,6 @@ function resolveAuthRole(){
 }
 
 
-
-async function refreshAll(){
-  // Central refresh: loads collections for current event and re-renders views
-  if(STATE.eventId && typeof localStorage !== "undefined"){
-    localStorage.setItem("selectedEventId", STATE.eventId);
-  }
-
-  if(typeof loadDrivers === "function") await loadDrivers();
-  if(typeof loadPassengers === "function") await loadPassengers();
-  if(typeof loadAssignments === "function") await loadAssignments();
-
-  if(typeof renderZones === "function") renderZones();
-  if(typeof renderDrivers === "function") renderDrivers();
-  if(typeof renderPassengers === "function") renderPassengers();
-  if(typeof renderAssignments === "function") renderAssignments();
-  if(typeof renderDashboard === "function") renderDashboard();
-  if(typeof renderTracking === "function") renderTracking();
-  if(typeof renderMap === "function" && typeof MAP !== "undefined") renderMap();
-}
-
 /* -------------------- START -------------------- */
 (async function init(){
   // 1) Conectar botón de login (si no se llama, el click no hace nada)
@@ -623,194 +1541,50 @@ async function refreshAll(){
   renderTracking();
 })();
 
-function renderEventDetailForm(ev){
-  const isNew = !ev;
-  const e = ev || { id:"", name:"", date:"", domicilioEvento:"", localidadEvento:"Rosario", lat:null, lng:null };
-
-  const box = $$("eventDetail");
-  if(!box) return;
-
-  box.innerHTML = `
-    <div class="card" style="margin-top:10px;">
-      <div class="cardTitle">${isNew ? "Nuevo evento" : "Editar evento"}</div>
-      <div class="muted">Destino del viaje: “Domicilio Evento”.</div>
-
-      <div class="grid2" style="margin-top:10px;">
-        <div>
-          <div class="field"><label>Event ID</label>
-            <input id="ev_id" value="${escapeHtml(e.id||"")}" ${isNew? "" : "disabled"} placeholder="Ej: Jovenes17-01-26">
-          </div>
-          <div class="field"><label>Nombre</label>
-            <input id="ev_name" value="${escapeHtml(e.name||"")}" placeholder="Ej: Jóvenes Rosario">
-          </div>
-          <div class="field"><label>Fecha (texto)</label>
-            <input id="ev_date" value="${escapeHtml(e.date||"")}" placeholder="Ej: 2026-01-17">
-          </div>
-        </div>
-
-        <div>
-          <div class="field"><label>Domicilio Evento (Destino)</label>
-            <input id="ev_address" value="${escapeHtml(e.domicilioEvento||"")}" placeholder="Ej: Calle y número del lugar del evento">
-          </div>
-          <div class="field"><label>Localidad Evento</label>
-            <select id="ev_localidad">
-              ${LOCALIDADES.map(l=>`<option value="${l}" ${((e.localidadEvento||"Rosario")===l)?"selected":""}>${l}</option>`).join("")}
-            </select>
-          </div>
-          <div class="muted">Coordenadas: ${e.lat && e.lng ? `${e.lat}, ${e.lng}` : "(sin geocodificar)"}</div>
-        </div>
-      </div>
-
-      <div class="actions" style="margin-top:10px;">
-        <button class="btn" id="btnSaveEvent">${isNew ? "Crear evento" : "Guardar cambios"}</button>
-        ${isNew ? "" : `<button class="btnDanger" id="btnDeleteEvent">Eliminar evento</button>`}
-        <button class="btnSecondary" id="btnGeocodeEvent">Geocodificar domicilio</button>
-      </div>
-      <div class="muted" id="eventFormHint"></div>
-    </div>
-  `;
-
-  $$("btnGeocodeEvent").addEventListener("click", async ()=>{
-    const addr = ($$("ev_address").value||"").trim();
-    const loc = ($$("ev_localidad").value||"Rosario").trim();
-    if(!addr){ alert("Completá el domicilio del evento."); return; }
-    const q = `${addr}, ${loc}, Santa Fe, Argentina`;
-    const hint = $$("eventFormHint");
-    if(hint) hint.textContent = "Geocodificando...";
-    const geo = await geocodeQuery(q);
-    if(!geo){
-      if(hint) hint.textContent = "No se pudo geocodificar.";
-      alert("No se pudo geocodificar ese domicilio.");
-      return;
-    }
-    if(hint) hint.textContent = `OK: ${geo.lat}, ${geo.lng}`;
-    renderEventDetailForm({ ...e, domicilioEvento: addr, localidadEvento: loc, lat: geo.lat, lng: geo.lng });
-  });
-
-  $$("btnSaveEvent").addEventListener("click", async ()=>{
-    const id = ($$("ev_id").value||"").trim();
-    if(isNew && !id){ alert("Event ID requerido"); return; }
-
-    const payload = {
-      name: ($$("ev_name").value||"").trim(),
-      date: ($$("ev_date").value||"").trim(),
-      domicilioEvento: ($$("ev_address").value||"").trim(),
-      localidadEvento: ($$("ev_localidad").value||"Rosario").trim(),
-      updatedAt: serverTimestamp(),
-    };
-
-    if(payload.domicilioEvento){
-      const q = `${payload.domicilioEvento}, ${payload.localidadEvento}, Santa Fe, Argentina`;
-      const geo = await geocodeQuery(q);
-      if(geo){
-        payload.lat = geo.lat;
-        payload.lng = geo.lng;
-        payload.geocodedQuery = q;
-        payload.geocodedAt = serverTimestamp();
-      }
-    }
-
-    if(isNew){
-      payload.createdAt = serverTimestamp();
-      await setDoc(doc(db,"events", id), payload);
-      toast("Evento creado");
-    }else{
-      await updateDoc(doc(db,"events", e.id), payload);
-      toast("Evento guardado");
-    }
-
-    await loadEvents();
-    await refreshAll();
-    const ev2 = STATE.events.find(x=>x.id===STATE.eventId) || null;
-    if(ev2) renderEventDetailForm(ev2);
-  });
-
-  if(!isNew){
-    $$("btnDeleteEvent").addEventListener("click", async ()=>{
-      if(!confirm("¿Eliminar evento?")) return;
-      await deleteDoc(doc(db,"events", e.id));
-      toast("Evento eliminado");
-      await loadEvents();
-      await refreshAll();
-      box.innerHTML = "Seleccioná un evento o creá uno nuevo.";
-    });
-  }
-}
-
-
-function haversineKm(lat1, lon1, lat2, lon2){
-  const R = 6371;
-  const toRad = (d)=> d * Math.PI / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLon = toRad(lon2 - lon1);
-  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
-  return 2 * R * Math.asin(Math.sqrt(a));
-}
-
-function hasLatLng(x){
-  return x && typeof x.lat === "number" && typeof x.lng === "number" && !isNaN(x.lat) && !isNaN(x.lng);
-}
-
-
-function getEventDestination(){
-  const ev = STATE.events.find(e=>e.id===STATE.eventId);
-  if(!ev) return null;
-  if(typeof ev.lat === "number" && typeof ev.lng === "number") return { lat: ev.lat, lng: ev.lng, domicilioEvento: ev.domicilioEvento||"", localidadEvento: ev.localidadEvento||"" };
-  return null;
-}
-
 
 function optimizeAssignments(){
-  // Returns a plan: [{passengerId, driverId, costKm, d1Km, d2Km}]
   const dest = getEventDestination();
-  if(!dest) return { ok:false, reason:"El evento no tiene coordenadas (geocodificá el domicilio del evento)." };
+  if(!dest) return { ok:false, reason:"El evento no tiene coordenadas. Geocodificá el Domicilio Evento en Config." };
 
-  const drivers = STATE.drivers
+  const drivers = (STATE.drivers||[])
     .filter(d => hasLatLng(d))
     .map(d => ({...d, cap: Number(d.capacity)||4, used: assignedCount(d.id)}))
     .filter(d => d.used < d.cap);
 
-  const passengers = STATE.passengers
-    .filter(p => (p.status !== "assigned" || !p.assignedDriverId)) // pendientes
+  const passengers = (STATE.passengers||[])
+    .filter(p => !p.assignedDriverId) // pendientes
     .filter(p => hasLatLng(p));
 
-  if(!drivers.length) return { ok:false, reason:"No hay choferes con coordenadas (lat/lng). Geocodificá los choferes." };
-  if(!passengers.length) return { ok:false, reason:"No hay pasajeros pendientes con coordenadas. Geocodificá los jóvenes." };
+  if(!drivers.length) return { ok:false, reason:"No hay choferes con coordenadas (lat/lng). Verificá que se geocodificaron (o editá/guardá su dirección para recalcular)." };
+  if(!passengers.length) return { ok:false, reason:"No hay pasajeros pendientes con coordenadas. Usá el botón de Geocodificar jóvenes en el mapa." };
 
-  // Build cost matrix
   const pairs = [];
-  passengers.forEach(p=>{
-    drivers.forEach(d=>{
-      // optional hard constraints: if both have localidad and differ a lot, we could penalize; keep simple
+  for(const p of passengers){
+    for(const d of drivers){
       const d1 = haversineKm(d.lat, d.lng, p.lat, p.lng);
       const d2 = haversineKm(p.lat, p.lng, dest.lat, dest.lng);
       const cost = d1 + d2;
       pairs.push({ passengerId:p.id, driverId:d.id, costKm:cost, d1Km:d1, d2Km:d2 });
-    });
-  });
+    }
+  }
+  pairs.sort((a,b)=>a.costKm-b.costKm);
 
-  // Greedy assignment: sort by cost ascending, pick if both available.
-  pairs.sort((a,b)=>a.costKm - b.costKm);
-
-  const driverRemaining = new Map(drivers.map(d=>[d.id, d.cap - d.used]));
+  const driverRemaining = new Map(drivers.map(d=>[d.id, d.cap-d.used]));
   const passengerAssigned = new Set();
   const plan = [];
 
   for(const pair of pairs){
     if(passengerAssigned.has(pair.passengerId)) continue;
     const rem = driverRemaining.get(pair.driverId) || 0;
-    if(rem <= 0) continue;
-
+    if(rem<=0) continue;
     passengerAssigned.add(pair.passengerId);
     driverRemaining.set(pair.driverId, rem-1);
     plan.push(pair);
   }
 
-  // Some passengers may remain unassigned due to capacity
-  const unassigned = passengers.filter(p=>!passengerAssigned.has(p.id)).map(p=>p.id);
-
+  const unassignedCount = passengers.length - plan.length;
   const totalKm = plan.reduce((s,x)=>s+x.costKm,0);
-  return { ok:true, plan, totalKm, dest, unassignedCount: unassigned.length, considered:{drivers:drivers.length, passengers:passengers.length} };
+  return { ok:true, plan, totalKm, dest, unassignedCount, considered:{drivers:drivers.length, passengers:passengers.length} };
 }
 
 function renderOptimizationResult(res){
@@ -822,64 +1596,66 @@ function renderOptimizationResult(res){
     return;
   }
 
-  // Group by driver
   const byDriver = new Map();
   res.plan.forEach(x=>{
     if(!byDriver.has(x.driverId)) byDriver.set(x.driverId, []);
     byDriver.get(x.driverId).push(x);
   });
 
-  const rows = [];
-  byDriver.forEach((items, driverId)=>{
+  const cards = [];
+  for(const [driverId, items] of byDriver.entries()){
     const d = driverById(driverId);
     const name = d ? fullName(d) : driverId;
     const subtotal = items.reduce((s,i)=>s+i.costKm,0);
-    rows.push(`<div class="card" style="margin-top:10px;">
+
+    const rows = items.map(i=>{
+      const p = passengerById(i.passengerId);
+      const pname = p ? fullName(p) : i.passengerId;
+      return `<tr>
+        <td>${escapeHtml(pname)}</td>
+        <td>${i.d1Km.toFixed(1)} km</td>
+        <td>${i.d2Km.toFixed(1)} km</td>
+        <td><strong>${i.costKm.toFixed(1)} km</strong></td>
+      </tr>`;
+    }).join("");
+
+    cards.push(`<div class="card" style="margin-top:10px;">
       <div class="cardTitle">Chofer: ${escapeHtml(name)} <span class="muted">(${items.length} pasajeros • ${subtotal.toFixed(1)} km)</span></div>
       <div class="tableWrap">
         <table class="table">
-          <thead><tr><th>Pasajero</th><th>Origen→Pasajero</th><th>Pasajero→Evento</th><th>Total</th></tr></thead>
-          <tbody>
-            ${items.map(i=>{
-              const p = passengerById(i.passengerId);
-              return `<tr>
-                <td>${p ? escapeHtml(fullName(p)) : i.passengerId}</td>
-                <td>${i.d1Km.toFixed(1)} km</td>
-                <td>${i.d2Km.toFixed(1)} km</td>
-                <td><strong>${i.costKm.toFixed(1)} km</strong></td>
-              </tr>`;
-            }).join("")}
-          </tbody>
+          <thead><tr><th>Pasajero</th><th>Chofer→Pasajero</th><th>Pasajero→Evento</th><th>Total</th></tr></thead>
+          <tbody>${rows}</tbody>
         </table>
       </div>
     </div>`);
-  });
+  }
 
   el.innerHTML = `
     <div class="card" style="margin-top:12px;">
       <div class="cardTitle">Optimización de rutas</div>
       <div class="muted">
-        Evento destino: ${escapeHtml(res.dest.domicilioEvento||"")} (${escapeHtml(res.dest.localidadEvento||"")})<br/>
+        Destino: ${escapeHtml(res.dest.domicilioEvento||"")} (${escapeHtml(res.dest.localidadEvento||"")})<br/>
         Choferes considerados: ${res.considered.drivers} • Pasajeros pendientes considerados: ${res.considered.passengers}<br/>
-        Asignaciones propuestas: <strong>${res.plan.length}</strong> • Total aprox: <strong>${res.totalKm.toFixed(1)} km</strong>
-        ${res.unassignedCount ? `<br/>Quedaron sin asignar por capacidad: <strong>${res.unassignedCount}</strong>` : ""}
+        Propuesta: <strong>${res.plan.length}</strong> asignaciones • Total aprox: <strong>${res.totalKm.toFixed(1)} km</strong>
+        ${res.unassignedCount ? `<br/>Sin asignar por capacidad: <strong>${res.unassignedCount}</strong>` : ""}
       </div>
       <div class="actions" style="margin-top:10px;">
         <button class="btn" id="btnApplyOptimization">Aplicar asignación</button>
       </div>
     </div>
-    ${rows.join("")}
+    ${cards.join("")}
   `;
 
   $$("btnApplyOptimization").addEventListener("click", async ()=>{
-    if(!confirm("¿Aplicar estas asignaciones? Esto asignará pasajeros pendientes a choferes.")) return;
+    if(!confirm("¿Aplicar estas asignaciones? Se asignarán pasajeros pendientes a choferes.")) return;
     try{
-      await applyOptimizationPlan(res.plan);
+      for(const item of res.plan){
+        await assignPassenger(item.passengerId, item.driverId);
+      }
       toast("Asignación aplicada");
       await refreshAll();
-      // rerun preview
+      // refrescar preview
       const again = optimizeAssignments();
-      STATE.optimization.plan = again;
       renderOptimizationResult(again);
     }catch(e){
       console.warn(e);
@@ -887,60 +1663,5 @@ function renderOptimizationResult(res){
     }
   });
 }
-
-async function applyOptimizationPlan(plan){
-  // Apply using existing assignPassenger logic (transaction safe)
-  for(const item of plan){
-    await assignPassenger(item.passengerId, item.driverId);
-  }
-}
-
-// -------------------- EVENTS --------------------
-async function loadEvents(){
-  // Loads events list into STATE.events (id, name, domicilioEvento, localidadEvento, lat/lng)
-  try{
-    const q = query(collection(db,"events"));
-    const snap = await getDocs(q);
-    const arr = [];
-    snap.forEach(docu=>{
-      const d = docu.data() || {};
-      arr.push({
-        id: docu.id,
-        ...d
-      });
-    });
-    // Sort by id for stable dropdown
-    arr.sort((a,b)=> (a.id||"").localeCompare(b.id||""));
-    STATE.events = arr;
-    if($$("eventSelect")) renderEventSelect();
-    return arr;
-  }catch(e){
-    console.warn("loadEvents failed", e);
-    throw e;
-  }
-}
-
-function renderEventSelect(){
-  const sel = $$("eventSelect");
-  if(!sel) return;
-  const current = STATE.eventId || "";
-
-  const esc = (s)=>{
-    return String(s ?? "")
-      .replaceAll("&","&amp;")
-      .replaceAll("<","&lt;")
-      .replaceAll(">","&gt;")
-      .replaceAll('"',"&quot;")
-      .replaceAll("'","&#039;");
-  };
-
-  sel.innerHTML = (STATE.events||[]).map(ev=>{
-    const label = ev.name ? `${ev.id} — ${ev.name}` : ev.id;
-    return `<option value="${esc(ev.id)}">${esc(label)}</option>`;
-  }).join("") || `<option value="">(sin eventos)</option>`;
-
-  sel.value = current;
-}
-
 
 
