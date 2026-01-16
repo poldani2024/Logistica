@@ -2,6 +2,16 @@ import {
 db } from "./firebase-init.js";
 import { parseCSV } from "./csv.js";
 
+
+function escapeHtml(s){
+  return String(s ?? "")
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#039;");
+}
+
 import {
   collection, doc, addDoc, setDoc, getDoc, getDocs, deleteDoc, updateDoc,
   query, where, orderBy, serverTimestamp,
