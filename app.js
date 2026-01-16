@@ -33,15 +33,15 @@ const STATE = {
 
 function resolveAuthRole(){
   // versión mínima para no romper
-  const email = state?.auth?.user?.email || "";
-  state.auth.isAdmin = (email === "pedro.l.oldani@gmail.com");
+  const email = STATE?.auth?.user?.email || "";
+  STATE.auth.isAdmin = (email === "pedro.l.oldani@gmail.com");
 
   // chofer: lo resolvemos si ya está cargada la lista de drivers
-  if(state.drivers && state.drivers.length){
+  if(STATE.drivers && STATE.drivers.length){
     const e = email.toLowerCase();
-    state.auth.driver = state.drivers.find(d => (d.email||"").toLowerCase() === e) || null;
+    STATE.auth.driver = STATE.drivers.find(d => (d.email||"").toLowerCase() === e) || null;
   }else{
-    state.auth.driver = null;
+    STATE.auth.driver = null;
   }
 }
 
