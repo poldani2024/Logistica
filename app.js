@@ -38,7 +38,7 @@ const $  = (id) => document.getElementById(id);
 const $$ = (id) => document.getElementById(id); // compat, tu código usa $$
 
 const STATE = {
-  eventId: "event1",
+  eventId: null,
   events: [],
   drivers: [],
   passengers: [],
@@ -70,12 +70,13 @@ function renderEventSelect(){
   const sel = $$("eventSelect");
   if(!sel) return;
 
-  sel.innerHTML = `
-    <option value="${STATE.eventId}">
-      ${STATE.eventId}
-    </option>
-  `;
-  sel.value = STATE.eventId;
+  sel.innerHTML = STATE.events.map(e =>
+    `<option value="${e.id}">${e.name || e.id}</option>`
+  ).join("");
+
+  if (STATE.eventId) {
+    sel.value = STATE.eventId;
+  }
 }
 
 
@@ -100,7 +101,7 @@ document.querySelectorAll(".tab").forEach(btn=>{
 {
   const btn = $("btnSetEvent");
   if (btn) {
-    btn.addEventListener("click", async () => {
+    b  tn.addEventListener("click", async () => {
       const v = ($("eventId")?.value || "").trim();
       STATE.eventId = v || "event1";
       await refreshAll();
@@ -950,7 +951,22 @@ $("btnDangerClearEvent").addEventListener("click", async ()=>{
     }
 
     if($$("eventSelect")) renderEventSelect();
+    // ✅ PASO 3: cuando cambio el evento desde el dropdown
+    if ($$("eventSelect")) {
+      $$("eventSelect").addEventListener("change", async () => {
+        const id = $$("eventSelect").value;
+        if (!id) return;
+    
+        STATE.eventId = id;
+        localStorage.setItem("selectedEventId", id);
+    
+        await refreshAll();
+        toast("Evento cambiado");
+      });
+    }
 
+
+    
     // Load data and resolve role
     try{ await loadDrivers(); }catch(e){}
     resolveAuthRole();
