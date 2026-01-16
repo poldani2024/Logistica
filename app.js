@@ -1,18 +1,12 @@
-import { db } from "./firebase-init.js";
+import {
+db } from "./firebase-init.js";
 import { parseCSV } from "./csv.js";
 
 import {
   collection, doc, addDoc, setDoc, getDoc, getDocs, deleteDoc, updateDoc,
   query, where, orderBy, serverTimestamp,
   runTransaction
-} 
-
-function driverByEmail(email){
-  const e = String(email||"").trim().toLowerCase();
-  if(!e) return null;
-  return (STATE.drivers||[]).find(d => String(d.email||"").trim().toLowerCase() === e) || null;
-}
-from "https://www.gstatic.com/firebasejs/10.7.2/firebase-firestore.js";
+} from "https://www.gstatic.com/firebasejs/10.7.2/firebase-firestore.js";
 
 import {
   getAuth, onAuthStateChanged,
@@ -28,6 +22,13 @@ let STATE = {
   events: [],
   auth: { user: null, isAdmin: false, driver: null },
 };
+
+function driverByEmail(email){
+  const e = String(email||"").trim().toLowerCase();
+  if(!e) return null;
+  return (STATE.drivers||[]).find(d => String(d.email||"").trim().toLowerCase() === e) || null;
+}
+
 
 const $ = (id) => document.getElementById(id);
 const $$ = (id) => document.getElementById(id);
