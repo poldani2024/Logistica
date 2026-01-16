@@ -82,14 +82,99 @@ function initMapIfNeeded(){
   return true;
 }
 
-function renderMap(){
-  if(!initMapIfNeeded()) return;
+let mapMarkersLayer = null;
+let mapZonesLayer = null;
 
-  // si el mapa estaba oculto y recién aparece, esto evita “mapa gris”
+function renderMap(){
+  const el = document.getElementById("map");
+  if(!el) return;
+  if(typeof L === "undefined") return;
+
+  // init map si no existe
+  if(!window._leafletMap){
+    window._leafletMap = L.map("map").setView([-32.95, -60.66], 11);
+
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19
+    }).addTo(window._leafletMap);
+  }
+
+  const map = window._leafletMap;
+
+  // si el mapa estaba oculto y recién se muestra
   setTimeout(() => map.invalidateSize(), 50);
 
-  // acá más adelante vas a dibujar markers
+  // limpiar capas anteriores
+  if(mapMarkersLayer) map.removeLayer(mapMarkersLayer);
+  if(mapZonesLayer) map.removeLayer(mapZonesLayer);
+
+  mapMarkersLayer = L.layerGroup().addTo(map);
+  mapZonesLayer = L.layerGroup().addTo(map);
+
+  // -------------------- ZONAS (rectángulos simples) --------------------
+  // Ajustá límites si querés después, pero esto te vuelve a mostrar "zonas"
+  const zones = [
+    { name:"Centro",  bounds:[[-32.99,-60.72],[-32.93,-60.62]] },
+    { name:"Norte",   bounds:[[-32.93,-60.72],[-32.86,-60.62]] },
+    { name:"Sur",     bounds:[[-33.05,-60.72],[-32.99,-60.62]] },
+    { name:"Oeste",   bounds:[[-33.05,-60.82],[-32.86,-60.72]] },
+    { name:"Este",    bounds:[[-33.05,-60.62],[-32.86,-60.55]] },
+  ];
+
+  zones.forEach(z=>{
+    const rect = L.rectangle(z.bounds, {
+      weight: 1,
+      fillOpacity: 0.05
+    }).addTo(mapZonesLayer);
+    rect.bindTooltip(z.name, { permanent:false, direction:"center" });
+  });
+
+  // -------------------- MARCADORES: PASAJEROS --------------------
+  // Rojo: sin chofer asignado
+  // Verde: con chofer asignado
+
+  const assignments = STATE.assignments || [];
+  const assignedPassengerIds = new Set(assignments.map(a => a.passengerId));
+
+  (STATE.passengers || []).forEach(p=>{
+    if(p.lat == null || p.lng == null) return;
+
+    const isAssigned = assignedPassengerIds.has(p.id);
+
+    const marker = L.circleMarker([p.lat, p.lng], {
+      radius: 7,
+      weight: 2,
+      fillOpacity: 0.8,
+      // Leaflet no acepta "color names" como lógica de negocio, pero sí strings CSS
+      color: isAssigned ? "green" : "red",
+      fillColor: isAssigned ? "green" : "red",
+    }).addTo(mapMarkersLayer);
+
+    marker.bindPopup(`
+      <b>Pasajero</b><br/>
+      ${escapeHtml(p.firstName || "")} ${escapeHtml(p.lastName || "")}<br/>
+      ${escapeHtml(p.address || "")}<br/>
+      ${escapeHtml(p.localidad || "")}<br/>
+      ${escapeHtml(p.phone || "")}
+    `);
+  });
+
+  // -------------------- MARCADORES: CHOFERES --------------------
+  (STATE.drivers || []).forEach(d=>{
+    if(d.lat == null || d.lng == null) return;
+
+    const marker = L.marker([d.lat, d.lng]).addTo(mapMarkersLayer);
+
+    marker.bindPopup(`
+      <b>Chofer</b><br/>
+      ${escapeHtml(d.firstName || "")} ${escapeHtml(d.lastName || "")}<br/>
+      ${escapeHtml(d.address || "")}<br/>
+      ${escapeHtml(d.localidad || "")}<br/>
+      ${escapeHtml(d.phone || "")}
+    `);
+  });
 }
+
 
 
 
