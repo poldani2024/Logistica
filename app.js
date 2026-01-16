@@ -351,7 +351,7 @@ function renderDriverDetailForm(driver){
         <div class="field"><label>Domicilio</label><input id="d_address" value="${escapeHtml(d.address||"")}" placeholder="Calle y número"></div>
         <div class="field"><label>Localidad</label>
           <select id="d_localidad">
-            ${["Rosario","Funes","Roldan","San Lorenzo","Pueblo Esther","Granadero Baigorria","Villa Gobernador Gálvez"];].map(l=>`<option value="${l}" ${((d.localidad||"Rosario")===l)?"selected":""}>${l}</option>`).join("")}
+            ${["Rosario","Funes","Roldan","San Lorenzo","Pueblo Esther","Granadero Baigorria","Villa Gobernador Gálvez"].map(l=>`<option value="${l}" ${((d.localidad||"Rosario")===l)?"selected":""}>${l}</option>`).join("")}
           </select>
         </div>
         <div class="field"><label>Zona</label><input id="d_zone" value="${escapeHtml(d.zone)}" placeholder="Centro / Norte / Sur..."></div>
