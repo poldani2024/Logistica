@@ -690,3 +690,161 @@ function renderEventDetailForm(ev){
 }
 
 
+function haversineKm(lat1, lon1, lat2, lon2){
+  const R = 6371;
+  const toRad = (d)=> d * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+function hasLatLng(x){
+  return x && typeof x.lat === "number" && typeof x.lng === "number" && !isNaN(x.lat) && !isNaN(x.lng);
+}
+
+
+function getEventDestination(){
+  const ev = STATE.events.find(e=>e.id===STATE.eventId);
+  if(!ev) return null;
+  if(typeof ev.lat === "number" && typeof ev.lng === "number") return { lat: ev.lat, lng: ev.lng, domicilioEvento: ev.domicilioEvento||"", localidadEvento: ev.localidadEvento||"" };
+  return null;
+}
+
+
+function optimizeAssignments(){
+  // Returns a plan: [{passengerId, driverId, costKm, d1Km, d2Km}]
+  const dest = getEventDestination();
+  if(!dest) return { ok:false, reason:"El evento no tiene coordenadas (geocodificá el domicilio del evento)." };
+
+  const drivers = STATE.drivers
+    .filter(d => hasLatLng(d))
+    .map(d => ({...d, cap: Number(d.capacity)||4, used: assignedCount(d.id)}))
+    .filter(d => d.used < d.cap);
+
+  const passengers = STATE.passengers
+    .filter(p => (p.status !== "assigned" || !p.assignedDriverId)) // pendientes
+    .filter(p => hasLatLng(p));
+
+  if(!drivers.length) return { ok:false, reason:"No hay choferes con coordenadas (lat/lng). Geocodificá los choferes." };
+  if(!passengers.length) return { ok:false, reason:"No hay pasajeros pendientes con coordenadas. Geocodificá los jóvenes." };
+
+  // Build cost matrix
+  const pairs = [];
+  passengers.forEach(p=>{
+    drivers.forEach(d=>{
+      // optional hard constraints: if both have localidad and differ a lot, we could penalize; keep simple
+      const d1 = haversineKm(d.lat, d.lng, p.lat, p.lng);
+      const d2 = haversineKm(p.lat, p.lng, dest.lat, dest.lng);
+      const cost = d1 + d2;
+      pairs.push({ passengerId:p.id, driverId:d.id, costKm:cost, d1Km:d1, d2Km:d2 });
+    });
+  });
+
+  // Greedy assignment: sort by cost ascending, pick if both available.
+  pairs.sort((a,b)=>a.costKm - b.costKm);
+
+  const driverRemaining = new Map(drivers.map(d=>[d.id, d.cap - d.used]));
+  const passengerAssigned = new Set();
+  const plan = [];
+
+  for(const pair of pairs){
+    if(passengerAssigned.has(pair.passengerId)) continue;
+    const rem = driverRemaining.get(pair.driverId) || 0;
+    if(rem <= 0) continue;
+
+    passengerAssigned.add(pair.passengerId);
+    driverRemaining.set(pair.driverId, rem-1);
+    plan.push(pair);
+  }
+
+  // Some passengers may remain unassigned due to capacity
+  const unassigned = passengers.filter(p=>!passengerAssigned.has(p.id)).map(p=>p.id);
+
+  const totalKm = plan.reduce((s,x)=>s+x.costKm,0);
+  return { ok:true, plan, totalKm, dest, unassignedCount: unassigned.length, considered:{drivers:drivers.length, passengers:passengers.length} };
+}
+
+function renderOptimizationResult(res){
+  const el = $$("optResult");
+  if(!el) return;
+
+  if(!res || !res.ok){
+    el.innerHTML = `<div class="card"><div class="cardTitle">Optimización</div><div class="muted">${escapeHtml(res?.reason || "Sin resultado")}</div></div>`;
+    return;
+  }
+
+  // Group by driver
+  const byDriver = new Map();
+  res.plan.forEach(x=>{
+    if(!byDriver.has(x.driverId)) byDriver.set(x.driverId, []);
+    byDriver.get(x.driverId).push(x);
+  });
+
+  const rows = [];
+  byDriver.forEach((items, driverId)=>{
+    const d = driverById(driverId);
+    const name = d ? fullName(d) : driverId;
+    const subtotal = items.reduce((s,i)=>s+i.costKm,0);
+    rows.push(`<div class="card" style="margin-top:10px;">
+      <div class="cardTitle">Chofer: ${escapeHtml(name)} <span class="muted">(${items.length} pasajeros • ${subtotal.toFixed(1)} km)</span></div>
+      <div class="tableWrap">
+        <table class="table">
+          <thead><tr><th>Pasajero</th><th>Origen→Pasajero</th><th>Pasajero→Evento</th><th>Total</th></tr></thead>
+          <tbody>
+            ${items.map(i=>{
+              const p = passengerById(i.passengerId);
+              return `<tr>
+                <td>${p ? escapeHtml(fullName(p)) : i.passengerId}</td>
+                <td>${i.d1Km.toFixed(1)} km</td>
+                <td>${i.d2Km.toFixed(1)} km</td>
+                <td><strong>${i.costKm.toFixed(1)} km</strong></td>
+              </tr>`;
+            }).join("")}
+          </tbody>
+        </table>
+      </div>
+    </div>`);
+  });
+
+  el.innerHTML = `
+    <div class="card" style="margin-top:12px;">
+      <div class="cardTitle">Optimización de rutas</div>
+      <div class="muted">
+        Evento destino: ${escapeHtml(res.dest.domicilioEvento||"")} (${escapeHtml(res.dest.localidadEvento||"")})<br/>
+        Choferes considerados: ${res.considered.drivers} • Pasajeros pendientes considerados: ${res.considered.passengers}<br/>
+        Asignaciones propuestas: <strong>${res.plan.length}</strong> • Total aprox: <strong>${res.totalKm.toFixed(1)} km</strong>
+        ${res.unassignedCount ? `<br/>Quedaron sin asignar por capacidad: <strong>${res.unassignedCount}</strong>` : ""}
+      </div>
+      <div class="actions" style="margin-top:10px;">
+        <button class="btn" id="btnApplyOptimization">Aplicar asignación</button>
+      </div>
+    </div>
+    ${rows.join("")}
+  `;
+
+  $$("btnApplyOptimization").addEventListener("click", async ()=>{
+    if(!confirm("¿Aplicar estas asignaciones? Esto asignará pasajeros pendientes a choferes.")) return;
+    try{
+      await applyOptimizationPlan(res.plan);
+      toast("Asignación aplicada");
+      await refreshAll();
+      // rerun preview
+      const again = optimizeAssignments();
+      STATE.optimization.plan = again;
+      renderOptimizationResult(again);
+    }catch(e){
+      console.warn(e);
+      alert(e?.message || String(e));
+    }
+  });
+}
+
+async function applyOptimizationPlan(plan){
+  // Apply using existing assignPassenger logic (transaction safe)
+  for(const item of plan){
+    await assignPassenger(item.passengerId, item.driverId);
+  }
+}
+
+
