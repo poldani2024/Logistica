@@ -1,6 +1,7 @@
-import { db } from "./firebase-init.js";
+import { app, db } from "./firebase-init.js";
 import { parseCSV } from "./csv.js";
 
+// Auth (Google Login)
 import {
   getAuth,
   onAuthStateChanged,
@@ -11,10 +12,10 @@ import {
   signOut
 } from "https://www.gstatic.com/firebasejs/10.7.2/firebase-auth.js";
 
-const auth = getAuth(); // ✅ ESTA LÍNEA FALTABA
+const auth = getAuth(app); // ✅ importante: usar el mismo app
 
+// Firestore (SOLO funciones, NO getFirestore)
 import {
-  getFirestore,
   collection,
   doc,
   getDoc,
@@ -30,8 +31,6 @@ import {
   serverTimestamp,
   writeBatch
 } from "https://www.gstatic.com/firebasejs/10.7.2/firebase-firestore.js";
-
-const db = getFirestore(app);
 
 
 // Helpers DOM (poner arriba de todo, después de imports)
