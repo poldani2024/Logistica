@@ -579,7 +579,13 @@ function renderPassengerDetailForm(passenger){
         <div class="field"><label>Dirección</label><input id="p_address" value="${escapeHtml(p.address)}"></div>
         <div class="field"><label>Localidad</label>
           <select id="p_localidad">
-            ${["Rosario","Funes","Roldan","San Lorenzo"].map(l=>`<option value="${l}" ${((p.localidad||"Rosario")===l)?"selected":""}>${l}</option>`).join("")}
+            ${["Rosario",
+                "Funes",
+                "Roldan",
+                "San Lorenzo",
+                "Pueblo Esther",
+                "Granadero Baigorria",
+                "Villa Gobernador Gálvez"].map(l=>`<option value="${l}" ${((p.localidad||"Rosario")===l)?"selected":""}>${l}</option>`).join("")}
           </select>
         </div>
         <div class="field"><label>Zona</label><input id="p_zone" value="${escapeHtml(p.zone)}"></div>
@@ -969,7 +975,15 @@ let MAP = {
   zonesLayer: null
 };
 
-const LOCALIDADES = ["Rosario","Funes","Roldan","San Lorenzo"];
+const LOCALIDADES = [
+  "Rosario",
+  "Funes",
+  "Roldan",
+  "San Lorenzo",
+  "Pueblo Esther",
+  "Granadero Baigorria",
+  "Villa Gobernador Gálvez"
+];
 
 // Rough bounds for Gran Rosario (approx)
 const GRAN_ROSARIO_CENTER = [-32.95, -60.66];
