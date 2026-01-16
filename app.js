@@ -33,12 +33,11 @@ document.querySelectorAll(".tab").forEach(btn=>{
     if(el) el.classList.add("active");
   });
 });
-
 /* -------------------- EVENT ID -------------------- */
 {
   const btn = $("btnSetEvent");
-  if(btn){
-    btn.addEventListener("click", async ()=>{
+  if (btn) {
+    btn.addEventListener("click", async () => {
       const v = ($("eventId")?.value || "").trim();
       STATE.eventId = v || "event1";
       await refreshAll();
@@ -46,10 +45,7 @@ document.querySelectorAll(".tab").forEach(btn=>{
     });
   }
 }
-  STATE.eventId = v || "event1";
-  await refreshAll();
-  toast("Event aplicado");
-});
+
 
 /* -------------------- LOAD + REFRESH -------------------- */
 async function refreshAll(){
