@@ -135,7 +135,10 @@ function renderMap(){
 
   const assignments = STATE.assignments || [];
   const assignedPassengerIds = new Set(assignments.map(a => a.passengerId));
-
+  const zoneFilter = ($("mapZoneFilter")?.value || "").trim();
+  const show = ($("mapShow")?.value || "all");
+  
+  if(show !== "all" && show !== "passengers") return; // antes del loop
   (STATE.passengers || []).forEach(p=>{
     if(p.lat == null || p.lng == null) return;
 
@@ -160,6 +163,7 @@ function renderMap(){
   });
 
   // -------------------- MARCADORES: CHOFERES --------------------
+  if(show !== "all" && show !== "drivers") return; // antes del loop
   (STATE.drivers || []).forEach(d=>{
     if(d.lat == null || d.lng == null) return;
 
@@ -179,11 +183,28 @@ function renderMap(){
 
 
 
+let _toastTimer = null;
+
 function toast(msg){
-  const el = $("copyHint");
-  if(el){ el.textContent = msg; setTimeout(()=> el.textContent="", 2200); }
-  else alert(msg);
+  const t = $("toast");
+  if(!t){
+    // fallback: si no agregaste el div todavía
+    const el = $("copyHint");
+    if(el){ el.textContent = msg; setTimeout(()=> el.textContent="", 2200); }
+    else alert(msg);
+    return;
+  }
+
+  t.textContent = msg;
+  t.classList.add("show");
+
+  if(_toastTimer) clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(()=>{
+    t.classList.remove("show");
+    t.textContent = "";
+  }, 2200);
 }
+
 
 /* -------------------- NAV -------------------- */
 document.querySelectorAll(".tab").forEach(btn=>{
@@ -230,6 +251,10 @@ $("btnRefreshDashboard").addEventListener("click", refreshAll);
 $("btnRefreshDrivers").addEventListener("click", loadDriversAndRender);
 $("btnRefreshPassengers").addEventListener("click", loadPassengersAndRender);
 $("btnRefreshAssignments").addEventListener("click", loadAssignmentsAndRender);
+// -------------------- MAP UI --------------------
+$("btnRefreshMap")?.addEventListener("click", renderMap);
+$("mapZoneFilter")?.addEventListener("change", renderMap);
+$("mapShow")?.addEventListener("change", renderMap);
 
 async function loadDriversAndRender(){ await loadDrivers(); renderZones(); renderDriversTable(); renderDashboard(); }
 async function loadPassengersAndRender(){ await loadPassengers(); renderZones(); renderPassengersTable(); renderDashboard(); }
@@ -297,17 +322,39 @@ function renderZones(){
     $("driverZoneFilter"),
     $("passengerZoneFilter"),
     $("assignmentZoneFilter"),
+    $("mapZoneFilter"), // ✅ NUEVO
   ];
   selects.forEach(sel=>{
+    if(!sel) return;
     const current = sel.value;
-    sel.innerHTML = `<option value="">Todas las zonas</option>` + zones.map(z=>`<option value="${escapeHtml(z)}">${escapeHtml(z)}</option>`).join("");
+    sel.innerHTML = `<option value="">Todas las zonas</option>` +
+      zones.map(z=>`<option value="${escapeHtml(z)}">${escapeHtml(z)}</option>`).join("");
     sel.value = current;
   });
 }
 
+
 function escapeHtml(s){
   return (s??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");
 }
+
+async function geocodeOSM(address, localidad){
+  const q = `${address}, ${localidad}, Santa Fe, Argentina`;
+  const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`;
+
+  const res = await fetch(url, {
+    headers: { "Accept": "application/json" }
+  });
+  if(!res.ok) throw new Error(`Geocoding HTTP ${res.status}`);
+  const data = await res.json();
+  if(!data.length) return null;
+
+  return { lat: Number(data[0].lat), lng: Number(data[0].lon) };
+}
+
+function norm(s){ return String(s||"").trim().toLowerCase(); }
+
+
 
 function fullName(x){ return `${x.lastName||""} ${x.firstName||""}`.trim(); }
 
@@ -507,7 +554,11 @@ function renderDriverDetailForm(driver){
     </div>
   `;
 
+  const newAddress = $("d_address").value.trim();
+const newLocalidad = $("d_localidad").value;
+
   $("btnSaveDriver").addEventListener("click", async ()=>{
+  try{
     const payload = {
       firstName: $("d_firstName").value.trim(),
       lastName: $("d_lastName").value.trim(),
@@ -521,6 +572,21 @@ function renderDriverDetailForm(driver){
       updatedAt: serverTimestamp(),
     };
 
+    // ✅ solo si cambió address/localidad (o si no tiene coords)
+    const changed =
+      isNew ||
+      norm(newAddress) !== norm(driver?.address) ||
+      norm(newLocalidad) !== norm(driver?.localidad) ||
+      driver?.lat == null || driver?.lng == null;
+    
+    if(changed && newAddress && newLocalidad){
+      const geo = await geocodeOSM(newAddress, newLocalidad);
+      if(geo){
+        payload.lat = geo.lat;
+        payload.lng = geo.lng;
+      }
+    }
+    
     if(isNew){
       payload.createdAt = serverTimestamp();
       await addDoc(collection(db,"drivers"), payload);
@@ -529,8 +595,15 @@ function renderDriverDetailForm(driver){
       await updateDoc(doc(db,"drivers",driver.id), payload);
       toast("Chofer guardado");
     }
+
     await loadDriversAndRender();
-  });
+  }catch(e){
+    console.error(e);
+    toast("Error al guardar chofer");
+    alert(e?.message || String(e));
+  }
+});
+
 
   if(!isNew){
     $("btnDeleteDriver").addEventListener("click", async ()=>{
