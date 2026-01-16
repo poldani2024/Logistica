@@ -5,7 +5,14 @@ import {
   collection, doc, addDoc, setDoc, getDoc, getDocs, deleteDoc, updateDoc,
   query, where, orderBy, serverTimestamp,
   runTransaction
-} from "https://www.gstatic.com/firebasejs/10.7.2/firebase-firestore.js";
+} 
+
+function driverByEmail(email){
+  const e = String(email||"").trim().toLowerCase();
+  if(!e) return null;
+  return (STATE.drivers||[]).find(d => String(d.email||"").trim().toLowerCase() === e) || null;
+}
+from "https://www.gstatic.com/firebasejs/10.7.2/firebase-firestore.js";
 
 import {
   getAuth, onAuthStateChanged,
@@ -533,6 +540,26 @@ function resolveAuthRole(){
   STATE.auth.driver = driver || null;
 }
 
+
+
+async function refreshAll(){
+  // Central refresh: loads collections for current event and re-renders views
+  if(STATE.eventId && typeof localStorage !== "undefined"){
+    localStorage.setItem("selectedEventId", STATE.eventId);
+  }
+
+  if(typeof loadDrivers === "function") await loadDrivers();
+  if(typeof loadPassengers === "function") await loadPassengers();
+  if(typeof loadAssignments === "function") await loadAssignments();
+
+  if(typeof renderZones === "function") renderZones();
+  if(typeof renderDrivers === "function") renderDrivers();
+  if(typeof renderPassengers === "function") renderPassengers();
+  if(typeof renderAssignments === "function") renderAssignments();
+  if(typeof renderDashboard === "function") renderDashboard();
+  if(typeof renderTracking === "function") renderTracking();
+  if(typeof renderMap === "function") renderMap();
+}
 
 /* -------------------- START -------------------- */
 (async function init(){
