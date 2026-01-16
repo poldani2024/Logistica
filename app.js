@@ -11,6 +11,7 @@ import {
   signOut
 } from "https://www.gstatic.com/firebasejs/10.7.2/firebase-auth.js";
 
+const auth = getAuth(); // ✅ ESTA LÍNEA FALTABA
 
 // Helpers DOM (poner arriba de todo, después de imports)
 const $  = (id) => document.getElementById(id);
