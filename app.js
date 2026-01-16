@@ -30,6 +30,17 @@ const STATE = {
     driver: null
   }
 };
+function renderEventSelect(){
+  const sel = $$("eventSelect");
+  if(!sel) return;
+
+  sel.innerHTML = `
+    <option value="${STATE.eventId}">
+      ${STATE.eventId}
+    </option>
+  `;
+  sel.value = STATE.eventId;
+}
 
 
 function toast(msg){
