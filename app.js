@@ -84,6 +84,12 @@ document.querySelectorAll(".tab").forEach(btn=>{
     document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
     const el = document.getElementById(`view-${view}`);
     if(el) el.classList.add("active");
+    // ✅ FIX MAPA (esto es lo único nuevo)
+    if(view === "map"){
+      setTimeout(() => {
+        renderMap();
+      }, 0);
+    }
   });
 });
 /* -------------------- EVENT ID -------------------- */
