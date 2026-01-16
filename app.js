@@ -17,12 +17,20 @@ const auth = getAuth(); // ✅ ESTA LÍNEA FALTABA
 const $  = (id) => document.getElementById(id);
 const $$ = (id) => document.getElementById(id); // compat, tu código usa $$
 
-let STATE = {
+const STATE = {
   eventId: "event1",
+  events: [],
   drivers: [],
   passengers: [],
-  assignments: [], // docs: {id, driverId, passengerIds[]}
+  assignments: [],
+
+  auth: {
+    user: null,
+    isAdmin: false,
+    driver: null
+  }
 };
+
 
 function toast(msg){
   const el = $("copyHint");
