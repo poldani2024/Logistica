@@ -6,12 +6,7 @@ import {
   query, where, orderBy, serverTimestamp,
   runTransaction
 } 
-
-function driverByEmail(email){
-  const e = String(email||"").trim().toLowerCase();
-  if(!e) return null;
-  return (STATE.drivers||[]).find(d => String(d.email||"").trim().toLowerCase() === e) || null;
-}
+  
 from "https://www.gstatic.com/firebasejs/10.7.2/firebase-firestore.js";
 
 import {
@@ -56,6 +51,12 @@ const ZONE_POLYS = {
   "Oeste":  [[-33.08,-60.95],[-33.08,-60.74],[-32.82,-60.74],[-32.82,-60.95]],
   "Este":   [[-33.08,-60.62],[-33.08,-60.50],[-32.82,-60.50],[-32.82,-60.62]]
 };
+
+function driverByEmail(email){
+  const e = String(email||"").trim().toLowerCase();
+  if(!e) return null;
+  return (STATE.drivers||[]).find(d => String(d.email||"").trim().toLowerCase() === e) || null;
+}
 
 function initMapIfNeeded(){
   const el = $("map");
