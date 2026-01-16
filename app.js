@@ -188,7 +188,6 @@ let _toastTimer = null;
 function toast(msg){
   const t = $("toast");
   if(!t){
-    // fallback: si no agregaste el div todavía
     const el = $("copyHint");
     if(el){ el.textContent = msg; setTimeout(()=> el.textContent="", 2200); }
     else alert(msg);
