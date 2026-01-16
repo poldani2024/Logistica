@@ -419,7 +419,11 @@ function renderDriversTable(){
 
 function renderDriverDetailForm(driver){
   const isNew = !driver;
-  const d = driver || { firstName:"", lastName:"", phone:"", zone:"", capacity:4, active:true };
+  const d = driver || {
+    firstName:"", lastName:"", phone:"",
+    address:"", localidad:"Rosario",
+    zone:"", capacity:4, active:true
+  };
 
   const a = driver ? driverAssignment(driver.id) : null;
   const passengerIds = a?.passengerIds || [];
@@ -439,8 +443,24 @@ function renderDriverDetailForm(driver){
         <div class="field"><label>Nombre</label><input id="d_firstName" value="${escapeHtml(d.firstName)}"></div>
         <div class="field"><label>Apellido</label><input id="d_lastName" value="${escapeHtml(d.lastName)}"></div>
         <div class="field"><label>Teléfono</label><input id="d_phone" value="${escapeHtml(d.phone)}"></div>
+
+        <div class="field">
+          <label>Dirección</label>
+          <input id="d_address" value="${escapeHtml(d.address || "")}" placeholder="Ej: Pellegrini 1234">
+        </div>
+
+        <div class="field">
+          <label>Localidad</label>
+          <select id="d_localidad">
+            ${["Rosario","Funes","Roldán","San Lorenzo","Pueblo Esther","Granadero Baigorria","Villa G. Galvez"]
+              .map(l => `<option value="${l}" ${d.localidad===l ? "selected" : ""}>${l}</option>`)
+              .join("")}
+          </select>
+        </div>
+
         <div class="field"><label>Zona</label><input id="d_zone" value="${escapeHtml(d.zone)}" placeholder="Centro / Norte / Sur..."></div>
         <div class="field"><label>Capacidad</label><input id="d_capacity" type="number" min="1" max="20" value="${escapeHtml(String(d.capacity ?? 4))}"></div>
+
         <div class="actions">
           <button class="btn" id="btnSaveDriver">${isNew ? "Crear" : "Guardar"}</button>
           ${isNew ? "" : `<button class="btnDanger" id="btnDeleteDriver">Eliminar</button>`}
@@ -492,6 +512,8 @@ function renderDriverDetailForm(driver){
       firstName: $("d_firstName").value.trim(),
       lastName: $("d_lastName").value.trim(),
       phone: $("d_phone").value.trim(),
+      address: $("d_address").value.trim(),
+      localidad: $("d_localidad").value,
       zone: $("d_zone").value.trim(),
       capacity: Number($("d_capacity").value || 4),
       active: true,
@@ -559,6 +581,7 @@ function renderDriverDetailForm(driver){
     });
   }
 }
+
 
 /* -------------------- PASSENGERS UI -------------------- */
 $("passengerSearch").addEventListener("input", renderPassengersTable);
