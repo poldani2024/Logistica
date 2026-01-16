@@ -13,6 +13,27 @@ import {
 
 const auth = getAuth(); // ✅ ESTA LÍNEA FALTABA
 
+import {
+  getFirestore,
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  addDoc,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  query,
+  where,
+  orderBy,
+  limit,
+  serverTimestamp,
+  writeBatch
+} from "https://www.gstatic.com/firebasejs/10.7.2/firebase-firestore.js";
+
+const db = getFirestore(app);
+
+
 // Helpers DOM (poner arriba de todo, después de imports)
 const $  = (id) => document.getElementById(id);
 const $$ = (id) => document.getElementById(id); // compat, tu código usa $$
