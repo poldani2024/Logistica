@@ -876,10 +876,21 @@ function renderEventSelect(){
   const sel = $$("eventSelect");
   if(!sel) return;
   const current = STATE.eventId || "";
+
+  const esc = (s)=>{
+    return String(s ?? "")
+      .replaceAll("&","&amp;")
+      .replaceAll("<","&lt;")
+      .replaceAll(">","&gt;")
+      .replaceAll('"',"&quot;")
+      .replaceAll("'","&#039;");
+  };
+
   sel.innerHTML = (STATE.events||[]).map(ev=>{
     const label = ev.name ? `${ev.id} — ${ev.name}` : ev.id;
-    return `<option value="${escapeHtml(ev.id)}">${escapeHtml(label)}</option>`;
+    return `<option value="${esc(ev.id)}">${esc(label)}</option>`;
   }).join("") || `<option value="">(sin eventos)</option>`;
+
   sel.value = current;
 }
 
