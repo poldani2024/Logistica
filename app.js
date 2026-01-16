@@ -6,7 +6,12 @@ import {
   query, where, orderBy, serverTimestamp,
   runTransaction
 } 
-  
+
+function driverByEmail(email){
+  const e = String(email||"").trim().toLowerCase();
+  if(!e) return null;
+  return (STATE.drivers||[]).find(d => String(d.email||"").trim().toLowerCase() === e) || null;
+}
 from "https://www.gstatic.com/firebasejs/10.7.2/firebase-firestore.js";
 
 import {
@@ -35,6 +40,12 @@ const ADMIN_EMAILS = [
   "pedro.l.oldani@gmail.com",
 ];
 
+function isAdminEmail(email){
+  const e = String(email||"").trim().toLowerCase();
+  return !!e && ADMIN_EMAILS.map(x=>String(x).trim().toLowerCase()).includes(e);
+}
+
+
 
 // Rough bounds for Gran Rosario (approx)
 const GRAN_ROSARIO_CENTER = [-32.95, -60.66];
@@ -52,13 +63,9 @@ const ZONE_POLYS = {
   "Este":   [[-33.08,-60.62],[-33.08,-60.50],[-32.82,-60.50],[-32.82,-60.62]]
 };
 
-function driverByEmail(email){
-  const e = String(email||"").trim().toLowerCase();
-  if(!e) return null;
-  return (STATE.drivers||[]).find(d => String(d.email||"").trim().toLowerCase() === e) || null;
-}
-
 function initMapIfNeeded(){
+  if(typeof MAP === "undefined") return;
+
   const el = $("map");
   if(!el) return;
 
@@ -119,6 +126,8 @@ function zoneFromPassenger(p){
 }
 
 function renderMap(){
+  if(typeof MAP === "undefined") return;
+
   initMapIfNeeded();
   if(!MAP.map) return;
 
@@ -559,7 +568,7 @@ async function refreshAll(){
   if(typeof renderAssignments === "function") renderAssignments();
   if(typeof renderDashboard === "function") renderDashboard();
   if(typeof renderTracking === "function") renderTracking();
-  if(typeof renderMap === "function") renderMap();
+  if(typeof renderMap === "function" && typeof MAP !== "undefined") renderMap();
 }
 
 /* -------------------- START -------------------- */
