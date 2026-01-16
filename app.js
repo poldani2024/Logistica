@@ -847,4 +847,41 @@ async function applyOptimizationPlan(plan){
   }
 }
 
+// -------------------- EVENTS --------------------
+async function loadEvents(){
+  // Loads events list into STATE.events (id, name, domicilioEvento, localidadEvento, lat/lng)
+  try{
+    const q = query(collection(db,"events"));
+    const snap = await getDocs(q);
+    const arr = [];
+    snap.forEach(docu=>{
+      const d = docu.data() || {};
+      arr.push({
+        id: docu.id,
+        ...d
+      });
+    });
+    // Sort by id for stable dropdown
+    arr.sort((a,b)=> (a.id||"").localeCompare(b.id||""));
+    STATE.events = arr;
+    if($$("eventSelect")) renderEventSelect();
+    return arr;
+  }catch(e){
+    console.warn("loadEvents failed", e);
+    throw e;
+  }
+}
+
+function renderEventSelect(){
+  const sel = $$("eventSelect");
+  if(!sel) return;
+  const current = STATE.eventId || "";
+  sel.innerHTML = (STATE.events||[]).map(ev=>{
+    const label = ev.name ? `${ev.id} — ${ev.name}` : ev.id;
+    return `<option value="${escapeHtml(ev.id)}">${escapeHtml(label)}</option>`;
+  }).join("") || `<option value="">(sin eventos)</option>`;
+  sel.value = current;
+}
+
+
 
