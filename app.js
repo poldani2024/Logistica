@@ -101,7 +101,7 @@ document.querySelectorAll(".tab").forEach(btn=>{
 {
   const btn = $("btnSetEvent");
   if (btn) {
-    b  tn.addEventListener("click", async () => {
+    btn.addEventListener("click", async () => {
       const v = ($("eventId")?.value || "").trim();
       STATE.eventId = v || "event1";
       await refreshAll();
