@@ -103,7 +103,7 @@ document.querySelectorAll(".tab").forEach(btn=>{
   if (btn) {
     btn.addEventListener("click", async () => {
       const v = ($("eventId")?.value || "").trim();
-      STATE.eventId = v || "event1";
+      STATE.eventId = v || null;
       await refreshAll();
       toast("Evento aplicado");
     });
@@ -129,6 +129,31 @@ $("btnRefreshAssignments").addEventListener("click", loadAssignmentsAndRender);
 async function loadDriversAndRender(){ await loadDrivers(); renderZones(); renderDriversTable(); renderDashboard(); }
 async function loadPassengersAndRender(){ await loadPassengers(); renderZones(); renderPassengersTable(); renderDashboard(); }
 async function loadAssignmentsAndRender(){ await loadAssignments(); renderAssignments(); renderDashboard(); }
+
+// -------------------- EVENTS --------------------
+async function loadEvents(){
+  const snap = await getDocs(query(collection(db, "events")));
+  const arr = [];
+  snap.forEach(d => {
+    const data = d.data() || {};
+    arr.push({ id: d.id, ...data });
+  });
+  arr.sort((a,b)=> (a.id||"").localeCompare(b.id||""));
+  STATE.events = arr;
+  return arr;
+}
+
+function renderEventSelect(){
+  const sel = $$("eventSelect");
+  if(!sel) return;
+
+  sel.innerHTML = (STATE.events || []).map(ev => {
+    const label = ev.name ? `${ev.id} — ${ev.name}` : ev.id;
+    return `<option value="${escapeHtml(ev.id)}">${escapeHtml(label)}</option>`;
+  }).join("") || `<option value="">(sin eventos)</option>`;
+
+  if (STATE.eventId) sel.value = STATE.eventId;
+}
 
 async function loadDrivers(){
   const ref = collection(db, "drivers");
