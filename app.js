@@ -18,8 +18,6 @@ let STATE = {
   assignments: [], // docs: {id, driverId, passengerIds[]}
 };
 
-const $ = (id) => document.getElementById(id);
-
 function toast(msg){
   const el = $("copyHint");
   if(el){ el.textContent = msg; setTimeout(()=> el.textContent="", 2200); }
