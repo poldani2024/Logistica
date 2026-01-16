@@ -7,6 +7,10 @@ import {
   runTransaction
 } from "https://www.gstatic.com/firebasejs/10.7.2/firebase-firestore.js";
 
+// Helpers DOM (poner arriba de todo, después de imports)
+const $  = (id) => document.getElementById(id);
+const $$ = (id) => document.getElementById(id); // compat, tu código usa $$
+
 let STATE = {
   eventId: "event1",
   drivers: [],
