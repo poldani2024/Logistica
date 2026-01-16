@@ -553,8 +553,6 @@ function renderDriverDetailForm(driver){
     </div>
   `;
 
-  const newAddress = $("d_address").value.trim();
-const newLocalidad = $("d_localidad").value;
 
   $("btnSaveDriver").addEventListener("click", async ()=>{
   try{
@@ -570,7 +568,8 @@ const newLocalidad = $("d_localidad").value;
       eventId: STATE.eventId,
       updatedAt: serverTimestamp(),
     };
-
+    const newAddress = $("d_address").value.trim();
+   const newLocalidad = $("d_localidad").value;
     // ✅ solo si cambió address/localidad (o si no tiene coords)
     const changed =
       isNew ||
