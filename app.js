@@ -66,18 +66,7 @@ function resolveAuthRole(){
 }
 
 
-function renderEventSelect(){
-  const sel = $$("eventSelect");
-  if(!sel) return;
 
-  sel.innerHTML = STATE.events.map(e =>
-    `<option value="${e.id}">${e.name || e.id}</option>`
-  ).join("");
-
-  if (STATE.eventId) {
-    sel.value = STATE.eventId;
-  }
-}
 
 
 function toast(msg){
