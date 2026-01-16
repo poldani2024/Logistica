@@ -30,6 +30,22 @@ const STATE = {
     driver: null
   }
 };
+
+function resolveAuthRole(){
+  // versión mínima para no romper
+  const email = state?.auth?.user?.email || "";
+  state.auth.isAdmin = (email === "pedro.l.oldani@gmail.com");
+
+  // chofer: lo resolvemos si ya está cargada la lista de drivers
+  if(state.drivers && state.drivers.length){
+    const e = email.toLowerCase();
+    state.auth.driver = state.drivers.find(d => (d.email||"").toLowerCase() === e) || null;
+  }else{
+    state.auth.driver = null;
+  }
+}
+
+
 function renderEventSelect(){
   const sel = $$("eventSelect");
   if(!sel) return;
