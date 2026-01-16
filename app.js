@@ -29,13 +29,23 @@ document.querySelectorAll(".tab").forEach(btn=>{
     btn.classList.add("active");
     const view = btn.dataset.view;
     document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
-    $(`view-${view}`).classList.add("active");
+    const el = document.getElementById(`view-${view}`);
+    if(el) el.classList.add("active");
   });
 });
 
 /* -------------------- EVENT ID -------------------- */
-$("btnSetEvent").addEventListener("click", async ()=>{
-  const v = $("eventId").value.trim();
+{
+  const btn = $("btnSetEvent");
+  if(btn){
+    btn.addEventListener("click", async ()=>{
+      const v = ($("eventId")?.value || "").trim();
+      STATE.eventId = v || "event1";
+      await refreshAll();
+      toast("Evento aplicado");
+    });
+  }
+}
   STATE.eventId = v || "event1";
   await refreshAll();
   toast("Event aplicado");
