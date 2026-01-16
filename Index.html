@@ -7,8 +7,43 @@
   <link rel="stylesheet" href="./styles.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 
+
+<style>
+/* AUTH GATE */
+.authGate{
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.55);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 9999;
+}
+.authGate.show{ display:flex; }
+.authCard{
+  width: min(520px, 100%);
+  background: #fff;
+  border-radius: 14px;
+  padding: 18px;
+  box-shadow: 0 12px 40px rgba(0,0,0,.25);
+}
+.authTitle{ font-size: 20px; font-weight: 700; margin-bottom: 6px; }
+.authText{ margin-bottom: 12px; color: rgba(0,0,0,.70); }
+.authBar{ margin-left:auto; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+</style>
+
 </head>
 <body>
+  <div id="authGate" class="authGate">
+    <div class="authCard">
+      <div class="authTitle">Ingresar</div>
+      <div class="authText">Para usar la app tenés que ingresar con tu cuenta de Google.</div>
+      <button class="btn" id="btnAppGoogleLogin">Ingresar con Google</button>
+      <div class="muted" id="authGateHint" style="margin-top:10px;"></div>
+    </div>
+  </div>
+
   <header class="topbar">
     <div class="brand">
       <div class="logo">🚐</div>
@@ -171,8 +206,6 @@
           </div>
           <div class="row">
             <button class="btnSecondary" id="btnExportCSV">Export CSV</button>
-            <button class="btnSecondary" id="btnAutoAssign">Auto-asignar</button>
-            <button class="btn" id="btnOptimizeAssignments">Optimizar rutas</button>
             <button class="btn" id="btnRefreshAssignments">Refrescar</button>
           </div>
         </div>
@@ -185,8 +218,6 @@
         </div>
 
         <div id="assignmentsList" class="listWrap"></div>
-
-        <div id="optResult" style="margin-top:12px;"></div>
       </div>
 
       <div class="card">
