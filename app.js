@@ -65,6 +65,31 @@ function resolveAuthRole(){
   }
 }
 
+let map;
+let mapLayer;
+
+function initMapIfNeeded(){
+  const el = document.getElementById("map");
+  if(!el) return false;              // no hay div
+  if(typeof L === "undefined") return false; // Leaflet no cargó
+  if(map) return true;               // ya está inicializado
+
+  map = L.map("map").setView([-32.95, -60.66], 11); // Rosario aprox
+  mapLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19
+  }).addTo(map);
+
+  return true;
+}
+
+function renderMap(){
+  if(!initMapIfNeeded()) return;
+
+  // si el mapa estaba oculto y recién aparece, esto evita “mapa gris”
+  setTimeout(() => map.invalidateSize(), 50);
+
+  // acá más adelante vas a dibujar markers
+}
 
 
 
