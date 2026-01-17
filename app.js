@@ -337,23 +337,67 @@ function escapeHtml(s){
   return (s??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");
 }
 
-async function geocodeOSM(address, localidad){
-  const q = `${address}, ${localidad}, Santa Fe, Argentina`;
-  const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`;
-
-  const res = await fetch(url, {
-    headers: { "Accept": "application/json" }
-  });
-  if(!res.ok) throw new Error(`Geocoding HTTP ${res.status}`);
-  const data = await res.json();
-  if(!data.length) return null;
-
-  return { lat: Number(data[0].lat), lng: Number(data[0].lon) };
-}
-
 function norm(s){ return String(s||"").trim().toLowerCase(); }
 
+async function geocodeOSM(address, localidad){
+  const city = localidad?.trim();
+  if(!address || !city) return null;
 
+  // 1) intento estructurado (mejor que q=...)
+  const url1 = new URL("https://nominatim.openstreetmap.org/search");
+  url1.searchParams.set("format", "json");
+  url1.searchParams.set("limit", "5");               // traemos varios para filtrar
+  url1.searchParams.set("addressdetails", "1");
+  url1.searchParams.set("countrycodes", "ar");
+  url1.searchParams.set("street", address);
+  url1.searchParams.set("city", city);
+  url1.searchParams.set("state", "Santa Fe");
+
+  const res1 = await fetch(url1.toString(), { headers: { "Accept":"application/json" }});
+  if(!res1.ok) throw new Error(`Geocoding HTTP ${res1.status}`);
+  const data1 = await res1.json();
+
+  // filtrar por coincidencia de ciudad/localidad en el address del resultado
+  const target = norm(city);
+  const pick = (arr) => {
+    for(const r of (arr||[])){
+      const a = r.address || {};
+      const got = norm(a.city || a.town || a.village || a.municipality || a.county);
+      if(got && got === target) return r;
+    }
+    return (arr && arr.length) ? arr[0] : null; // fallback
+  };
+
+  let best = pick(data1);
+  
+  // 2) si el mejor no coincide con la localidad, reintento con query reforzada
+  if(best){
+    const a = best.address || {};
+    const got = norm(a.city || a.town || a.village || a.municipality || a.county);
+    if(got && got !== target){
+      const url2 = new URL("https://nominatim.openstreetmap.org/search");
+      url2.searchParams.set("format", "json");
+      url2.searchParams.set("limit", "5");
+      url2.searchParams.set("addressdetails", "1");
+      url2.searchParams.set("countrycodes", "ar");
+      url2.searchParams.set("q", `${address}, ${city}, Santa Fe, Argentina`);
+
+      const res2 = await fetch(url2.toString(), { headers: { "Accept":"application/json" }});
+      if(!res2.ok) throw new Error(`Geocoding HTTP ${res2.status}`);
+      const data2 = await res2.json();
+      best = pick(data2);
+    }
+  }
+
+  if(!best) return null;
+
+  return {
+    lat: Number(best.lat),
+    lng: Number(best.lon),
+    geoLabel: best.display_name || "",
+    geoCity: (best.address && (best.address.city || best.address.town || best.address.village || "")) || ""
+  };
+}
 
 function fullName(x){ return `${x.lastName||""} ${x.firstName||""}`.trim(); }
 
@@ -572,18 +616,24 @@ function renderDriverDetailForm(driver){
    const newLocalidad = $("d_localidad").value;
     // ✅ solo si cambió address/localidad (o si no tiene coords)
     const changed =
-      isNew ||
-      norm(newAddress) !== norm(driver?.address) ||
-      norm(newLocalidad) !== norm(driver?.localidad) ||
-      driver?.lat == null || driver?.lng == null;
-    
-    if(changed && newAddress && newLocalidad){
-      const geo = await geocodeOSM(newAddress, newLocalidad);
-      if(geo){
-        payload.lat = geo.lat;
-        payload.lng = geo.lng;
-      }
-    }
+  isNew ||
+  norm(newAddress) !== norm(driver?.address) ||
+  norm(newLocalidad) !== norm(driver?.localidad) ||
+  driver?.lat == null || driver?.lng == null;
+
+if(changed && newAddress && newLocalidad){
+  const geo = await geocodeOSM(newAddress, newLocalidad);
+  if(geo){
+    payload.lat = geo.lat;
+    payload.lng = geo.lng;          // IMPORTANTE: lng (no long)
+    payload.geoLabel = geo.geoLabel;
+    payload.geoCity = geo.geoCity;
+  }else{
+    // opcional: avisar que no se pudo geocodificar
+    toast("No pude geocodificar ese domicilio");
+  }
+}
+
     
     if(isNew){
       payload.createdAt = serverTimestamp();
