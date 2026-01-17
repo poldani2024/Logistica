@@ -339,65 +339,86 @@ function escapeHtml(s){
 
 function norm(s){ return String(s||"").trim().toLowerCase(); }
 
+// Cache simple para no pedir el bbox todo el tiempo
+const CITY_BBOX_CACHE = new Map();
+
+// Devuelve viewbox "left,top,right,bottom" para una ciudad (Santa Fe, AR)
+async function getCityViewbox(city){
+  const key = norm(city);
+  if(CITY_BBOX_CACHE.has(key)) return CITY_BBOX_CACHE.get(key);
+
+  const url = new URL("https://nominatim.openstreetmap.org/search");
+  url.searchParams.set("format", "json");
+  url.searchParams.set("limit", "1");
+  url.searchParams.set("addressdetails", "1");
+  url.searchParams.set("countrycodes", "ar");
+  url.searchParams.set("city", city);
+  url.searchParams.set("state", "Santa Fe");
+
+  const res = await fetch(url.toString(), { headers: { "Accept":"application/json" }});
+  if(!res.ok) throw new Error(`City bbox HTTP ${res.status}`);
+  const data = await res.json();
+  if(!data.length || !data[0].boundingbox) return null;
+
+  // boundingbox viene como [south_lat, north_lat, west_lon, east_lon]
+  const bb = data[0].boundingbox.map(Number);
+  const south = bb[0], north = bb[1], west = bb[2], east = bb[3];
+
+  // viewbox = left,top,right,bottom (lon,lat,lon,lat)
+  const viewbox = `${west},${north},${east},${south}`;
+  CITY_BBOX_CACHE.set(key, viewbox);
+  return viewbox;
+}
+
+function pickCityFromAddress(r){
+  const a = r.address || {};
+  return (a.city || a.town || a.village || a.municipality || a.county || "").trim();
+}
+
 async function geocodeOSM(address, localidad){
   const city = localidad?.trim();
   if(!address || !city) return null;
 
-  // 1) intento estructurado (mejor que q=...)
-  const url1 = new URL("https://nominatim.openstreetmap.org/search");
-  url1.searchParams.set("format", "json");
-  url1.searchParams.set("limit", "5");               // traemos varios para filtrar
-  url1.searchParams.set("addressdetails", "1");
-  url1.searchParams.set("countrycodes", "ar");
-  url1.searchParams.set("street", address);
-  url1.searchParams.set("city", city);
-  url1.searchParams.set("state", "Santa Fe");
+  const viewbox = await getCityViewbox(city);
 
-  const res1 = await fetch(url1.toString(), { headers: { "Accept":"application/json" }});
-  if(!res1.ok) throw new Error(`Geocoding HTTP ${res1.status}`);
-  const data1 = await res1.json();
+  const url = new URL("https://nominatim.openstreetmap.org/search");
+  url.searchParams.set("format", "json");
+  url.searchParams.set("limit", "5");
+  url.searchParams.set("addressdetails", "1");
+  url.searchParams.set("countrycodes", "ar");
+  url.searchParams.set("q", `${address}, ${city}, Santa Fe, Argentina`);
 
-  // filtrar por coincidencia de ciudad/localidad en el address del resultado
-  const target = norm(city);
-  const pick = (arr) => {
-    for(const r of (arr||[])){
-      const a = r.address || {};
-      const got = norm(a.city || a.town || a.village || a.municipality || a.county);
-      if(got && got === target) return r;
-    }
-    return (arr && arr.length) ? arr[0] : null; // fallback
-  };
-
-  let best = pick(data1);
-  
-  // 2) si el mejor no coincide con la localidad, reintento con query reforzada
-  if(best){
-    const a = best.address || {};
-    const got = norm(a.city || a.town || a.village || a.municipality || a.county);
-    if(got && got !== target){
-      const url2 = new URL("https://nominatim.openstreetmap.org/search");
-      url2.searchParams.set("format", "json");
-      url2.searchParams.set("limit", "5");
-      url2.searchParams.set("addressdetails", "1");
-      url2.searchParams.set("countrycodes", "ar");
-      url2.searchParams.set("q", `${address}, ${city}, Santa Fe, Argentina`);
-
-      const res2 = await fetch(url2.toString(), { headers: { "Accept":"application/json" }});
-      if(!res2.ok) throw new Error(`Geocoding HTTP ${res2.status}`);
-      const data2 = await res2.json();
-      best = pick(data2);
-    }
+  // ✅ si conseguimos viewbox de la ciudad, encerramos la búsqueda
+  if(viewbox){
+    url.searchParams.set("viewbox", viewbox);
+    url.searchParams.set("bounded", "1");
   }
 
-  if(!best) return null;
+  const res = await fetch(url.toString(), { headers: { "Accept":"application/json" }});
+  if(!res.ok) throw new Error(`Geocoding HTTP ${res.status}`);
+  const data = await res.json();
+  if(!data.length) return null;
 
+  // ✅ elegimos el primer resultado que coincide con la ciudad target
+  const target = norm(city);
+  let best = null;
+
+  for(const r of data){
+    const got = norm(pickCityFromAddress(r));
+    if(got && got === target){ best = r; break; }
+  }
+  if(!best) best = data[0]; // fallback (igual lo vamos a validar luego)
+
+  const geoCity = pickCityFromAddress(best);
   return {
     lat: Number(best.lat),
     lng: Number(best.lon),
     geoLabel: best.display_name || "",
-    geoCity: (best.address && (best.address.city || best.address.town || best.address.village || "")) || ""
+    geoCity,
+    geoCodeQuery: `${address}, ${city}, Santa Fe, Argentina`
   };
 }
+
 
 function fullName(x){ return `${x.lastName||""} ${x.firstName||""}`.trim(); }
 
@@ -623,15 +644,23 @@ function renderDriverDetailForm(driver){
 
 if(changed && newAddress && newLocalidad){
   const geo = await geocodeOSM(newAddress, newLocalidad);
-  if(geo){
+ if(geo){
+  const target = norm(newLocalidad);
+  const got = norm(geo.geoCity);
+
+  // ✅ si devolvió otra ciudad/localidad, lo rechazamos
+  if(got && target && got !== target){
+    toast(`Geocoding rechazado: devolvió "${geo.geoCity}" y se esperaba "${newLocalidad}"`);
+    // NO setear payload.lat/lng
+  }else{
     payload.lat = geo.lat;
-    payload.lng = geo.lng;          // IMPORTANTE: lng (no long)
+    payload.lng = geo.lng;
     payload.geoLabel = geo.geoLabel;
     payload.geoCity = geo.geoCity;
-  }else{
-    // opcional: avisar que no se pudo geocodificar
-    toast("No pude geocodificar ese domicilio");
+    payload.geoCodeQuery = geo.geoCodeQuery;
   }
+}
+
 }
 
     
