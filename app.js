@@ -81,6 +81,21 @@ function canonicalLocalidad(loc){
   return x; // fallback
 }
 
+function pointInViewbox(lat, lng, viewbox){
+  // viewbox: "west,north,east,south"
+  const [west, north, east, south] = viewbox.split(",").map(Number);
+  return lng >= west && lng <= east && lat >= south && lat <= north;
+}
+
+async function isWithinSelectedCity(lat, lng, localidad){
+  const cityCanonical = canonicalLocalidad((localidad||"").trim());
+  const vb = await getCityViewbox(cityCanonical);
+  if(!vb) return true; // si no se puede obtener bbox, no bloquees
+  return pointInViewbox(lat, lng, vb);
+}
+
+
+
 let map;
 let mapLayer;
 
@@ -154,7 +169,7 @@ function renderMap(){
   const zoneFilter = ($("mapZoneFilter")?.value || "").trim();
   const show = ($("mapShow")?.value || "all");
   
-  if(show !== "all" && show !== "passengers") return; // antes del loop
+  if(show !== "all" && show == "passengers") return; // antes del loop
   (STATE.passengers || []).forEach(p=>{
     if(p.lat == null || p.lng == null) return;
 
@@ -179,7 +194,7 @@ function renderMap(){
   });
 
   // -------------------- MARCADORES: CHOFERES --------------------
-  if(show !== "all" && show !== "drivers") return; // antes del loop
+  if(show !== "all" && show == "drivers") return; // antes del loop
   (STATE.drivers || []).forEach(d=>{
     if(d.lat == null || d.lng == null) return;
 
@@ -665,10 +680,10 @@ function renderDriverDetailForm(driver){
       if(geo){
         const target = canonicalLocalidad(newLocalidad);
         const got = canonicalLocalidad(geo.geoCity);
+        const ok = await isWithinSelectedCity(geo.lat, geo.lng, newLocalidad);
 
-        if(got && target && got !== target){
-          toast(`Geocoding rechazado: devolvió "${geo.geoCity}" y se esperaba "${newLocalidad}"`);
-          // no setea lat/lng
+        if(!ok){
+          toast(`Geocoding rechazado: el punto cae fuera de ${newLocalidad}`);
         }else{
           payload.lat = geo.lat;
           payload.lng = geo.lng;
@@ -676,6 +691,7 @@ function renderDriverDetailForm(driver){
           payload.geoCity = geo.geoCity;
           payload.geoCodeQuery = geo.geoCodeQuery;
         }
+
       }
     }
 
