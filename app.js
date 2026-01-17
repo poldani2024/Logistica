@@ -64,6 +64,22 @@ function resolveAuthRole(){
     STATE.auth.driver = null;
   }
 }
+function canonicalLocalidad(loc){
+  const x = norm(loc);
+
+  // aliases típicos
+  if(x === "villa g. galvez" || x === "villa g galvez" || x === "villa gálvez") return "villa gobernador gálvez";
+  if(x === "vgg") return "villa gobernador gálvez";
+
+  if(x === "roldán") return "roldán";
+  if(x === "granadero baigorria") return "granadero baigorria";
+  if(x === "pueblo esther") return "pueblo esther";
+  if(x === "san lorenzo") return "san lorenzo";
+  if(x === "funes") return "funes";
+  if(x === "rosario") return "rosario";
+
+  return x; // fallback
+}
 
 let map;
 let mapLayer;
@@ -376,17 +392,19 @@ function pickCityFromAddress(r){
 }
 
 async function geocodeOSM(address, localidad){
-  const city = localidad?.trim();
+  const city = (localidad || "").trim();
+  const cityCanonical = canonicalLocalidad(city); // <- normalizado
+
   if(!address || !city) return null;
 
-  const viewbox = await getCityViewbox(city);
+  const viewbox = await getCityViewbox(cityCanonical);
 
   const url = new URL("https://nominatim.openstreetmap.org/search");
   url.searchParams.set("format", "json");
   url.searchParams.set("limit", "5");
   url.searchParams.set("addressdetails", "1");
   url.searchParams.set("countrycodes", "ar");
-  url.searchParams.set("q", `${address}, ${city}, Santa Fe, Argentina`);
+  url.searchParams.set("q", `${address}, ${cityCanonical}, Santa Fe, Argentina`);
 
   // ✅ si conseguimos viewbox de la ciudad, encerramos la búsqueda
   if(viewbox){
@@ -400,7 +418,7 @@ async function geocodeOSM(address, localidad){
   if(!data.length) return null;
 
   // ✅ elegimos el primer resultado que coincide con la ciudad target
-  const target = norm(city);
+  const target = norm(cityCanonical);
   let best = null;
 
   for(const r of data){
@@ -415,7 +433,7 @@ async function geocodeOSM(address, localidad){
     lng: Number(best.lon),
     geoLabel: best.display_name || "",
     geoCity,
-    geoCodeQuery: `${address}, ${city}, Santa Fe, Argentina`
+    geoCodeQuery: `${address}, ${cityCanonical}, Santa Fe, Argentina`
   };
 }
 
@@ -633,10 +651,10 @@ function renderDriverDetailForm(driver){
       eventId: STATE.eventId,
       updatedAt: serverTimestamp(),
     };
-    const newAddress = $("d_address").value.trim();
-   const newLocalidad = $("d_localidad").value;
-    // ✅ solo si cambió address/localidad (o si no tiene coords)
-    const changed =
+   const newAddress = $("d_address").value.trim();
+const newLocalidad = $("d_localidad").value;
+
+const changed =
   isNew ||
   norm(newAddress) !== norm(driver?.address) ||
   norm(newLocalidad) !== norm(driver?.localidad) ||
@@ -644,22 +662,22 @@ function renderDriverDetailForm(driver){
 
 if(changed && newAddress && newLocalidad){
   const geo = await geocodeOSM(newAddress, newLocalidad);
- if(geo){
-  const target = norm(newLocalidad);
-  const got = norm(geo.geoCity);
+  if(geo){
+    const target = canonicalLocalidad(newLocalidad);
+    const got = canonicalLocalidad(geo.geoCity);
 
-  // ✅ si devolvió otra ciudad/localidad, lo rechazamos
-  if(got && target && got !== target){
-    toast(`Geocoding rechazado: devolvió "${geo.geoCity}" y se esperaba "${newLocalidad}"`);
-    // NO setear payload.lat/lng
-  }else{
-    payload.lat = geo.lat;
-    payload.lng = geo.lng;
-    payload.geoLabel = geo.geoLabel;
-    payload.geoCity = geo.geoCity;
-    payload.geoCodeQuery = geo.geoCodeQuery;
+    if(got && target && got !== target){
+      toast(`Geocoding rechazado: devolvió "${geo.geoCity}" y se esperaba "${newLocalidad}"`);
+    }else{
+      payload.lat = geo.lat;
+      payload.lng = geo.lng;
+      payload.geoLabel = geo.geoLabel;
+      payload.geoCity = geo.geoCity;
+      payload.geoCodeQuery = geo.geoCodeQuery;
+    }
   }
 }
+
 
 }
 
