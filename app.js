@@ -638,6 +638,7 @@ function renderDriverDetailForm(driver){
 
 
   $("btnSaveDriver").addEventListener("click", async ()=>{
+ $("btnSaveDriver").addEventListener("click", async ()=>{
   try{
     const payload = {
       firstName: $("d_firstName").value.trim(),
@@ -651,37 +652,35 @@ function renderDriverDetailForm(driver){
       eventId: STATE.eventId,
       updatedAt: serverTimestamp(),
     };
-   const newAddress = $("d_address").value.trim();
-const newLocalidad = $("d_localidad").value;
 
-const changed =
-  isNew ||
-  norm(newAddress) !== norm(driver?.address) ||
-  norm(newLocalidad) !== norm(driver?.localidad) ||
-  driver?.lat == null || driver?.lng == null;
+    const newAddress = payload.address;       // ya lo tenés en payload
+    const newLocalidad = payload.localidad;
 
-if(changed && newAddress && newLocalidad){
-  const geo = await geocodeOSM(newAddress, newLocalidad);
-  if(geo){
-    const target = canonicalLocalidad(newLocalidad);
-    const got = canonicalLocalidad(geo.geoCity);
+    const changed =
+      isNew ||
+      norm(newAddress) !== norm(driver?.address) ||
+      norm(newLocalidad) !== norm(driver?.localidad) ||
+      driver?.lat == null || driver?.lng == null;
 
-    if(got && target && got !== target){
-      toast(`Geocoding rechazado: devolvió "${geo.geoCity}" y se esperaba "${newLocalidad}"`);
-    }else{
-      payload.lat = geo.lat;
-      payload.lng = geo.lng;
-      payload.geoLabel = geo.geoLabel;
-      payload.geoCity = geo.geoCity;
-      payload.geoCodeQuery = geo.geoCodeQuery;
+    if(changed && newAddress && newLocalidad){
+      const geo = await geocodeOSM(newAddress, newLocalidad);
+      if(geo){
+        const target = canonicalLocalidad(newLocalidad);
+        const got = canonicalLocalidad(geo.geoCity);
+
+        if(got && target && got !== target){
+          toast(`Geocoding rechazado: devolvió "${geo.geoCity}" y se esperaba "${newLocalidad}"`);
+          // no setea lat/lng
+        }else{
+          payload.lat = geo.lat;
+          payload.lng = geo.lng;
+          payload.geoLabel = geo.geoLabel;
+          payload.geoCity = geo.geoCity;
+          payload.geoCodeQuery = geo.geoCodeQuery;
+        }
+      }
     }
-  }
-}
 
-
-}
-
-    
     if(isNew){
       payload.createdAt = serverTimestamp();
       await addDoc(collection(db,"drivers"), payload);
@@ -698,7 +697,6 @@ if(changed && newAddress && newLocalidad){
     alert(e?.message || String(e));
   }
 });
-
 
   if(!isNew){
     $("btnDeleteDriver").addEventListener("click", async ()=>{
