@@ -636,8 +636,6 @@ function renderDriverDetailForm(driver){
     </div>
   `;
 
-
-  $("btnSaveDriver").addEventListener("click", async ()=>{
  $("btnSaveDriver").addEventListener("click", async ()=>{
   try{
     const payload = {
