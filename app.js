@@ -339,6 +339,53 @@ async function loadAssignments(){
 }
 
 /* -------------------- HELPERS -------------------- */
+
+
+document.addEventListener("click", async (e)=>{
+  const t = e.target;
+  if(!t) return;
+
+  if(t.id === "btnGoogleLogin"){
+    console.log("[Tracking] click login");
+    try{
+      await doGoogleLogin();
+    }catch(err){
+      console.warn(err);
+      toast(err?.message || String(err));
+    }
+  }
+
+  if(t.id === "btnLogout"){
+    console.log("[Tracking] click logout");
+    try{
+      await signOut(auth);
+    }catch(err){
+      console.warn(err);
+      toast(err?.message || String(err));
+    }
+  }
+
+  if(t.id === "btnAppGoogleLogin"){
+    console.log("[Gate] click login");
+    try{
+      await doGoogleLogin();
+    }catch(err){
+      console.warn(err);
+      toast(err?.message || String(err));
+    }
+  }
+
+  if(t.id === "btnAppLogout"){
+    console.log("[App] click logout");
+    try{
+      await signOut(auth);
+    }catch(err){
+      console.warn(err);
+      toast(err?.message || String(err));
+    }
+  }
+});
+
 function uniqZones(){
   const zones = new Set();
   [...STATE.drivers, ...STATE.passengers].forEach(x=>{
@@ -1357,14 +1404,11 @@ function wireGlobalAuthUI(){
         toast(e?.message || String(e));
       }
     });
-  } else {
-    console.warn("[Tracking] btnGoogleLogin no encontrado en el DOM");
   }
 
   // Tracking logout button
   if($$("btnLogout")){
     $$("btnLogout").addEventListener("click", async ()=>{
-      console.log("[Tracking] click logout");
       await signOut(auth);
     });
   }
