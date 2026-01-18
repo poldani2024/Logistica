@@ -826,7 +826,12 @@ function renderPassengersTable(){
 
 function renderPassengerDetailForm(passenger){
   const isNew = !passenger;
-  const p = passenger || { firstName:"", lastName:"", phone:"", address:"", zone:"", status:"unassigned", assignedDriverId:null };
+ const p = passenger || {
+  firstName:"", lastName:"", phone:"",
+  address:"", localidad:"Rosario",
+  zone:"", status:"unassigned", assignedDriverId:null
+};
+
 
   const driver = p.assignedDriverId ? driverById(p.assignedDriverId) : null;
 
@@ -837,6 +842,12 @@ function renderPassengerDetailForm(passenger){
         <div class="field"><label>Apellido</label><input id="p_lastName" value="${escapeHtml(p.lastName)}"></div>
         <div class="field"><label>Teléfono</label><input id="p_phone" value="${escapeHtml(p.phone)}"></div>
         <div class="field"><label>Dirección</label><input id="p_address" value="${escapeHtml(p.address)}"></div>
+        <div class="field"><label>Localidad</label><select id="p_localidad">
+            ${["Rosario","Funes","Roldán","San Lorenzo","Pueblo Esther","Granadero Baigorria","Villa G. Galvez"]
+              .map(l => `<option value="${l}" ${p.localidad===l ? "selected" : ""}>${l}</option>`)
+              .join("")}
+          </select>
+        </div>
         <div class="field"><label>Zona</label><input id="p_zone" value="${escapeHtml(p.zone)}"></div>
 
         <div class="muted">Estado: <strong>${escapeHtml(p.status || "unassigned")}</strong></div>
@@ -863,11 +874,29 @@ function renderPassengerDetailForm(passenger){
       lastName: $("p_lastName").value.trim(),
       phone: $("p_phone").value.trim(),
       address: $("p_address").value.trim(),
+      localidad: $("p_localidad").value,   // ✅
       zone: $("p_zone").value.trim(),
       eventId: STATE.eventId,
       updatedAt: serverTimestamp(),
     };
-
+      if (changed && newAddress && newLocalidad) {
+      const geo = await geocodeOSM(newAddress, newLocalidad);
+      if (geo) {
+        // (opcional) misma validación ciudad/target que ya usaste en choferes
+        const target = canonicalLocalidad(newLocalidad);
+        const got = canonicalLocalidad(geo.geoCity);
+    
+        if (got && target && got !== target) {
+          toast(`Geocoding rechazado: devolvió "${geo.geoCity}" y se esperaba "${newLocalidad}"`);
+        } else {
+          payload.lat = geo.lat;
+          payload.lng = geo.lng;
+          payload.geoLabel = geo.geoLabel;
+          payload.geoCity = geo.geoCity;
+          payload.geoCodeQuery = geo.geoCodeQuery;
+        }
+      }
+    }
     if(isNew){
       payload.status = "unassigned";
       payload.assignedDriverId = null;
