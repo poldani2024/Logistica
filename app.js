@@ -879,15 +879,15 @@ function renderPassengerDetailForm(passenger){
       eventId: STATE.eventId,
       updatedAt: serverTimestamp(),
     };
-      if (changed && newAddress && newLocalidad) {
-      const geo = await geocodeOSM(newAddress, newLocalidad);
+    
+      const geo = await geocodeOSM(payload.address, payload.Localidad);
       if (geo) {
         // (opcional) misma validación ciudad/target que ya usaste en choferes
-        const target = canonicalLocalidad(newLocalidad);
+        const target = canonicalLocalidad(payload.Localidad);
         const got = canonicalLocalidad(geo.geoCity);
     
         if (got && target && got !== target) {
-          toast(`Geocoding rechazado: devolvió "${geo.geoCity}" y se esperaba "${newLocalidad}"`);
+          toast(`Geocoding rechazado: devolvió "${geo.geoCity}" y se esperaba "${payload.Localidad}"`);
         } else {
           payload.lat = geo.lat;
           payload.lng = geo.lng;
@@ -896,7 +896,7 @@ function renderPassengerDetailForm(passenger){
           payload.geoCodeQuery = geo.geoCodeQuery;
         }
       }
-    }
+   
     if(isNew){
       payload.status = "unassigned";
       payload.assignedDriverId = null;
