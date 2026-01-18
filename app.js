@@ -1357,15 +1357,17 @@ function wireGlobalAuthUI(){
         toast(e?.message || String(e));
       }
     });
+  } else {
+    console.warn("[Tracking] btnGoogleLogin no encontrado en el DOM");
   }
 
   // Tracking logout button
   if($$("btnLogout")){
     $$("btnLogout").addEventListener("click", async ()=>{
+      console.log("[Tracking] click logout");
       await signOut(auth);
     });
   }
-
 }
 
 function renderAuthBar(){
