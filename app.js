@@ -1250,7 +1250,7 @@ $("btnDangerClearEvent").addEventListener("click", async ()=>{
 /* -------------------- START -------------------- */
 (async function init(){
   wireGlobalAuthUI();
-
+  await setPersistence(auth, browserLocalPersistence);
   // Finish redirect login (mobile)
   try{ await getRedirectResult(auth); }catch(e){ console.warn("getRedirectResult:", e?.message || e);}
 
@@ -1331,7 +1331,10 @@ $("btnDangerClearEvent").addEventListener("click", async ()=>{
   if($$("eventSelect")) $$("eventSelect").disabled = true;
   if($$("btnReloadEvents")) $$("btnReloadEvents").disabled = true;
 }
-
+function isInAppBrowser(){
+  const ua = navigator.userAgent || "";
+  return /Instagram|FBAN|FBAV|FBIOS|FB_IAB|Line|Twitter|TikTok|Snapchat/i.test(ua);
+}
 function hideAuthGate(){
   const gate = $$("authGate");
   if(gate) gate.classList.remove("show");
@@ -1347,11 +1350,16 @@ async function doGoogleLogin(){
   const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
   if(isMobile){
+    if(isInAppBrowser()){
+      alert("Para iniciar sesión, abrí esta página en Chrome/Safari (no dentro de Instagram/Facebook).");
+      return;
+    }
     await signInWithRedirect(auth, provider);
   }else{
     await signInWithPopup(auth, provider);
   }
 }
+
 
 
 
