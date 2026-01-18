@@ -1340,23 +1340,25 @@ async function doGoogleLogin(){
 }
 
 function wireGlobalAuthUI(){
-  if($$("btnAppGoogleLogin")){
-    $$("btnAppGoogleLogin").addEventListener("click", async ()=>{
+    // Tracking login button
+  if($$("btnGoogleLogin")){
+    $$("btnGoogleLogin").addEventListener("click", async ()=>{
       try{
-        if($$("authGateHint")) $$("authGateHint").textContent = "Abriendo login con Google...";
         await doGoogleLogin();
       }catch(e){
         console.warn(e);
-        showAuthGate(e?.message || String(e));
+        toast(e?.message || String(e));
       }
     });
   }
 
-  if($$("btnAppLogout")){
-    $$("btnAppLogout").addEventListener("click", async ()=>{
+  // Tracking logout button
+  if($$("btnLogout")){
+    $$("btnLogout").addEventListener("click", async ()=>{
       await signOut(auth);
     });
   }
+
 }
 
 function renderAuthBar(){
