@@ -1300,6 +1300,7 @@ $("btnDangerClearEvent").addEventListener("click", async ()=>{
         localStorage.setItem("selectedEventId", id);
     
         await refreshAll();
+        if(typeof renderTracking==="function") renderTracking();
         toast("Evento cambiado");
       });
     }
@@ -1392,6 +1393,177 @@ function renderAuthBar(){
   }else{
     el.textContent = "No logueado";
     if(btn) btn.style.display = "none";
+  }
+}
+function getAssignedPassengersForDriver(driverId){
+  const a = driverAssignment(driverId);
+  const ids = a?.passengerIds || [];
+  return ids.map(pid => passengerById(pid)).filter(Boolean);
+}
+
+function trackingStatusLabel(s){
+  switch((s||"").toLowerCase()){
+    case "pending": return "Pendiente";
+    case "transit": return "En tránsito";
+    case "arrived": return "En destino";
+    case "absent": return "Ausente";
+    default: return "Pendiente";
+  }
+}
+
+function renderTracking(){
+  // elementos
+  const authBox = $("trackingAuthBox");
+  const statusEl = $("authStatus");
+  const listEl = $("trackingList");
+  const headerEl = $("trackingHeader");
+  const filterSel = $("trackingDriverFilter");
+  const btnLogout = $("btnLogout");
+
+  if(!listEl || !filterSel || !statusEl || !headerEl) return;
+
+  const user = STATE?.auth?.user || null;
+  const isAdmin = !!STATE?.auth?.isAdmin;
+  const myDriver = STATE?.auth?.driver || null;
+
+  // UI auth state
+  if(!user){
+    statusEl.textContent = "No estás logueado.";
+    if(authBox) authBox.style.display = "grid";
+    if(btnLogout) btnLogout.style.display = "none";
+    filterSel.disabled = true;
+    filterSel.innerHTML = `<option value="">(Solo cuando estés logueado)</option>`;
+    headerEl.textContent = "";
+    listEl.innerHTML = `<div class="muted">Ingresá para ver el tracking.</div>`;
+    return;
+  }
+
+  statusEl.textContent = `Logueado: ${user.email || "(sin email)"} • ${isAdmin ? "Admin" : (myDriver ? "Chofer" : "Usuario")}`;
+  if(btnLogout) btnLogout.style.display = "inline-block";
+
+  // Si es admin, arma filtro de chofer; si es chofer, lo deja fijo
+  if(isAdmin){
+    filterSel.disabled = false;
+    const current = filterSel.value || "";
+    filterSel.innerHTML =
+      `<option value="">(Todos los choferes)</option>` +
+      STATE.drivers.map(d => `<option value="${d.id}">${escapeHtml(fullName(d))}</option>`).join("");
+    filterSel.value = current;
+  }else{
+    filterSel.disabled = true;
+    if(myDriver){
+      filterSel.innerHTML = `<option value="${myDriver.id}">${escapeHtml(fullName(myDriver))}</option>`;
+      filterSel.value = myDriver.id;
+    }else{
+      filterSel.innerHTML = `<option value="">(Tu correo no coincide con ningún chofer)</option>`;
+      filterSel.value = "";
+    }
+  }
+
+  // Determinar qué chofer(es) se muestran
+  const selectedDriverId = (isAdmin ? (filterSel.value || "") : (myDriver?.id || ""));
+  let driversToShow = [];
+
+  if(isAdmin){
+    driversToShow = selectedDriverId ? [driverById(selectedDriverId)].filter(Boolean) : [...STATE.drivers];
+  }else{
+    driversToShow = selectedDriverId ? [driverById(selectedDriverId)].filter(Boolean) : [];
+  }
+
+  // Render
+  if(!driversToShow.length){
+    headerEl.textContent = "No hay chofer seleccionado / disponible.";
+    listEl.innerHTML = `<div class="muted">Si sos chofer, tu email debe estar cargado en el chofer.</div>`;
+    return;
+  }
+
+  const totalPassengers = driversToShow.reduce((acc,d)=> acc + getAssignedPassengersForDriver(d.id).length, 0);
+  headerEl.textContent = `${driversToShow.length === 1 ? "Chofer" : "Choferes"}: ${driversToShow.length} • Pasajeros: ${totalPassengers}`;
+
+  const canEdit = !!myDriver && !isAdmin ? true : isAdmin; // admin puede editar si querés; si no, cambiá a false
+
+  listEl.innerHTML = driversToShow.map(d=>{
+    const ps = getAssignedPassengersForDriver(d.id);
+
+    return `
+      <div class="item" style="padding:12px;">
+        <div style="font-weight:700;">${escapeHtml(fullName(d))}</div>
+        <div class="muted">${escapeHtml(d.phone||"")}</div>
+        <div class="divider" style="margin:10px 0;"></div>
+
+        ${ps.length ? ps.map(p=>{
+          const st = (p.trackStatus || "pending");
+          const cm = (p.trackComment || "");
+          return `
+            <div class="card" style="margin:10px 0; padding:12px;">
+              <div style="font-weight:700;">${escapeHtml(fullName(p))}</div>
+              <div class="muted">${escapeHtml(p.phone||"")} • ${escapeHtml(p.address||"")} • ${escapeHtml(p.localidad||"")}</div>
+
+              <div class="grid2" style="margin-top:10px;">
+                <div class="field">
+                  <label>Estado</label>
+                  <select data-track-status="${p.id}" ${canEdit ? "" : "disabled"}>
+                    <option value="pending"  ${st==="pending"?"selected":""}>Pendiente</option>
+                    <option value="transit"  ${st==="transit"?"selected":""}>En tránsito</option>
+                    <option value="arrived"  ${st==="arrived"?"selected":""}>En destino</option>
+                    <option value="absent"   ${st==="absent"?"selected":""}>Ausente</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label>Comentario</label>
+                  <input data-track-comment="${p.id}" value="${escapeHtml(cm)}" ${canEdit ? "" : "disabled"} />
+                </div>
+              </div>
+
+              <div class="actions" style="margin-top:10px;">
+                <button class="btnSecondary" data-track-save="${p.id}" ${canEdit ? "" : "disabled"}>
+                  Guardar tracking
+                </button>
+                <span class="muted" data-track-hint="${p.id}"></span>
+              </div>
+            </div>
+          `;
+        }).join("") : `<div class="muted">Sin pasajeros asignados.</div>`}
+      </div>
+    `;
+  }).join("");
+
+  // Wire saves
+  listEl.querySelectorAll("button[data-track-save]").forEach(btn=>{
+    btn.addEventListener("click", async ()=>{
+      const pid = btn.dataset.trackSave;
+      const sel = listEl.querySelector(`select[data-track-status="${pid}"]`);
+      const inp = listEl.querySelector(`input[data-track-comment="${pid}"]`);
+      const hint = listEl.querySelector(`span[data-track-hint="${pid}"]`);
+
+      try{
+        const payload = {
+          trackStatus: sel?.value || "pending",
+          trackComment: inp?.value?.trim() || "",
+          trackUpdatedAt: serverTimestamp(),
+          trackUpdatedBy: (STATE.auth.user?.email || ""),
+          updatedAt: serverTimestamp()
+        };
+        await updateDoc(doc(db, "passengers", pid), payload);
+
+        if(hint) hint.textContent = "Guardado ✅";
+        // refrescar memoria local para que quede consistente
+        const p = passengerById(pid);
+        if(p){
+          p.trackStatus = payload.trackStatus;
+          p.trackComment = payload.trackComment;
+        }
+      }catch(e){
+        console.error(e);
+        if(hint) hint.textContent = "Error ❌";
+        alert(e?.message || String(e));
+      }
+    });
+  });
+
+  // Wire filter change (admin)
+  if(isAdmin){
+    filterSel.onchange = () => renderTracking();
   }
 }
 
