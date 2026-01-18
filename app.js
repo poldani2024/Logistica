@@ -276,6 +276,7 @@ async function refreshAll(){
   renderPassengersTable();
   renderAssignments();
   renderDashboard();
+  if(typeof renderTracking==="function") renderTracking(); // ✅ AGREGAR
 }
 
 $("btnRefreshDashboard").addEventListener("click", refreshAll);
