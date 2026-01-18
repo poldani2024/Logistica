@@ -37,7 +37,7 @@ import {
 // Helpers DOM (poner arriba de todo, después de imports)
 const $  = (id) => document.getElementById(id);
 const $$ = (id) => document.getElementById(id); // compat, tu código usa $$
-
+let AUTH_IN_PROGRESS = false;
 const STATE = {
   eventId: null,
   events: [],
@@ -341,50 +341,7 @@ async function loadAssignments(){
 /* -------------------- HELPERS -------------------- */
 
 
-document.addEventListener("click", async (e)=>{
-  const t = e.target;
-  if(!t) return;
 
-  if(t.id === "btnGoogleLogin"){
-    console.log("[Tracking] click login");
-    try{
-      await doGoogleLogin();
-    }catch(err){
-      console.warn(err);
-      toast(err?.message || String(err));
-    }
-  }
-
-  if(t.id === "btnLogout"){
-    console.log("[Tracking] click logout");
-    try{
-      await signOut(auth);
-    }catch(err){
-      console.warn(err);
-      toast(err?.message || String(err));
-    }
-  }
-
-  if(t.id === "btnAppGoogleLogin"){
-    console.log("[Gate] click login");
-    try{
-      await doGoogleLogin();
-    }catch(err){
-      console.warn(err);
-      toast(err?.message || String(err));
-    }
-  }
-
-  if(t.id === "btnAppLogout"){
-    console.log("[App] click logout");
-    try{
-      await signOut(auth);
-    }catch(err){
-      console.warn(err);
-      toast(err?.message || String(err));
-    }
-  }
-});
 
 function uniqZones(){
   const zones = new Set();
@@ -1383,15 +1340,23 @@ function hideAuthGate(){
 }
 
 async function doGoogleLogin(){
-  const provider = new GoogleAuthProvider();
-  provider.setCustomParameters({ prompt: "select_account" });
-  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-  if(isMobile){
-    await signInWithRedirect(auth, provider);
-  }else{
-    await signInWithPopup(auth, provider);
+  if(AUTH_IN_PROGRESS) return;
+  AUTH_IN_PROGRESS = true;
+
+  try{
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: "select_account" });
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    if(isMobile){
+      await signInWithRedirect(auth, provider);
+    }else{
+      await signInWithPopup(auth, provider);
+    }
+  } finally {
+    AUTH_IN_PROGRESS = false;
   }
 }
+
 
 function wireGlobalAuthUI(){
     // Tracking login button
