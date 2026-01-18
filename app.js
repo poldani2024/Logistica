@@ -1349,18 +1349,46 @@ async function doGoogleLogin(){
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: "select_account" });
 
-  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  try{
+    // ✅ intentar popup primero (inclusive en mobile)
+    await signInWithPopup(auth, provider);
+    return;
+  }catch(e){
+    const code = e?.code || "";
+    const msg = String(e?.message || "");
 
-  if(isMobile){
-    if(isInAppBrowser()){
-      alert("Para iniciar sesión, abrí esta página en Chrome/Safari (no dentro de Instagram/Facebook).");
+    // Si popup está bloqueado/cancelado, probamos redirect
+    const popupRelated =
+      code === "auth/popup-blocked" ||
+      code === "auth/popup-closed-by-user" ||
+      code === "auth/cancelled-popup-request";
+
+    if(!popupRelated){
+      // otro error: lo mostramos
+      toast(msg);
+      throw e;
+    }
+  }
+
+  // Fallback redirect
+  try{
+    await signInWithRedirect(auth, provider);
+  }catch(e){
+    const msg = String(e?.message || "");
+    // ✅ caso que vos tenés
+    if(msg.includes("missing initial state")){
+      alert(
+        "En algunos celulares el login falla por restricciones del navegador.\n\n" +
+        "Solución: activá 'Sitio de escritorio' (desktop site) e intentá de nuevo, " +
+        "o abrí esta página en Chrome/Safari."
+      );
       return;
     }
-    await signInWithRedirect(auth, provider);
-  }else{
-    await signInWithPopup(auth, provider);
+    toast(msg);
+    throw e;
   }
 }
+
 
 
 
