@@ -170,7 +170,7 @@ function renderMap(){
   const zoneFilter = ($("mapZoneFilter")?.value || "").trim();
   const show = ($("mapShow")?.value || "all");
   
-  if(show !== "all" && show == "passengers") return; // antes del loop
+ if(show === "all" || show === "passengers"){
   (STATE.passengers || []).forEach(p=>{
     if(p.lat == null || p.lng == null) return;
 
@@ -193,9 +193,9 @@ function renderMap(){
       ${escapeHtml(p.phone || "")}
     `);
   });
-
+  }
   // -------------------- MARCADORES: CHOFERES --------------------
-  if(show !== "all" && show == "drivers") return; // antes del loop
+ if(show === "all" || show === "drivers"){
   (STATE.drivers || []).forEach(d=>{
     if(d.lat == null || d.lng == null) return;
 
@@ -210,7 +210,7 @@ function renderMap(){
     `);
   });
 }
-
+}
 
 
 
@@ -1302,12 +1302,18 @@ $("btnDangerClearEvent").addEventListener("click", async ()=>{
 
 
     
-    // Load data and resolve role
-    try{ await loadDrivers(); }catch(e){}
-    resolveAuthRole();
-    renderAuthBar();
+    // Cargar TODO primero
+      await refreshAll();
+      
+      // Recién ahora resolver rol (chofer/admin)
+      resolveAuthRole();
+      renderAuthBar();
+      
+      // ⚠️ clave: forzar render tracking ahora que hay datos
+      if(typeof renderTracking === "function") {
+        renderTracking();
+      }
 
-    await refreshAll();
   });
 
   // show gate until auth resolves
