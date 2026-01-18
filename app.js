@@ -214,6 +214,18 @@ function renderMap(){
 }
 }
 
+$$("btnGeocodePassengers")?.addEventListener("click", async ()=>{
+  try{
+    const onlyMissing = true; // si querés geocodificar todos, ponelo en false
+    await geocodePassengers({ onlyMissing });
+    toast("Geocoding de pasajeros finalizado");
+    await refreshAll();
+  }catch(e){
+    console.error(e);
+    toast("Error geocodificando pasajeros");
+    alert(e?.message || String(e));
+  }
+});
 
 
 
@@ -342,6 +354,78 @@ async function loadAssignments(){
 
 /* -------------------- HELPERS -------------------- */
 
+function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
+
+async function geocodePassengers({ onlyMissing = true } = {}){
+  if(!STATE?.passengers?.length){
+    await loadPassengers();
+  }
+
+  // Filtra candidatos
+  const candidates = (STATE.passengers || []).filter(p=>{
+    const hasAddr = (p.address || "").trim().length > 0;
+    const hasLoc  = (p.localidad || "").trim().length > 0;
+    const hasGeo  = (p.lat != null && p.lng != null);
+    if(!hasAddr || !hasLoc) return false;
+    return onlyMissing ? !hasGeo : true;
+  });
+
+  if(!candidates.length){
+    toast("No hay pasajeros para geocodificar");
+    return;
+  }
+
+  // Límite amigable para Nominatim (evita que te bloquee)
+  let ok = 0, fail = 0;
+
+  for(const p of candidates){
+    const addr = (p.address || "").trim();
+    const loc  = (p.localidad || "").trim();
+
+    try{
+      const geo = await geocodeOSM(addr, loc);
+      if(!geo){
+        fail++;
+        continue;
+      }
+
+      // (Opcional) Validación por localidad, igual que choferes
+      const target = canonicalLocalidad(loc);
+      const got = canonicalLocalidad(geo.geoCity);
+      if(got && target && got !== target){
+        // rechazado: no guardamos coords
+        fail++;
+        continue;
+      }
+
+      await updateDoc(doc(db, "passengers", p.id), {
+        lat: geo.lat,
+        lng: geo.lng,
+        geoLabel: geo.geoLabel,
+        geoCity: geo.geoCity,
+        geoCodeQuery: geo.geoCodeQuery,
+        updatedAt: serverTimestamp()
+      });
+
+      // actualizar memoria local para que el mapa lo vea sin recargar
+      p.lat = geo.lat;
+      p.lng = geo.lng;
+      p.geoLabel = geo.geoLabel;
+      p.geoCity = geo.geoCity;
+      p.geoCodeQuery = geo.geoCodeQuery;
+
+      ok++;
+    }catch(e){
+      console.warn("Geocode passenger failed:", p.id, e);
+      fail++;
+    }
+
+    // pausa para no saturar el servicio
+    await sleep(900);
+  }
+
+  toast(`Geocoding pasajeros: OK ${ok} • Fallos ${fail}`);
+}
 
 
 
