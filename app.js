@@ -1252,7 +1252,7 @@ $("btnDangerClearEvent").addEventListener("click", async ()=>{
   wireGlobalAuthUI();
 
   // Finish redirect login (mobile)
-  try{ await getRedirectResult(auth); }catch(e){}
+  try{ await getRedirectResult(auth); }catch(e){ console.warn("getRedirectResult:", e?.message || e);}
 
   onAuthStateChanged(auth, async (user)=>{
     STATE.auth.user = user || null;
@@ -1341,22 +1341,18 @@ function hideAuthGate(){
 }
 
 async function doGoogleLogin(){
-  if(AUTH_IN_PROGRESS) return;
-  AUTH_IN_PROGRESS = true;
+  const provider = new GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: "select_account" });
 
-  try{
-    const provider = new GoogleAuthProvider();
-    provider.setCustomParameters({ prompt: "select_account" });
-    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-    if(isMobile){
-      await signInWithRedirect(auth, provider);
-    }else{
-      await signInWithPopup(auth, provider);
-    }
-  } finally {
-    AUTH_IN_PROGRESS = false;
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+  if(isMobile){
+    await signInWithRedirect(auth, provider);
+  }else{
+    await signInWithPopup(auth, provider);
   }
 }
+
 
 
 function wireGlobalAuthUI(){
