@@ -1066,97 +1066,98 @@ async function assignPassenger(driverId, passengerId){
   const driverRef = doc(db,"drivers",driverId);
   const passengerRef = doc(db,"passengers",passengerId);
 
-  // buscamos/creamos assignment doc para este driver + event
+  const linkDriverRef = doc(db,"events",STATE.eventId,"eventDrivers",driverId);
+  const linkPassengerRef = doc(db,"events",STATE.eventId,"eventPassengers",passengerId);
+
   const assignmentRef = await ensureAssignmentDoc(driverId);
 
   await runTransaction(db, async (tx)=>{
-    const driverSnap = await tx.get(driverRef);
-    if(!driverSnap.exists()) throw new Error("Chofer no existe");
+    const dSnap = await tx.get(driverRef);
+    if(!dSnap.exists()) throw new Error("Chofer no existe");
 
-    const passengerSnap = await tx.get(passengerRef);
-    if(!passengerSnap.exists()) throw new Error("Pasajero no existe");
+    const pSnap = await tx.get(passengerRef);
+    if(!pSnap.exists()) throw new Error("Pasajero no existe");
 
-    const d = driverSnap.data();
-    const p = passengerSnap.data();
+    // ✅ validar que ambos estén asociados al evento
+    const ld = await tx.get(linkDriverRef);
+    if(!ld.exists()) throw new Error("Chofer no está asociado al evento");
 
-    if(p.eventId !== STATE.eventId || d.eventId !== STATE.eventId){
-      throw new Error("EventId no coincide");
-    }
-    if(p.status === "assigned" && p.assignedDriverId){
+    const lp = await tx.get(linkPassengerRef);
+    if(!lp.exists()) throw new Error("Pasajero no está asociado al evento");
+
+    const pEvent = lp.data() || {};
+    if(pEvent.status === "assigned" && pEvent.assignedDriverId){
       throw new Error("Ese pasajero ya está asignado");
     }
 
     const aSnap = await tx.get(assignmentRef);
     const a = aSnap.exists() ? aSnap.data() : { passengerIds:[] };
 
+    const d = dSnap.data();
     const cap = Number(d.capacity)||4;
     const ids = Array.isArray(a.passengerIds) ? a.passengerIds : [];
     if(ids.length >= cap) throw new Error("Chofer lleno (capacidad alcanzada)");
 
-    // update assignment
-    const newIds = [...ids, passengerId];
     tx.set(assignmentRef, {
-      eventId: STATE.eventId,
       driverId,
-      passengerIds: newIds,
+      passengerIds: [...ids, passengerId],
       updatedAt: serverTimestamp(),
     }, { merge:true });
 
-    // update passenger
-    tx.update(passengerRef, {
+    // ✅ update status dentro del evento (no en maestro)
+    tx.set(linkPassengerRef, {
       status: "assigned",
       assignedDriverId: driverId,
       updatedAt: serverTimestamp(),
-    });
+    }, { merge:true });
   });
 
   toast("Asignado");
 }
 
+
 async function unassignPassenger(driverId, passengerId){
-  const passengerRef = doc(db,"passengers",passengerId);
+  const linkPassengerRef = doc(db,"events",STATE.eventId,"eventPassengers",passengerId);
   const assignmentRef = await ensureAssignmentDoc(driverId);
 
   await runTransaction(db, async (tx)=>{
-    const pSnap = await tx.get(passengerRef);
-    if(!pSnap.exists()) return;
-    const p = pSnap.data();
-
     const aSnap = await tx.get(assignmentRef);
     const a = aSnap.exists() ? aSnap.data() : { passengerIds:[] };
     const ids = Array.isArray(a.passengerIds) ? a.passengerIds : [];
     const newIds = ids.filter(id=>id!==passengerId);
 
     tx.set(assignmentRef, {
-      eventId: STATE.eventId,
       driverId,
       passengerIds: newIds,
       updatedAt: serverTimestamp(),
     }, { merge:true });
 
-    // solo si coincide chofer
-    if(p.assignedDriverId === driverId){
-      tx.update(passengerRef, {
-        status: "unassigned",
-        assignedDriverId: null,
-        updatedAt: serverTimestamp(),
-      });
-    }
+    // ✅ limpiar estado dentro del evento
+    tx.set(linkPassengerRef, {
+      status: "unassigned",
+      assignedDriverId: null,
+      updatedAt: serverTimestamp(),
+    }, { merge:true });
   });
 
   toast("Quitado");
 }
 
+
 async function ensureAssignmentDoc(driverId){
-  // assignmentId determinístico: `${eventId}_${driverId}`
-  const id = `${STATE.eventId}_${driverId}`;
-  const ref = doc(db,"assignments", id);
+  const ref = doc(db, "events", STATE.eventId, "assignments", driverId);
   const snap = await getDoc(ref);
   if(!snap.exists()){
-    await setDoc(ref, { eventId: STATE.eventId, driverId, passengerIds: [], createdAt: serverTimestamp() });
+    await setDoc(ref, {
+      driverId,
+      passengerIds: [],
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
   }
   return ref;
 }
+
 
 /* -------------------- ASSIGNMENTS VIEW -------------------- */
 $("assignmentSearch").addEventListener("input", renderAssignments);
