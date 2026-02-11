@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Asociaciones - Logística</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <style>
+    .authGate{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;padding:16px;z-index:9999}
+    .authGate.show{display:flex}
+    .authCard{width:min(520px,100%);background:#fff;border-radius:14px;padding:18px;box-shadow:0 12px 40px rgba(0,0,0,.25)}
+    .authTitle{font-size:20px;font-weight:700;margin-bottom:6px}
+    .authText{margin-bottom:12px;color:rgba(0,0,0,.70)}
+  </style>
+</head>
+<body>
+  <div id="authGate" class="authGate">
+    <div class="authCard">
+      <div class="authTitle">Ingresar</div>
+      <div class="authText">Para usar la app tenés que ingresar con tu cuenta de Google.</div>
+      <button class="btn" id="btnGoogleLogin">Ingresar con Google</button>
+      <div class="muted" id="authGateHint" style="margin-top:10px;"></div>
+    </div>
+  </div>
+
+  <header class="topbar">
+    <div id="toast" class="toast" aria-live="polite"></div>
+    <div class="brand">
+      <div class="logo">🔗</div>
+      <div>
+        <div class="title">Asociar personas</div>
+        <div class="subtitle">Choferes / Jóvenes → Evento</div>
+      </div>
+    </div>
+    <div class="row">
+      <a class="btnSecondary" href="./index.html">Volver</a>
+      <a class="btnSecondary" href="./events.html">Eventos</a>
+    </div>
+  </header>
+
+  <div class="event">
+    <label class="field">
+      <span>Evento</span>
+      <select id="eventSelect"></select>
+    </label>
+    <button id="btnReloadEvents" class="btnSecondary">Recargar</button>
+  </div>
+
+  <main class="container">
+    <section class="card">
+      <div class="rowBetween">
+        <div>
+          <div class="cardTitle">Choferes</div>
+          <div class="muted">Asignar choferes existentes al evento seleccionado (setea <code>eventId</code>).</div>
+        </div>
+        <div class="row">
+          <button class="btnSecondary" id="btnReloadDrivers">Refrescar</button>
+          <button class="btn" id="btnAssignDriversBulk">Asignar seleccionados</button>
+          <button class="btnDanger" id="btnRemoveDriversBulk">Sacar seleccionados</button>
+        </div>
+      </div>
+      <div class="filters">
+        <input id="driverSearch2" placeholder="Buscar chofer (nombre, tel, email, zona)..." />
+      </div>
+      <div id="driversTable2" class="tableWrap"></div>
+    </section>
+
+    <section class="card">
+      <div class="rowBetween">
+        <div>
+          <div class="cardTitle">Jóvenes / Pasajeros</div>
+          <div class="muted">Asignar jóvenes existentes al evento seleccionado (setea <code>eventId</code>).</div>
+        </div>
+        <div class="row">
+          <button class="btnSecondary" id="btnReloadPassengers">Refrescar</button>
+          <button class="btn" id="btnAssignPassengersBulk">Asignar seleccionados</button>
+          <button class="btnDanger" id="btnRemovePassengersBulk">Sacar seleccionados</button>
+        </div>
+      </div>
+      <div class="filters">
+        <input id="passSearch2" placeholder="Buscar joven (nombre, tel, dirección, zona)..." />
+      </div>
+      <div id="passengersTable2" class="tableWrap"></div>
+    </section>
+  </main>
+
+  <script type="module" src="./event-links.js"></script>
+</body>
+</html>
