@@ -62,11 +62,27 @@ function hideAuthGate() {
 }
 
 export async function loadEvents() {
-  const snap = await getDocs(query(collection(db, "events"), orderBy("startAt", "desc")));
+  const snap = await getDocs(collection(db, "events"));
   const arr = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+  // Orden robusto: usa startAt si existe, si no usa date, si no 0
+  const toMillis = (v) => {
+    if (!v) return 0;
+    if (v.toDate) return v.toDate().getTime();      // Timestamp
+    const d = new Date(v);                           // string/Date
+    return isNaN(d.getTime()) ? 0 : d.getTime();
+  };
+
+  arr.sort((a, b) => {
+    const aa = toMillis(a.startAt ?? a.date);
+    const bb = toMillis(b.startAt ?? b.date);
+    return bb - aa;
+  });
+
   STATE.events = arr;
   return arr;
 }
+
 
 export function renderEventSelect() {
   const sel = $("eventSelect");
