@@ -120,20 +120,37 @@ async function refreshUI() {
     }
   });
 
-  $("btnSave").addEventListener("click", async () => {
-    try {
-      if (!STATE.eventId) throw new Error("No hay evento seleccionado");
-      const payload = readForm();
-      await updateDoc(doc(db, "events", STATE.eventId), {
+ $("btnSave").addEventListener("click", async () => {
+  try {
+    const payload = readForm();
+
+    // ✅ Si no hay evento seleccionado, Guardar crea uno nuevo
+    if (!STATE.eventId) {
+      const docRef = await addDoc(collection(db, "events"), {
         ...payload,
+        createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
+        createdBy: STATE.auth.user?.uid || null,
       });
-      toast("Evento guardado");
+      toast("Evento creado");
+      STATE.eventId = docRef.id;
+      localStorage.setItem("selectedEventId", STATE.eventId);
       await refreshUI();
-    } catch (e) {
-      alert(e?.message || String(e));
+      return;
     }
-  });
+
+    // ✅ Si hay evento seleccionado, Guardar actualiza
+    await updateDoc(doc(db, "events", STATE.eventId), {
+      ...payload,
+      updatedAt: serverTimestamp(),
+    });
+    toast("Evento guardado");
+    await refreshUI();
+  } catch (e) {
+    alert(e?.message || String(e));
+  }
+});
+
 
   $("btnDelete").addEventListener("click", async () => {
     try {
