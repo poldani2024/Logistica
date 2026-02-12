@@ -1521,6 +1521,147 @@ function getAssignedPassengersForDriver(driverId){
   const ids = a?.passengerIds || [];
   return ids.map(pid => passengerById(pid)).filter(Boolean);
 }
+/* =========================
+   DRIVERS UI (standalone)
+   ========================= */
+
+// Helpers mínimos (si ya existen, no se pisan)
+const $ = window.$ || ((id)=>document.getElementById(id));
+
+function escapeHtml(s){
+  s = String(s ?? "");
+  return s
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#039;");
+}
+
+function fullName(x){
+  return `${x?.lastName||""} ${x?.firstName||""}`.trim();
+}
+
+function driverById(id){
+  return (STATE.drivers || []).find(d=>d.id===id) || null;
+}
+
+function driverAssignment(driverId){
+  return (STATE.assignments || []).find(a => a.driverId === driverId) || null;
+}
+
+function assignedCount(driverId){
+  const a = driverAssignment(driverId);
+  return Array.isArray(a?.passengerIds) ? a.passengerIds.length : 0;
+}
+
+function ensureDriversZoneFilter(){
+  const sel = $("driverZoneFilter");
+  if(!sel) return;
+
+  const zones = Array.from(new Set((STATE.drivers||[])
+    .map(d=>String(d.zone||"").trim())
+    .filter(Boolean)
+  )).sort((a,b)=>a.localeCompare(b));
+
+  const current = sel.value || "";
+  sel.innerHTML = `<option value="">Todas las zonas</option>` +
+    zones.map(z => `<option value="${escapeHtml(z)}">${escapeHtml(z)}</option>`).join("");
+
+  // re-seleccionar si estaba
+  if(current && zones.includes(current)) sel.value = current;
+}
+
+function renderDriversTable(){
+  const wrap = $("driversTable");
+  if(!wrap) return; // si estás en otra página
+
+  const qEl = $("driverSearch");
+  const zEl = $("driverZoneFilter");
+
+  const q = (qEl?.value || "").toLowerCase().trim();
+  const zf = (zEl?.value || "");
+
+  const drivers = Array.isArray(STATE.drivers) ? STATE.drivers : [];
+  const list = drivers.filter(d=>{
+    if(zf && String(d.zone||"") !== zf) return false;
+    const hay = `${d.firstName||""} ${d.lastName||""} ${d.phone||""} ${d.email||""} ${d.zone||""}`.toLowerCase();
+    return !q || hay.includes(q);
+  });
+
+  const html = `
+    <table>
+      <thead>
+        <tr>
+          <th>Chofer</th><th>Tel</th><th>Zona</th><th>Cap</th><th>Ocupación</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        ${list.map(d=>{
+          const cap = Number(d.capacity)||4;
+          const used = assignedCount(d.id);
+          return `
+            <tr>
+              <td><strong>${escapeHtml(fullName(d))}</strong></td>
+              <td>${escapeHtml(d.phone||"")}</td>
+              <td><span class="tag">${escapeHtml(d.zone||"")}</span></td>
+              <td>${cap}</td>
+              <td>${used}/${cap}</td>
+              <td><button class="btnSecondary" data-driver="${escapeHtml(d.id)}">Ver</button></td>
+            </tr>`;
+        }).join("") || `
+          <tr><td colspan="6" class="muted">No hay choferes cargados.</td></tr>
+        `}
+      </tbody>
+    </table>
+  `;
+
+  wrap.innerHTML = html;
+
+  wrap.querySelectorAll("button[data-driver]").forEach(b=>{
+    b.addEventListener("click", ()=>{
+      const id = b.dataset.driver;
+      const d = driverById(id);
+      if(typeof renderDriverDetailForm === "function"){
+        renderDriverDetailForm(d);
+      } else {
+        alert("renderDriverDetailForm() no está definido todavía.");
+        console.warn("Driver seleccionado:", d);
+      }
+    });
+  });
+}
+
+async function loadDriversGlobal(){
+  // ⚠️ Esta función asume que tenés db y getDocs/collection importados arriba en app.js
+  const snap = await getDocs(collection(db, "drivers"));
+  const arr = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+  arr.sort((a,b)=>(`${a.lastName||""} ${a.firstName||""}`).localeCompare(`${b.lastName||""} ${b.firstName||""}`));
+  STATE.drivers = arr;
+}
+
+/** Inicializa el tab de choferes (llamar 1 vez al arrancar) */
+function initDriversUI(){
+  if(!$("driversTable")) return; // no estamos en index
+
+  // listeners (si existen los elementos)
+  $("driverSearch")?.addEventListener("input", renderDriversTable);
+  $("driverZoneFilter")?.addEventListener("change", renderDriversTable);
+
+  $("btnNewDriver")?.addEventListener("click", ()=>{
+    if(typeof renderDriverDetailForm === "function") renderDriverDetailForm(null);
+    else alert("renderDriverDetailForm() no está definido todavía.");
+  });
+
+  $("btnRefreshDrivers")?.addEventListener("click", async ()=>{
+    await loadDriversGlobal();
+    ensureDriversZoneFilter();
+    renderDriversTable();
+  });
+}
+
+// ✅ Llamalo al final del init general de tu app (o directo acá):
+// initDriversUI();
 
 function trackingStatusLabel(s){
   switch((s||"").toLowerCase()){
