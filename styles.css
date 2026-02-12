@@ -1,3 +1,48 @@
+.navbtn{
+  position:relative;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:16px;
+  border-radius:16px;
+  border:1px solid var(--border);
+  background: rgba(255,255,255,.04);
+  min-height:72px;
+}
+
+.navbtn-title{
+  font-weight:800;
+  font-size:18px;
+  letter-spacing:.2px;
+}
+
+.iconbtn{
+  width:40px; height:40px;
+  border-radius:999px;
+  border:1px solid var(--border);
+  background: rgba(255,255,255,.06);
+  color: var(--muted);
+  font-weight:800;
+  cursor:pointer;
+}
+
+.tooltip{
+  position:fixed;
+  left:50%;
+  transform:translateX(-50%);
+  bottom:18px;
+  max-width:min(92vw, 520px);
+  padding:10px 14px;
+  border-radius:999px;
+  border:1px solid var(--border);
+  background: rgba(17,26,46,.92);
+  box-shadow: var(--shadow);
+  display:none;
+  z-index:999;
+}
+.tooltip.show{ display:block; }
+
 :root{
   --bg:#0b1220;
   --card:#111a2e;
