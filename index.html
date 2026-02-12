@@ -1,112 +1,40 @@
-<!doctype html>
-<html lang="es">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Logística Jóvenes</title>
-  <link rel="stylesheet" href="./styles.css" />
-</head>
-<body>
- <div class="topbar">
-  <div class="topbar-inner">
-    <div class="brand">
-      <div class="title">Logística Jóvenes</div>
-      <div class="subtitle">Rosario / Gran Rosario</div>
-    </div>
-
-    <div class="row grow">
-      <div class="grow">
-        <label>Evento activo</label>
-        <select id="eventSelect"></select>
-      </div>
-    </div>
-
-    <div class="row">
-      <button class="btn" id="btnHome">🏠</button>
-      <button class="btn danger" id="btnLogout">Salir</button>
-    </div>
-  </div>
-</div>
-
 <div class="container">
   <div class="grid cols-2">
-    <div class="card">
-      <div style="display:flex; justify-content:space-between; gap:10px; align-items:center;">
-        <div>
-          <div style="font-weight:800; font-size:18px;">Choferes</div>
-          <div style="color:var(--muted); font-size:13px;">Master data</div>
-        </div>
-        <button class="btn primary" id="btnAddDriver">+ Agregar</button>
+    <a class="navbtn" href="events.html">
+      <div class="navbtn-main">
+        <div class="navbtn-title">Eventos</div>
       </div>
-      <!-- tabla desktop -->
-      <div class="desktop-only" style="margin-top:12px;">
-        <table class="table" id="driversTable"></table>
-      </div>
-      <!-- cards mobile -->
-      <div class="mobile-only" style="margin-top:12px;">
-        <div class="cards-list" id="driversCards"></div>
-      </div>
-    </div>
+      <button class="iconbtn" type="button" data-tip="Crear/editar evento y seleccionar evento activo">i</button>
+    </a>
 
-    <div class="card">
-      <!-- otra columna -->
-    </div>
+    <a class="navbtn" href="drivers.html">
+      <div class="navbtn-main">
+        <div class="navbtn-title">Choferes</div>
+      </div>
+      <button class="iconbtn" type="button" data-tip="Master data de choferes">i</button>
+    </a>
+
+    <a class="navbtn" href="passengers.html">
+      <div class="navbtn-main">
+        <div class="navbtn-title">Pasajeros</div>
+      </div>
+      <button class="iconbtn" type="button" data-tip="Master data de pasajeros">i</button>
+    </a>
+
+    <a class="navbtn" href="assignments.html">
+      <div class="navbtn-main">
+        <div class="navbtn-title">Asignaciones</div>
+      </div>
+      <button class="iconbtn" type="button" data-tip="Asignar pasajeros a choferes dentro del evento">i</button>
+    </a>
+
+    <a class="navbtn" href="tracking.html">
+      <div class="navbtn-main">
+        <div class="navbtn-title">Tracking</div>
+      </div>
+      <button class="iconbtn" type="button" data-tip="Estado del viaje por chofer/pasajero">i</button>
+    </a>
   </div>
+
+  <div class="tooltip" id="tooltip"></div>
 </div>
-
-<div class="toast" id="toast"></div>
-
-
-  <main class="container">
-    <section class="card">
-      <h2>Evento seleccionado</h2>
-
-      <div class="row">
-        <select id="eventSelect" class="select"></select>
-        <button id="btnReloadEvents" class="btnSecondary">Recargar</button>
-      </div>
-
-      <div class="muted" id="eventHint"></div>
-    </section>
-
-    <section class="gridCards">
-      <a class="cardLink" href="./events.html">
-        <h3>Eventos</h3>
-        <p>Alta/edición de eventos + asociar choferes y pasajeros.</p>
-      </a>
-
-      <a class="cardLink" href="./drivers.html">
-        <h3>Choferes (Master)</h3>
-        <p>CRUD de choferes. No se asigna a pasajeros acá.</p>
-      </a>
-
-      <a class="cardLink" href="./passengers.html">
-        <h3>Pasajeros (Master)</h3>
-        <p>CRUD de pasajeros. No muestra “chofer asignado”.</p>
-      </a>
-
-      <a class="cardLink" href="./assignments.html">
-        <h3>Asignaciones (por Evento)</h3>
-        <p>Asignar pasajeros del evento a choferes del evento.</p>
-      </a>
-
-      <a class="cardLink" href="./tracking.html">
-        <h3>Tracking (por Evento)</h3>
-        <p>Chofer ve solo sus pasajeros (del evento seleccionado).</p>
-      </a>
-
-      <a class="cardLink" href="./map.html">
-        <h3>Mapa (por Evento)</h3>
-        <p>Capas: choferes/pasajeros/zonas del evento seleccionado.</p>
-      </a>
-    </section>
-  </main>
-
-  <div id="toast" class="toast"></div>
-
-  <script type="module">
-    import { initCorePage } from "./core.js";
-    initCorePage({ page: "home" });
-  </script>
-</body>
-</html>
