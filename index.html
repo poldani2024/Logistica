@@ -158,18 +158,20 @@
 </head>
 
 <body>
-  <header class="topbar">
-    <div class="topbar-inner">
-      <div class="brand">
-        <div class="title">Logística Jóvenes</div>
-        <div class="sub">Rosario / Gran Rosario</div>
-      </div>
-
-      <div class="pill" id="userPill">
+  
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <div class="title">Logística Jóvenes</div>
+      <div class="sub">Rosario / Gran Rosario</div>
+    </div>
+    <div class="pill" id="userPill">
       <span id="authStatus">No ingresado</span>
       <button class="btn" id="btnLogin" type="button" style="margin-left:10px">Ingresar</button>
-</div>
-  </header>
+    </div>
+  </div>
+</header>
+
 
   <main class="container">
     <section class="hero">
@@ -234,31 +236,10 @@
     </div>
   </footer>
 
-  <script>
-    // Tooltips: tocar "i" no navega (aunque esté dentro del <a>)
-    (function(){
-      const tip = document.getElementById("tooltip");
-      document.addEventListener("click", (e) => {
-        const btn = e.target.closest(".iconbtn");
-        if(!btn) return;
-        e.preventDefault();
-        e.stopPropagation();
-        tip.textContent = btn.dataset.tip || "";
-        tip.classList.add("show");
-        clearTimeout(window.__tipTimer);
-        window.__tipTimer = setTimeout(()=> tip.classList.remove("show"), 2600);
-      });
-    })();
+  
 
-    // Placeholder: si querés, después lo conectás con core.js (user email + logout)
-    document.getElementById("btnLogout").addEventListener("click", () => {
-      alert("Acá llamarías a signOut() de Firebase.");
-    });
+<script type="module" src="./firebase-init.js"></script>
+<script type="module" src="./core.js"></script>
 
-    document.getElementById("btnSelectEvent").addEventListener("click", () => {
-      // Lo ideal: abrir events.html o mostrar modal selector (según cómo lo tengas)
-      location.href = "events.html";
-    });
-  </script>
 </body>
 </html>
