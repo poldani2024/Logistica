@@ -1,1 +1,64 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Asignaciones · Logística Jóvenes</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <a class="btnSecondary" href="./index.html">← Home</a>
+
+    <div style="flex:1"></div>
+
+    <div class="row">
+      <select id="eventSelect" class="select"></select>
+      <button id="btnReloadEvents" class="btnSecondary">Recargar</button>
+    </div>
+
+    <div class="authBox">
+      <div id="authStatus" class="muted"></div>
+      <div class="authBtns">
+        <button id="btnLogin" class="btnPrimary">Ingresar</button>
+        <button id="btnLogout" class="btnSecondary">Salir</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="card">
+      <h2>Asignaciones (por evento)</h2>
+      <div class="muted" id="eventHint"></div>
+
+      <div class="grid2">
+        <div>
+          <h3>Choferes del evento</h3>
+          <div id="driversBox"></div>
+        </div>
+
+        <div>
+          <h3>Pasajeros del evento</h3>
+          <div id="passengersBox"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Asignar</h2>
+      <div class="row">
+        <select id="selDriver" class="select"></select>
+        <select id="selPassenger" class="select"></select>
+        <button id="btnAssign" class="btnPrimary">Asignar</button>
+        <button id="btnUnassign" class="btnSecondary">Quitar</button>
+      </div>
+      <div class="muted">Admin: asigna/quita. Chofer: solo tracking (en pantalla Tracking).</div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast"></div>
+
+  <script type="module" src="./assignments.js"></script>
+</body>
+</html>
 
