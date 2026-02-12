@@ -878,7 +878,7 @@ function renderPassengersTable(){
   <table>
     <thead>
       <tr>
-        <th>Joven</th><th>Tel</th><th>Dirección</th><th>Zona</th><th>Estado</th><th>Chofer</th><th></th>
+        <th>Pasajero</th><th>Tel</th><th>Dirección</th><th>Zona</th><th>Estado</th><th>Chofer</th><th></th>
       </tr>
     </thead>
     <tbody>
@@ -986,25 +986,25 @@ function renderPassengerDetailForm(passenger){
       payload.assignedDriverId = null;
       payload.createdAt = serverTimestamp();
       await addDoc(collection(db,"passengers"), payload);
-      toast("Joven creado");
+      toast("Pasajero creado");
     }else{
       await updateDoc(doc(db,"passengers",passenger.id), payload);
-      toast("Joven guardado");
+      toast("Pasajero guardado");
     }
     await loadPassengersAndRender();
   });
 
   if(!isNew){
     $("btnDeletePassenger").addEventListener("click", async ()=>{
-      if(!confirm("¿Eliminar joven?")) return;
+      if(!confirm("¿Eliminar Pasajero?")) return;
       // si estaba asignado, intentar sacarlo de la asignación
       if(passenger.status==="assigned" && passenger.assignedDriverId){
         await unassignPassenger(passenger.assignedDriverId, passenger.id);
       }
       await deleteDoc(doc(db,"passengers",passenger.id));
-      toast("Joven eliminado");
+      toast("Pasajero eliminado");
       await refreshAll();
-      $("passengerDetail").textContent = "Seleccioná un joven para ver/editar.";
+      $("passengerDetail").textContent = "Seleccioná un Pasajero para ver/editar.";
     });
 
     const unBtn = $("btnUnassignHere");
