@@ -1,1 +1,46 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Mapa · Logística Jóvenes</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+</head>
+<body>
+  <header class="topbar">
+    <a class="btnSecondary" href="./index.html">← Home</a>
+
+    <div style="flex:1"></div>
+
+    <div class="row">
+      <select id="eventSelect" class="select"></select>
+      <button id="btnReloadEvents" class="btnSecondary">Recargar</button>
+    </div>
+
+    <div class="authBox">
+      <div id="authStatus" class="muted"></div>
+      <div class="authBtns">
+        <button id="btnLogin" class="btnPrimary">Ingresar</button>
+        <button id="btnLogout" class="btnSecondary">Salir</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="card">
+      <div class="row">
+        <div class="muted" id="eventHint"></div>
+        <button id="btnRefreshMap" class="btnSecondary">Redibujar</button>
+      </div>
+      <div id="map" style="height:70vh;border-radius:12px;overflow:hidden;"></div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script type="module" src="./map.js"></script>
+</body>
+</html>
 
