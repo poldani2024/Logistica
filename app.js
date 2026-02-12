@@ -361,11 +361,12 @@ async function loadPassengers(){
 
 
 async function loadAssignments(){
-  const ref = collection(db, "assignments");
-  const qy = query(ref, where("eventId","==",STATE.eventId));
-  const snap = await getDocs(qy);
+  if(!STATE.eventId){ STATE.assignments = []; return; }
+  const ref = collection(db, "events", STATE.eventId, "assignments");
+  const snap = await getDocs(ref);
   STATE.assignments = snap.docs.map(d=> ({ id:d.id, ...d.data() }));
 }
+
 
 /* -------------------- HELPERS -------------------- */
 
@@ -619,8 +620,9 @@ function driverByEmail(email){
 
 
 /* -------------------- DRIVERS UI -------------------- */
-$("driverSearch").addEventListener("input", renderDrivers());
-$("driverZoneFilter").addEventListener("change", renderDrivers());
+$("driverSearch")?.addEventListener("input", renderDriversTable);
+$("driverZoneFilter")?.addEventListener("change", renderDriversTable);
+
 
 $("btnNewDriver").addEventListener("click", ()=> renderDriverDetailForm(null));
 
@@ -937,14 +939,14 @@ function renderPassengerDetailForm(passenger){
       updatedAt: serverTimestamp(),
     };
     
-      const geo = await geocodeOSM(payload.address, payload.Localidad);
+     const geo = await geocodeOSM(payload.address, payload.localidad);
       if (geo) {
         // (opcional) misma validación ciudad/target que ya usaste en choferes
-        const target = canonicalLocalidad(payload.Localidad);
+        const target = canonicalLocalidad(payload.localidad);
         const got = canonicalLocalidad(geo.geoCity);
     
         if (got && target && got !== target) {
-          toast(`Geocoding rechazado: devolvió "${geo.geoCity}" y se esperaba "${payload.Localidad}"`);
+          toast(`Geocoding rechazado: devolvió "${geo.geoCity}" y se esperaba "${payload.localidad}"`);
         } else {
           payload.lat = geo.lat;
           payload.lng = geo.lng;
@@ -1525,8 +1527,6 @@ function getAssignedPassengersForDriver(driverId){
    DRIVERS UI (standalone)
    ========================= */
 
-// Helpers mínimos (si ya existen, no se pisan)
-const $ = window.$ || ((id)=>document.getElementById(id));
 
 function escapeHtml(s){
   s = String(s ?? "");
