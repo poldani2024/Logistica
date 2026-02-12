@@ -51,13 +51,17 @@ export const STATE = {
     assignments: new Map()      // driverId -> { passengerIds: [] }
   }
 };
-window.waitForAuth = function(){
+window.waitForAuth = function () {
   return new Promise((resolve) => {
     const unsub = firebase.auth().onAuthStateChanged((user) => {
+      window.STATE = window.STATE || {};
       STATE.auth = STATE.auth || {};
       STATE.auth.user = user || null;
       STATE.auth.isAdmin = !!(user && user.email === "pedro.l.oldani@gmail.com");
-      if (user){ unsub(); resolve(user); }
+      if (user) {
+        unsub();
+        resolve(user);
+      }
     });
   });
 };
