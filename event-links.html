@@ -23,20 +23,55 @@
     </div>
   </div>
 
-  <header class="topbar">
-    <div id="toast" class="toast" aria-live="polite"></div>
+  <div class="topbar">
+  <div class="topbar-inner">
     <div class="brand">
-      <div class="logo">🔗</div>
-      <div>
-        <div class="title">Asociar personas</div>
-        <div class="subtitle">Choferes / Jóvenes → Evento</div>
+      <div class="title">Logística Jóvenes</div>
+      <div class="subtitle">Rosario / Gran Rosario</div>
+    </div>
+
+    <div class="row grow">
+      <div class="grow">
+        <label>Evento activo</label>
+        <select id="eventSelect"></select>
       </div>
     </div>
+
     <div class="row">
-      <a class="btnSecondary" href="./Index.html">Volver</a>
-      <a class="btnSecondary" href="./events.html">Eventos</a>
+      <button class="btn" id="btnHome">🏠</button>
+      <button class="btn danger" id="btnLogout">Salir</button>
     </div>
-  </header>
+  </div>
+</div>
+
+<div class="container">
+  <div class="grid cols-2">
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; gap:10px; align-items:center;">
+        <div>
+          <div style="font-weight:800; font-size:18px;">Choferes</div>
+          <div style="color:var(--muted); font-size:13px;">Master data</div>
+        </div>
+        <button class="btn primary" id="btnAddDriver">+ Agregar</button>
+      </div>
+      <!-- tabla desktop -->
+      <div class="desktop-only" style="margin-top:12px;">
+        <table class="table" id="driversTable"></table>
+      </div>
+      <!-- cards mobile -->
+      <div class="mobile-only" style="margin-top:12px;">
+        <div class="cards-list" id="driversCards"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <!-- otra columna -->
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
 
   <div class="event">
     <label class="field">
