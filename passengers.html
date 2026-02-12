@@ -1,1 +1,49 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Pasajeros (Master) · Logística Jóvenes</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <a class="btnSecondary" href="./index.html">← Home</a>
+
+    <div style="flex:1"></div>
+
+    <div class="row">
+      <select id="eventSelect" class="select"></select>
+      <button id="btnReloadEvents" class="btnSecondary">Recargar</button>
+    </div>
+
+    <div class="authBox">
+      <div id="authStatus" class="muted"></div>
+      <div class="authBtns">
+        <button id="btnLogin" class="btnPrimary">Ingresar</button>
+        <button id="btnLogout" class="btnSecondary">Salir</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="card">
+      <div class="row">
+        <input id="passSearch" placeholder="Buscar…" />
+        <button id="btnReloadPassengers" class="btnSecondary">Recargar</button>
+      </div>
+      <div id="passengersTable"></div>
+    </section>
+
+    <section class="card">
+      <h2>Detalle</h2>
+      <div id="passengerDetail" class="muted">Seleccioná un pasajero…</div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast"></div>
+
+  <script type="module" src="./passengers.js"></script>
+</body>
+</html>
 
