@@ -619,8 +619,8 @@ function driverByEmail(email){
 
 
 /* -------------------- DRIVERS UI -------------------- */
-$("driverSearch").addEventListener("input", renderDriversTable);
-$("driverZoneFilter").addEventListener("change", renderDriversTable);
+$("driverSearch").addEventListener("input", renderDrivers());
+$("driverZoneFilter").addEventListener("change", renderDrivers());
 
 $("btnNewDriver").addEventListener("click", ()=> renderDriverDetailForm(null));
 
