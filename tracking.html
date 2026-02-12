@@ -1,1 +1,42 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Tracking · Logística Jóvenes</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <a class="btnSecondary" href="./index.html">← Home</a>
+
+    <div style="flex:1"></div>
+
+    <div class="row">
+      <select id="eventSelect" class="select"></select>
+      <button id="btnReloadEvents" class="btnSecondary">Recargar</button>
+    </div>
+
+    <div class="authBox">
+      <div id="authStatus" class="muted"></div>
+      <div class="authBtns">
+        <button id="btnLogin" class="btnPrimary">Ingresar</button>
+        <button id="btnLogout" class="btnSecondary">Salir</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="card">
+      <h2>Tracking (por evento)</h2>
+      <div class="muted" id="eventHint"></div>
+      <div id="trackingBox"></div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast"></div>
+
+  <script type="module" src="./tracking.js"></script>
+</body>
+</html>
 
