@@ -457,9 +457,16 @@ export async function updateTrackingAsDriver({ passengerId, trackingStatus, trac
  */
 export async function initCorePage({ page }) {
   // Botones auth (si existen)
-  $("btnLogin")?.addEventListener("click", async () => {
-    try { await loginGoogle(); } catch (e) { console.error(e); toast(e.message || String(e)); }
-  });
+ $("btnLogin")?.addEventListener("click", async () => {
+  console.log("CLICK login"); // <-- agregado
+  try {
+    await loginGoogle();
+    console.log("loginGoogle resolved");
+  } catch (e) {
+    console.error("loginGoogle error", e);
+    toast(e.message || String(e));
+  }
+});
 
   $("btnLogout")?.addEventListener("click", async () => {
     try { await logout(); } catch (e) { console.error(e); toast(e.message || String(e)); }
