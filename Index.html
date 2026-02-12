@@ -2,347 +2,76 @@
 <html lang="es">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Logística Evento</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Logística Jóvenes</title>
   <link rel="stylesheet" href="./styles.css" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
- 
-
-
-<style>
-/* AUTH GATE */
-.authGate{
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,.55);
-  display: none;
-  align-items: center;
-  justify-content: center;
-  padding: 16px;
-  z-index: 9999;
-}
-.authGate.show{ display:flex; }
-.authCard{
-  width: min(520px, 100%);
-  background: #fff;
-  border-radius: 14px;
-  padding: 18px;
-  box-shadow: 0 12px 40px rgba(0,0,0,.25);
-}
-.authTitle{ font-size: 20px; font-weight: 700; margin-bottom: 6px; }
-.authText{ margin-bottom: 12px; color: rgba(0,0,0,.70); }
-.authBar{ margin-left:auto; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
-</style>
-
 </head>
 <body>
-  <div id="authGate" class="authGate">
-    <div class="authCard">
-      <div class="authTitle">Ingresar</div>
-      <div class="authText">Para usar la app tenés que ingresar con tu cuenta de Google.</div>
-      <button class="btn" id="btnGoogleLogin">Ingresar con Google</button>
-      <div class="muted" id="authGateHint" style="margin-top:10px;"></div>
-    </div>
-  </div>
-
   <header class="topbar">
-    <div id="toast" class="toast" aria-live="polite"></div>
     <div class="brand">
-      <div class="logo">🚐</div>
-      <div>
-        <div class="title">Logística Evento</div>
-        <div class="subtitle">Gestión Lógistica para eventos de la Soka Gakkai Rosario</div>
+      <div class="brandTitle">Logística Jóvenes</div>
+      <div class="muted">Rosario / Gran Rosario · Firebase + GitHub Pages</div>
+    </div>
+
+    <div class="authBox">
+      <div id="authStatus" class="muted">Cargando…</div>
+      <div class="authBtns">
+        <button id="btnLogin" class="btnPrimary">Ingresar con Google</button>
+        <button id="btnLogout" class="btnSecondary">Salir</button>
       </div>
     </div>
   </header>
-  <div class="event">
-     <label class="field">
-      <span>Evento</span>
-      <select id="eventSelect"></select>
-    </label>
-   <button id="btnReloadEvents" class="btnSecondary">Recargar eventos</button>
-  </div>
-  <nav class="tabs">
-    <a class="btnSecondary" href="./events.html">📅 Eventos</a>
-    <a class="btnSecondary" href="./event-links.html">🔗 Asociar personas</a>
-    <button class="tab active" data-view="dashboard">Dashboard</button>
-    <button class="tab" data-view="map">Mapa</button>
-    <button class="tab" data-view="drivers">Choferes</button>
-    <button class="tab" data-view="passengers">Pasajeros</button>
-    <button class="tab" data-view="assignments">Asignaciones</button>
-    <button class="tab" data-view="tracking">Tracking</button>
-    <button class="tab" data-view="import">Importar</button>
-    <button class="tab" data-view="settings">Config</button>
-  </nav>
 
   <main class="container">
-    <!-- DASHBOARD -->
-    <section id="view-dashboard" class="view active">
-      <div class="grid">
-        <div class="card">
-          <div class="cardTitle">Pasajeros</div>
-          <div class="big" id="statPassengers">-</div>
-          <div class="muted" id="statPassengers2">-</div>
-        </div>
-        <div class="card">
-          <div class="cardTitle">Choferes</div>
-          <div class="big" id="statDrivers">-</div>
-          <div class="muted" id="statDrivers2">-</div>
-        </div>
-        <div class="card">
-          <div class="cardTitle">Capacidad</div>
-          <div class="big" id="statCapacity">-</div>
-          <div class="muted" id="statCapacity2">-</div>
-        </div>
+    <section class="card">
+      <h2>Evento seleccionado</h2>
+
+      <div class="row">
+        <select id="eventSelect" class="select"></select>
+        <button id="btnReloadEvents" class="btnSecondary">Recargar</button>
       </div>
 
-      <div class="card">
-        <div class="rowBetween">
-          <div>
-            <div class="cardTitle">Pendientes por zona</div>
-            <div class="muted">Pasajeros sin asignar agrupados por zona</div>
-          </div>
-          <button class="btn" id="btnRefreshDashboard">Refrescar</button>
-        </div>
-        <div id="pendingByZone" class="tableWrap"></div>
-      </div>
-    </section>
-    <section id="view-map" class="view">
-      <div class="card">
-        <div class="rowBetween">
-          <div>
-            <div class="cardTitle">Mapa (Gran Rosario)</div>
-            <div class="muted">Pasajeros: verde = asignado, rojo = pendiente.</div>
-          </div>
-    
-          <div class="row">
-            <button class="btnSecondary" id="btnGeocodePassengers">
-              Geocodificar Pasajeros sin coordenadas
-            </button>
-            <button class="btn" id="btnRefreshMap">Refrescar</button>
-          </div>
-        </div>
-    
-        <div class="filters">
-          <select id="mapZoneFilter">
-            <option value="">Todas las zonas</option>
-          </select>
-    
-          <select id="mapShow">
-            <option value="all">Mostrar: todo</option>
-            <option value="passengers">Solo pasajeros</option>
-            <option value="drivers">Solo choferes</option>
-          </select>
-        </div>
-    
-        <div id="map" style="height: 560px; border-radius:16px; border:1px solid var(--line);"></div>
-      </div>
+      <div class="muted" id="eventHint"></div>
     </section>
 
-    <!-- DRIVERS -->
-    <section id="view-drivers" class="view">
-      <div class="card">
-        <div class="rowBetween">
-          <div>
-            <div class="cardTitle">Choferes</div>
-            <div class="muted">Crear/editar choferes. Capacidad por defecto: 4.</div>
-          </div>
-          <button class="btn" id="btnNewDriver">+ Nuevo chofer</button>
-        </div>
+    <section class="gridCards">
+      <a class="cardLink" href="./events.html">
+        <h3>Eventos</h3>
+        <p>Alta/edición de eventos + asociar choferes y pasajeros.</p>
+      </a>
 
-        <div class="filters">
-          <input id="driverSearch" placeholder="Buscar (nombre, teléfono, zona)..." />
-          <select id="driverZoneFilter">
-            <option value="">Todas las zonas</option>
-          </select>
-          <button class="btnSecondary" id="btnRefreshDrivers">Refrescar</button>
-        </div>
+      <a class="cardLink" href="./drivers.html">
+        <h3>Choferes (Master)</h3>
+        <p>CRUD de choferes. No se asigna a pasajeros acá.</p>
+      </a>
 
-        <div id="driversTable" class="tableWrap"></div>
-      </div>
+      <a class="cardLink" href="./passengers.html">
+        <h3>Pasajeros (Master)</h3>
+        <p>CRUD de pasajeros. No muestra “chofer asignado”.</p>
+      </a>
 
-      <div class="card">
-        <div class="cardTitle">Detalle del chofer</div>
-        <div id="driverDetail" class="muted">Seleccioná un chofer para ver/editar y asignar pasajeros.</div>
-      </div>
-    </section>
+      <a class="cardLink" href="./assignments.html">
+        <h3>Asignaciones (por Evento)</h3>
+        <p>Asignar pasajeros del evento a choferes del evento.</p>
+      </a>
 
-    <!-- PASSENGERS -->
-    <section id="view-passengers" class="view">
-      <div class="card">
-        <div class="rowBetween">
-          <div>
-            <div class="cardTitle">Pasajeros</div>
-            <div class="muted">Crear/editar Pasajeros. Estado: asignado / pendiente.</div>
-          </div>
-          <button class="btn" id="btnNewPassenger">+ Nuevo Pasajero</button>
-        </div>
+      <a class="cardLink" href="./tracking.html">
+        <h3>Tracking (por Evento)</h3>
+        <p>Chofer ve solo sus pasajeros (del evento seleccionado).</p>
+      </a>
 
-        <div class="filters">
-          <input id="passengerSearch" placeholder="Buscar (nombre, teléfono, dirección, zona)..." />
-          <select id="passengerZoneFilter">
-            <option value="">Todas las zonas</option>
-          </select>
-          <select id="passengerStatusFilter">
-            <option value="">Todos</option>
-            <option value="unassigned">Pendientes</option>
-            <option value="assigned">Asignados</option>
-          </select>
-          <button class="btnSecondary" id="btnRefreshPassengers">Refrescar</button>
-        </div>
-
-        <div id="passengersTable" class="tableWrap"></div>
-      </div>
-
-      <div class="card">
-        <div class="cardTitle">Detalle del Pasajero</div>
-        <div id="passengerDetail" class="muted">Seleccioná un Pasajero para ver/editar.</div>
-      </div>
-    </section>
-
-    <!-- ASSIGNMENTS -->
-    <section id="view-assignments" class="view">
-      <div class="card">
-        <div class="rowBetween">
-          <div>
-            <div class="cardTitle">Asignaciones por Chofer</div>
-            <div class="muted">Ver quién lleva a quién, exportar texto para WhatsApp y CSV.</div>
-          </div>
-          <div class="row">
-            <button class="btnSecondary" id="btnExportCSV">Export CSV</button>
-            <button class="btn" id="btnRefreshAssignments">Refrescar</button>
-          </div>
-        </div>
-
-        <div class="filters">
-          <select id="assignmentZoneFilter">
-            <option value="">Todas las zonas</option>
-          </select>
-          <input id="assignmentSearch" placeholder="Buscar chofer o pasajero..." />
-        </div>
-
-        <div id="assignmentsList" class="listWrap"></div>
-      </div>
-
-      <div class="card">
-        <div class="cardTitle">Texto para WhatsApp (por chofer)</div>
-        <textarea id="waText" rows="8" placeholder="Seleccioná un chofer en la lista para generar el texto..."></textarea>
-        <div class="row">
-          <button class="btnSecondary" id="btnCopyWA">Copiar</button>
-          <span class="muted" id="copyHint"></span>
-        </div>
-      </div>
-    </section>
-
-
-    <!-- TRACKING -->
-    <section id="view-tracking" class="view">
-      <div class="card">
-        <div class="rowBetween">
-          <div>
-            <div class="cardTitle">Tracking de pasajeros</div>
-            <div class="muted">Choferes actualizan el estado de sus pasajeros. Admin puede ver todos.</div>
-          </div>
-          <div class="row">
-            <button class="btnSecondary" id="btnLogout" style="display:none;">Salir</button>
-          </div>
-        </div>
-
-        <div id="trackingAuthBox" class="grid2" style="margin-top:12px;">
-  <div>
-    <div class="cardTitle small">Ingresar chofer</div>
-    <div class="muted">Ingresá con tu cuenta de Google. El correo debe coincidir con el correo cargado en el chofer.</div>
-    <div class="actions" style="margin-top:10px;">
-      <button class="btn" id="btnGoogleLogin">Ingresar con Google</button>
-    </div>
-    <div class="muted" id="authStatus"></div>
-  </div>
-
-  <div>
-    <div class="cardTitle small">Modo Admin</div>
-    <div class="muted">Si tu correo está marcado como Admin, vas a poder filtrar por chofer.</div>
-    <div class="field">
-      <label>Ver por chofer</label>
-      <select id="trackingDriverFilter" disabled>
-        <option value="">(Solo cuando estés logueado)</option>
-      </select>
-    </div>
-    <div class="muted">Estados: Pendiente • En tránsito • En destino • Ausente</div>
-  </div>
-</div>
-
-          
-
-        <div class="divider"></div>
-
-        <div id="trackingHeader" class="muted"></div>
-        <div id="trackingList" class="listWrap" style="margin-top:10px;"></div>
-      </div>
-    </section>
-
-
-    <!-- IMPORT -->
-    <section id="view-import" class="view">
-      <div class="card">
-        <div class="cardTitle">Importar CSV</div>
-        <div class="muted">
-          Pegá CSV con encabezados.
-          <br>Pasajeros: <code>firstName,lastName,phone,address,zone,localidad</code>
-          <br>Choferes: <code>firstName,lastName,phone,email,zone,capacity</code>
-        </div>
-
-        <div class="grid2">
-          <div>
-            <div class="rowBetween">
-              <div class="cardTitle small">Pasajeros</div>
-              <button class="btn" id="btnImportPassengers">Importar pasajeros</button>
-            </div>
-            <textarea id="csvPassengers" rows="10" placeholder="firstName,lastName,phone,address,zone,localidad&#10;Juan,Pérez,341...,San Martín 123,Centro,Rosario"></textarea>
-          </div>
-
-          <div>
-            <div class="rowBetween">
-              <div class="cardTitle small">Choferes</div>
-              <button class="btn" id="btnImportDrivers">Importar choferes</button>
-            </div>
-            <textarea id="csvDrivers" rows="10" placeholder="firstName,lastName,phone,email,zone,capacity&#10;Ana,Gómez,341...,ana@gmail.com,Norte,4"></textarea>
-          </div>
-        </div>
-
-        <div class="row">
-          <button class="btnDanger" id="btnDangerClearEvent">⚠️ Borrar datos del evento</button>
-          <span class="muted">Borra pasajeros, choferes y asignaciones del eventId actual.</span>
-        </div>
-
-        <div id="importLog" class="log"></div>
-      </div>
-    </section>
-
-    <!-- SETTINGS -->
-    <section id="view-settings" class="view">
-      <div class="card">
-        <div class="cardTitle">Config Firebase</div>
-        <div class="muted">Pegá tu firebaseConfig en <code>firebase-init.js</code>.</div>
-        <ol class="muted">
-          <li>Firebase Console → Project settings → Your apps → Web app</li>
-          <li>Copiá el objeto <code>firebaseConfig</code></li>
-          <li>Reemplazalo en <code>firebase-init.js</code></li>
-        </ol>
-        <div class="divider"></div>
-        <div class="muted">
-          Si vas a usar GitHub Pages, asegurate de servir por HTTPS (Pages ya lo hace).
-        </div>
-      </div>
+      <a class="cardLink" href="./map.html">
+        <h3>Mapa (por Evento)</h3>
+        <p>Capas: choferes/pasajeros/zonas del evento seleccionado.</p>
+      </a>
     </section>
   </main>
 
-  <footer class="footer muted">
-    Hecho para asignación simple por zona • Sin login (modo abierto)
-  </footer>
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <div id="toast" class="toast"></div>
 
-  <script type="module" src="./firebase-init.js"></script>
-  <script type="module" src="./csv.js"></script>
-  <script type="module" src="./app.js"></script>
+  <script type="module">
+    import { initCorePage } from "./core.js";
+    initCorePage({ page: "home" });
+  </script>
 </body>
 </html>
