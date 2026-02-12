@@ -2,95 +2,104 @@
 <html lang="es">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Eventos - Logística</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Eventos · Logística Jóvenes</title>
   <link rel="stylesheet" href="./styles.css" />
-  <style>
-    .authGate{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;padding:16px;z-index:9999}
-    .authGate.show{display:flex}
-    .authCard{width:min(520px,100%);background:#fff;border-radius:14px;padding:18px;box-shadow:0 12px 40px rgba(0,0,0,.25)}
-    .authTitle{font-size:20px;font-weight:700;margin-bottom:6px}
-    .authText{margin-bottom:12px;color:rgba(0,0,0,.70)}
-  </style>
 </head>
 <body>
-  <div id="authGate" class="authGate">
-    <div class="authCard">
-      <div class="authTitle">Ingresar</div>
-      <div class="authText">Para usar la app tenés que ingresar con tu cuenta de Google.</div>
-      <button class="btn" id="btnGoogleLogin">Ingresar con Google</button>
-      <div class="muted" id="authGateHint" style="margin-top:10px;"></div>
-    </div>
-  </div>
-
   <header class="topbar">
-    <div id="toast" class="toast" aria-live="polite"></div>
-    <div class="brand">
-      <div class="logo">📅</div>
-      <div>
-        <div class="title">Eventos</div>
-        <div class="subtitle">Alta / edición / borrado</div>
-      </div>
-    </div>
+    <a class="btnSecondary" href="./index.html">← Home</a>
+
+    <div style="flex:1"></div>
+
     <div class="row">
-      <a class="btnSecondary" href="./Index.html">Volver</a>
-      <a class="btnSecondary" href="./event-links.html">Asociar personas</a>
+      <select id="eventSelect" class="select"></select>
+      <button id="btnReloadEvents" class="btnSecondary">Recargar</button>
+    </div>
+
+    <div class="authBox">
+      <div id="authStatus" class="muted"></div>
+      <div class="authBtns">
+        <button id="btnLogin" class="btnPrimary">Ingresar</button>
+        <button id="btnLogout" class="btnSecondary">Salir</button>
+      </div>
     </div>
   </header>
 
-  <div class="event">
-    <label class="field">
-      <span>Evento</span>
-      <select id="eventSelect"></select>
-    </label>
-    <button id="btnReloadEvents" class="btnSecondary">Recargar</button>
-  </div>
-
   <main class="container">
     <section class="card">
-      <div class="rowBetween">
-        <div>
-          <div class="cardTitle">Nuevo evento</div>
-          <div class="muted">Nombre, inicio, fin, domicilio y localidad.</div>
-        </div>
-        <button class="btn" id="btnNew">+ Crear</button>
-      </div>
+      <h2>Alta / Edición de Evento</h2>
+
       <div class="grid2">
-        <div>
-          <div class="field"><label>Nombre</label><input id="ev_name" placeholder="Ej: Zadankai Febrero"></div>
-          <div class="field"><label>Inicio</label><input id="ev_start" type="datetime-local"></div>
-          <div class="field"><label>Fin</label><input id="ev_end" type="datetime-local"></div>
+        <div class="field">
+          <label>ID del evento (ej: 2026-03-ZADANKAI)</label>
+          <input id="ev_id" placeholder="ID único (no vacío)" />
         </div>
-        <div>
-          <div class="field"><label>Domicilio</label><input id="ev_address" placeholder="Ej: San Martín 1234"></div>
-          <div class="field">
-            <label>Localidad</label>
-            <select id="ev_localidad">
-              <option>Rosario</option><option>Funes</option><option>Roldán</option>
-              <option>San Lorenzo</option><option>Pueblo Esther</option>
-              <option>Granadero Baigorria</option><option>Villa G. Galvez</option>
-            </select>
-          </div>
-          <div class="actions">
-            <button class="btnSecondary" id="btnSave">Guardar</button>
-            <button class="btnDanger" id="btnDelete">Eliminar</button>
-          </div>
-          <div class="muted" id="ev_hint"></div>
+
+        <div class="field">
+          <label>Nombre</label>
+          <input id="ev_name" placeholder="Nombre identificable" />
+        </div>
+
+        <div class="field">
+          <label>Fecha inicio</label>
+          <input id="ev_start" type="datetime-local" />
+        </div>
+
+        <div class="field">
+          <label>Fecha fin</label>
+          <input id="ev_end" type="datetime-local" />
+        </div>
+
+        <div class="field">
+          <label>Domicilio</label>
+          <input id="ev_address" placeholder="Dirección del evento" />
+        </div>
+
+        <div class="field">
+          <label>Localidad</label>
+          <input id="ev_localidad" placeholder="Rosario / Funes / ..." />
         </div>
       </div>
+
+      <div class="row">
+        <button id="btnSaveEvent" class="btnPrimary">Guardar Evento</button>
+        <button id="btnLoadFromSelected" class="btnSecondary">Cargar desde seleccionado</button>
+      </div>
+
+      <div class="muted" id="eventHint"></div>
     </section>
 
     <section class="card">
-      <div class="rowBetween">
+      <h2>Asociar Choferes y Pasajeros al Evento (histórico)</h2>
+      <p class="muted">Esto define el “universo” del evento. La asignación chofer↔pasajero se hace en “Asignaciones”.</p>
+
+      <div class="grid2">
         <div>
-          <div class="cardTitle">Lista de eventos</div>
-          <div class="muted">Seleccioná uno para editar.</div>
+          <h3>Choferes</h3>
+          <div class="row">
+            <input id="driverSearch" placeholder="Buscar chofer…" />
+            <button id="btnLinkAllDrivers" class="btnSecondary">Vincular seleccionados</button>
+            <button id="btnUnlinkAllDrivers" class="btnSecondary">Desvincular seleccionados</button>
+          </div>
+          <div id="driversList"></div>
+        </div>
+
+        <div>
+          <h3>Pasajeros</h3>
+          <div class="row">
+            <input id="passSearch" placeholder="Buscar pasajero…" />
+            <button id="btnLinkAllPassengers" class="btnSecondary">Vincular seleccionados</button>
+            <button id="btnUnlinkAllPassengers" class="btnSecondary">Desvincular seleccionados</button>
+          </div>
+          <div id="passengersList"></div>
         </div>
       </div>
-      <div id="eventsTable" class="tableWrap"></div>
     </section>
   </main>
 
-  <script type="module" src="./events-page.js"></script>
+  <div id="toast" class="toast"></div>
+
+  <script type="module" src="./events.js"></script>
 </body>
 </html>
