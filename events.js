@@ -1,28 +1,9 @@
 import {
   initCorePage, STATE, $, toast, escapeHtml,
   loadMasterDrivers, loadEvents, loadMasterPassengers,
-  loadEventContext, driversInEvent, passengersInEvent,
-  saveEvent, linkDriversToEvent, linkPassengersToEvent
+  loadEventContext, saveEvent, linkDriversToEvent, linkPassengersToEvent,
+  renderEventSelect
 } from "./core.js";
-
-async function init() {
-  try {
-    await initCorePage({ page: "events" });
-    if (!STATE.auth.user) return;
-
-    // si esta página necesita recargar eventos/contexto extra:
-    await loadEvents();
-    renderEventSelect();
-    if (STATE.event.id) await loadEventContext(STATE.event.id);
-
-    // ... resto de tu render
-  } catch (e) {
-    console.error("INIT ERROR:", e);
-    toast(e.message || String(e));
-  }
-}
-init();
-
 
 function toLocalInputValue(iso) {
   if (!iso) return "";
@@ -42,7 +23,7 @@ function pickedIds(attr) {
 }
 
 function renderDrivers() {
-  const q = ($("driverSearch").value || "").toLowerCase();
+  const q = ($("driverSearch")?.value || "").toLowerCase();
   const linked = STATE.event.driversIds;
 
   const list = (STATE.master.drivers || []).filter(d => {
@@ -71,7 +52,7 @@ function renderDrivers() {
 }
 
 function renderPassengers() {
-  const q = ($("passSearch").value || "").toLowerCase();
+  const q = ($("passSearch")?.value || "").toLowerCase();
   const linked = STATE.event.passengersIds;
 
   const list = (STATE.master.passengers || []).filter(p => {
@@ -111,102 +92,107 @@ async function refreshAll() {
   if (hint) hint.textContent = STATE.event.id ? `Evento activo: ${STATE.event.id}` : "No hay evento seleccionado";
 }
 
-(async function init() {
-  await initCorePage({ page: "events" });
+(async function boot() {
+  try {
+    await initCorePage({ page: "events" });
+    if (!STATE.auth.user) return;
 
-  if (!STATE.auth.isAdmin) {
-    toast("Esta pantalla requiere Admin");
-    // igual dejamos ver, pero no permite guardar/editar
-  }
+    // initCorePage ya carga eventos y renderiza selector, pero si querés reforzar:
+    await loadEvents();
+    renderEventSelect();
+    if (STATE.event.id) await loadEventContext(STATE.event.id);
 
-  $("driverSearch").addEventListener("input", renderDrivers);
-  $("passSearch").addEventListener("input", renderPassengers);
+    if (!STATE.auth.isAdmin) {
+      toast("Esta pantalla requiere Admin (modo lectura)");
+    }
 
-  document.addEventListener("eventChanged", async () => {
-    await loadEventContext(STATE.event.id);
+    $("driverSearch")?.addEventListener("input", renderDrivers);
+    $("passSearch")?.addEventListener("input", renderPassengers);
+
+    document.addEventListener("eventChanged", async () => {
+      await loadEventContext(STATE.event.id);
+      await refreshAll();
+    });
+
+    $("btnSaveEvent")?.addEventListener("click", async () => {
+      try {
+        if (!STATE.auth.isAdmin) throw new Error("Solo Admin");
+
+        await saveEvent({
+          id: $("ev_id").value,
+          name: $("ev_name").value,
+          dateStart: $("ev_start").value,
+          dateEnd: $("ev_end").value,
+          address: $("ev_address").value,
+          localidad: $("ev_localidad").value
+        });
+
+        toast("Evento guardado");
+        await loadEvents();
+        renderEventSelect();
+      } catch (e) { console.error(e); toast(e.message || String(e)); }
+    });
+
+    $("btnLoadFromSelected")?.addEventListener("click", async () => {
+      try {
+        const id = STATE.event.id;
+        if (!id) throw new Error("No hay evento seleccionado");
+        const ev = (STATE.events || []).find(x => x.id === id);
+        if (!ev) throw new Error("No encontré el evento en memoria. Recargá eventos.");
+
+        $("ev_id").value = ev.id || "";
+        $("ev_name").value = ev.name || "";
+        $("ev_start").value = toLocalInputValue(ev.dateStart);
+        $("ev_end").value = toLocalInputValue(ev.dateEnd);
+        $("ev_address").value = ev.address || "";
+        $("ev_localidad").value = ev.localidad || "";
+        toast("Cargado desde el evento seleccionado");
+      } catch (e) { console.error(e); toast(e.message || String(e)); }
+    });
+
+    $("btnLinkAllDrivers")?.addEventListener("click", async () => {
+      try {
+        if (!STATE.auth.isAdmin) throw new Error("Solo Admin");
+        await linkDriversToEvent(pickedIds("data-pick-driver"), true);
+        await loadEventContext(STATE.event.id);
+        renderDrivers();
+        toast("Choferes vinculados");
+      } catch (e) { console.error(e); toast(e.message || String(e)); }
+    });
+
+    $("btnUnlinkAllDrivers")?.addEventListener("click", async () => {
+      try {
+        if (!STATE.auth.isAdmin) throw new Error("Solo Admin");
+        await linkDriversToEvent(pickedIds("data-pick-driver"), false);
+        await loadEventContext(STATE.event.id);
+        renderDrivers();
+        toast("Choferes desvinculados");
+      } catch (e) { console.error(e); toast(e.message || String(e)); }
+    });
+
+    $("btnLinkAllPassengers")?.addEventListener("click", async () => {
+      try {
+        if (!STATE.auth.isAdmin) throw new Error("Solo Admin");
+        await linkPassengersToEvent(pickedIds("data-pick-pass"), true);
+        await loadEventContext(STATE.event.id);
+        renderPassengers();
+        toast("Pasajeros vinculados");
+      } catch (e) { console.error(e); toast(e.message || String(e)); }
+    });
+
+    $("btnUnlinkAllPassengers")?.addEventListener("click", async () => {
+      try {
+        if (!STATE.auth.isAdmin) throw new Error("Solo Admin");
+        await linkPassengersToEvent(pickedIds("data-pick-pass"), false);
+        await loadEventContext(STATE.event.id);
+        renderPassengers();
+        toast("Pasajeros desvinculados");
+      } catch (e) { console.error(e); toast(e.message || String(e)); }
+    });
+
     await refreshAll();
-  });
-
-  $("btnSaveEvent").addEventListener("click", async () => {
-    try {
-      if (!STATE.auth.isAdmin) throw new Error("Solo Admin");
-
-      await saveEvent({
-        id: $("ev_id").value,
-        name: $("ev_name").value,
-        dateStart: $("ev_start").value,
-        dateEnd: $("ev_end").value,
-        address: $("ev_address").value,
-        localidad: $("ev_localidad").value
-      });
-
-      toast("Evento guardado");
-    } catch (e) {
-      console.error(e);
-      toast(e.message || String(e));
-    }
-  });
-
-  $("btnLoadFromSelected").addEventListener("click", async () => {
-    try {
-      const id = STATE.event.id;
-      if (!id) throw new Error("No hay evento seleccionado");
-      const ev = (STATE.events || []).find(x => x.id === id);
-      if (!ev) throw new Error("No encontré el evento en memoria. Recargá eventos.");
-
-      $("ev_id").value = ev.id || "";
-      $("ev_name").value = ev.name || "";
-      $("ev_start").value = toLocalInputValue(ev.dateStart);
-      $("ev_end").value = toLocalInputValue(ev.dateEnd);
-      $("ev_address").value = ev.address || "";
-      $("ev_localidad").value = ev.localidad || "";
-      toast("Cargado desde el evento seleccionado");
-    } catch (e) {
-      console.error(e);
-      toast(e.message || String(e));
-    }
-  });
-
-  $("btnLinkAllDrivers").addEventListener("click", async () => {
-    try {
-      if (!STATE.auth.isAdmin) throw new Error("Solo Admin");
-      await linkDriversToEvent(pickedIds("data-pick-driver"), true);
-      await loadEventContext(STATE.event.id);
-      renderDrivers();
-      toast("Choferes vinculados");
-    } catch (e) { console.error(e); toast(e.message || String(e)); }
-  });
-
-  $("btnUnlinkAllDrivers").addEventListener("click", async () => {
-    try {
-      if (!STATE.auth.isAdmin) throw new Error("Solo Admin");
-      await linkDriversToEvent(pickedIds("data-pick-driver"), false);
-      await loadEventContext(STATE.event.id);
-      renderDrivers();
-      toast("Choferes desvinculados");
-    } catch (e) { console.error(e); toast(e.message || String(e)); }
-  });
-
-  $("btnLinkAllPassengers").addEventListener("click", async () => {
-    try {
-      if (!STATE.auth.isAdmin) throw new Error("Solo Admin");
-      await linkPassengersToEvent(pickedIds("data-pick-pass"), true);
-      await loadEventContext(STATE.event.id);
-      renderPassengers();
-      toast("Pasajeros vinculados");
-    } catch (e) { console.error(e); toast(e.message || String(e)); }
-  });
-
-  $("btnUnlinkAllPassengers").addEventListener("click", async () => {
-    try {
-      if (!STATE.auth.isAdmin) throw new Error("Solo Admin");
-      await linkPassengersToEvent(pickedIds("data-pick-pass"), false);
-      await loadEventContext(STATE.event.id);
-      renderPassengers();
-      toast("Pasajeros desvinculados");
-    } catch (e) { console.error(e); toast(e.message || String(e)); }
-  });
-
-  await refreshAll();
+  } catch (e) {
+    console.error("INIT ERROR:", e);
+    toast(e.message || String(e));
+  }
 })();
-
