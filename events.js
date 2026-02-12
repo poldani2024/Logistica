@@ -1,22 +1,28 @@
 import {
   initCorePage, STATE, $, toast, escapeHtml,
-  loadMasterDrivers, loadMasterPassengers,
+  loadMasterDrivers, loadEvents, loadMasterPassengers,
   loadEventContext, driversInEvent, passengersInEvent,
   saveEvent, linkDriversToEvent, linkPassengersToEvent
 } from "./core.js";
 
-async function init(){
-  try{
-    await waitForAuth();   // <-- clave
-    await loadEvents();    // o lo que uses para poblar select
-    await loadEventContext(STATE.event.id); // si aplica
-    // render...
-  }catch(e){
+async function init() {
+  try {
+    await initCorePage({ page: "events" });
+    if (!STATE.auth.user) return;
+
+    // si esta página necesita recargar eventos/contexto extra:
+    await loadEvents();
+    renderEventSelect();
+    if (STATE.event.id) await loadEventContext(STATE.event.id);
+
+    // ... resto de tu render
+  } catch (e) {
     console.error("INIT ERROR:", e);
     toast(e.message || String(e));
   }
 }
 init();
+
 
 function toLocalInputValue(iso) {
   if (!iso) return "";
