@@ -332,18 +332,33 @@ function renderEventSelect(){
 }
 
 async function loadDrivers(){
-  const ref = collection(db, "drivers");
-  const qy = query(ref, where("eventId","==",STATE.eventId), orderBy("lastName","asc"));
-  const snap = await getDocs(qy);
-  STATE.drivers = snap.docs.map(d=> ({ id:d.id, ...d.data() }));
+  const snap = await getDocs(collection(db, "drivers"));
+  const arr = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+  // orden por apellido/nombre sin requerir índice/field en todos
+  arr.sort((a,b)=>{
+    const aa = `${a.lastName||""} ${a.firstName||""}`.trim().toLowerCase();
+    const bb = `${b.lastName||""} ${b.firstName||""}`.trim().toLowerCase();
+    return aa.localeCompare(bb);
+  });
+
+  STATE.drivers = arr;
 }
 
+
 async function loadPassengers(){
-  const ref = collection(db, "passengers");
-  const qy = query(ref, where("eventId","==",STATE.eventId), orderBy("lastName","asc"));
-  const snap = await getDocs(qy);
-  STATE.passengers = snap.docs.map(d=> ({ id:d.id, ...d.data() }));
+  const snap = await getDocs(collection(db, "passengers"));
+  const arr = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+  arr.sort((a,b)=>{
+    const aa = `${a.lastName||""} ${a.firstName||""}`.trim().toLowerCase();
+    const bb = `${b.lastName||""} ${b.firstName||""}`.trim().toLowerCase();
+    return aa.localeCompare(bb);
+  });
+
+  STATE.passengers = arr;
 }
+
 
 async function loadAssignments(){
   const ref = collection(db, "assignments");
@@ -609,49 +624,7 @@ $("driverZoneFilter").addEventListener("change", renderDriversTable);
 
 $("btnNewDriver").addEventListener("click", ()=> renderDriverDetailForm(null));
 
-function renderDriversTable(){
-  const q = ($("driverSearch").value||"").toLowerCase();
-  const zf = $("driverZoneFilter").value;
 
-  const list = STATE.drivers.filter(d=>{
-    if(zf && (d.zone||"") !== zf) return false;
-    const hay = `${d.firstName||""} ${d.lastName||""} ${d.phone||""} ${d.zone||""}`.toLowerCase();
-    return !q || hay.includes(q);
-  });
-
-  const html = `
-  <table>
-    <thead>
-      <tr>
-        <th>Chofer</th><th>Tel</th><th>Zona</th><th>Cap</th><th>Ocupación</th><th></th>
-      </tr>
-    </thead>
-    <tbody>
-      ${list.map(d=>{
-        const cap = Number(d.capacity)||4;
-        const used = assignedCount(d.id);
-        return `
-        <tr>
-          <td><strong>${escapeHtml(fullName(d))}</strong></td>
-          <td>${escapeHtml(d.phone||"")}</td>
-          <td><span class="tag">${escapeHtml(d.zone||"")}</span></td>
-          <td>${cap}</td>
-          <td>${used}/${cap}</td>
-          <td><button class="btnSecondary" data-driver="${d.id}">Ver</button></td>
-        </tr>`;
-      }).join("")}
-    </tbody>
-  </table>`;
-  $("driversTable").innerHTML = html;
-
-  $("driversTable").querySelectorAll("button[data-driver]").forEach(b=>{
-    b.addEventListener("click", ()=>{
-      const id = b.dataset.driver;
-      const d = driverById(id);
-      renderDriverDetailForm(d);
-    });
-  });
-}
 
 function renderDriverDetailForm(driver){
   const isNew = !driver;
