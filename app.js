@@ -555,9 +555,6 @@ async function geocodeOSM(address, localidad){
   };
 }
 
-
-function fullName(x){ return `${x.lastName||""} ${x.firstName||""}`.trim(); }
-
 function driverAssignment(driverId){
   return STATE.assignments.find(a=>a.driverId === driverId) || null;
 }
