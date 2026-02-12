@@ -5,6 +5,19 @@ import {
   saveEvent, linkDriversToEvent, linkPassengersToEvent
 } from "./core.js";
 
+async function init(){
+  try{
+    await waitForAuth();   // <-- clave
+    await loadEvents();    // o lo que uses para poblar select
+    await loadEventContext(STATE.event.id); // si aplica
+    // render...
+  }catch(e){
+    console.error("INIT ERROR:", e);
+    toast(e.message || String(e));
+  }
+}
+init();
+
 function toLocalInputValue(iso) {
   if (!iso) return "";
   const d = new Date(iso);
