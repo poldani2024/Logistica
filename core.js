@@ -1,6 +1,11 @@
+// core.js (Firebase v10+ modular, multipágina, GitHub Pages)
+// - NO usa `firebase.*` global
+// - Exporta helpers y mantiene STATE
+// - Centraliza auth + carga de masters + eventos + contexto de evento
+
 import { app, db } from "./firebase-init.js";
 
-// Auth
+// Auth (modular)
 import {
   getAuth,
   onAuthStateChanged,
@@ -11,16 +16,13 @@ import {
   browserLocalPersistence
 } from "https://www.gstatic.com/firebasejs/10.7.2/firebase-auth.js";
 
-// Firestore
+// Firestore (modular)
 import {
   collection,
   doc,
-  getDoc,
   getDocs,
   setDoc,
-  addDoc,
   updateDoc,
-  deleteDoc,
   query,
   orderBy,
   serverTimestamp,
@@ -28,15 +30,23 @@ import {
   writeBatch
 } from "https://www.gstatic.com/firebasejs/10.7.2/firebase-firestore.js";
 
+/* -------------------------
+ * Constantes + helpers DOM
+ * ------------------------- */
+
 export const $ = (id) => document.getElementById(id);
 
 export const ADMIN_EMAIL = "pedro.l.oldani@gmail.com";
+
+/* -------------------------
+ * Estado global
+ * ------------------------- */
 
 export const STATE = {
   auth: {
     user: null,
     isAdmin: false,
-    driver: null
+    driver: null // objeto driver master si matchea email
   },
   events: [],
   master: {
@@ -48,25 +58,16 @@ export const STATE = {
     driversIds: new Set(),
     passengersIds: new Set(),
     passengersMeta: new Map(), // passengerId -> meta (status/tracking/assignedDriverId/etc)
-    assignments: new Map()      // driverId -> { passengerIds: [] }
+    assignments: new Map()     // driverId -> { driverId, passengerIds: [] }
   }
 };
-window.waitForAuth = function () {
-  return new Promise((resolve) => {
-    const unsub = firebase.auth().onAuthStateChanged((user) => {
-      window.STATE = window.STATE || {};
-      STATE.auth = STATE.auth || {};
-      STATE.auth.user = user || null;
-      STATE.auth.isAdmin = !!(user && user.email === "pedro.l.oldani@gmail.com");
-      if (user) {
-        unsub();
-        resolve(user);
-      }
-    });
-  });
-};
 
-const auth = getAuth(app);
+// Exponer para debug (multipágina)
+window.STATE = STATE;
+
+/* -------------------------
+ * UI: escape + toast
+ * ------------------------- */
 
 export function escapeHtml(s) {
   return String(s ?? "")
@@ -80,8 +81,12 @@ export function escapeHtml(s) {
 let _toastTimer = null;
 export function toast(msg) {
   const el = $("toast");
-  if (!el) { alert(msg); return; }
-  el.textContent = msg;
+  if (!el) {
+    // fallback
+    alert(msg);
+    return;
+  }
+  el.textContent = String(msg ?? "");
   el.classList.add("show");
   if (_toastTimer) clearTimeout(_toastTimer);
   _toastTimer = setTimeout(() => {
@@ -89,6 +94,10 @@ export function toast(msg) {
     el.textContent = "";
   }, 2200);
 }
+
+/* -------------------------
+ * Evento seleccionado (localStorage)
+ * ------------------------- */
 
 export function getSelectedEventId() {
   return localStorage.getItem("eventId") || "";
@@ -100,18 +109,51 @@ export function setSelectedEventId(id) {
   STATE.event.id = v || null;
 }
 
-export async function ensureAuth() {
-  await setPersistence(auth, browserLocalPersistence);
+/* -------------------------
+ * Auth
+ * ------------------------- */
 
-  return new Promise((resolve) => {
-    onAuthStateChanged(auth, async (user) => {
-      STATE.auth.user = user || null;
-      const email = (user?.email || "").toLowerCase();
-      STATE.auth.isAdmin = (email === ADMIN_EMAIL.toLowerCase());
-      resolve(user || null);
+export const auth = getAuth(app);
+
+let _authReadyPromise = null;
+
+/**
+ * Inicializa auth una sola vez:
+ * - setPersistence(local)
+ * - suscribe onAuthStateChanged y completa STATE.auth
+ * - devuelve el user (o null)
+ */
+export async function ensureAuth() {
+  if (_authReadyPromise) return _authReadyPromise;
+
+  _authReadyPromise = (async () => {
+    // Importante: en algunos browsers puede fallar si storage está bloqueado
+    try {
+      await setPersistence(auth, browserLocalPersistence);
+    } catch (e) {
+      console.warn("setPersistence warning:", e);
+      // seguimos igual: auth puede funcionar sin persistencia
+    }
+
+    return new Promise((resolve) => {
+      const unsub = onAuthStateChanged(auth, (user) => {
+        STATE.auth.user = user || null;
+        const email = (user?.email || "").trim().toLowerCase();
+        STATE.auth.isAdmin = email === ADMIN_EMAIL.toLowerCase();
+        // driver se resuelve luego de cargar master drivers
+        resolve(user || null);
+        // No hacemos unsub: es útil mantenerlo para cambios de sesión.
+        // Si preferís 1-shot: descomentá la línea siguiente.
+        // unsub();
+      });
     });
-  });
+  })();
+
+  return _authReadyPromise;
 }
+
+/** Alias de compatibilidad si alguna página llama waitForAuth */
+window.waitForAuth = ensureAuth;
 
 export async function loginGoogle() {
   const provider = new GoogleAuthProvider();
@@ -122,11 +164,18 @@ export async function logout() {
   await signOut(auth);
 }
 
+/* -------------------------
+ * Carga de master data
+ * ------------------------- */
+
 export async function loadMasterDrivers() {
+  // Si no tenés lastName en todos, el orderBy podría fallar.
+  // Asumimos que existe. Si no, sacá orderBy y ordená en JS.
   const snap = await getDocs(query(collection(db, "drivers"), orderBy("lastName")));
   const arr = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-  // fallback sorting (si no existe lastName en alguno)
-  arr.sort((a,b)=> `${a.lastName||""} ${a.firstName||""}`.localeCompare(`${b.lastName||""} ${b.firstName||""}`));
+  arr.sort((a, b) =>
+    `${a.lastName || ""} ${a.firstName || ""}`.localeCompare(`${b.lastName || ""} ${b.firstName || ""}`)
+  );
   STATE.master.drivers = arr;
   return arr;
 }
@@ -134,20 +183,34 @@ export async function loadMasterDrivers() {
 export async function loadMasterPassengers() {
   const snap = await getDocs(query(collection(db, "passengers"), orderBy("lastName")));
   const arr = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-  arr.sort((a,b)=> `${a.lastName||""} ${a.firstName||""}`.localeCompare(`${b.lastName||""} ${b.firstName||""}`));
+  arr.sort((a, b) =>
+    `${a.lastName || ""} ${a.firstName || ""}`.localeCompare(`${b.lastName || ""} ${b.firstName || ""}`)
+  );
   STATE.master.passengers = arr;
   return arr;
 }
 
 export function resolveDriverRoleFromMaster() {
   const email = (STATE.auth.user?.email || "").trim().toLowerCase();
-  if (!email) { STATE.auth.driver = null; return null; }
-  const d = (STATE.master.drivers || []).find(x => String(x.email||"").trim().toLowerCase() === email) || null;
+  if (!email) {
+    STATE.auth.driver = null;
+    return null;
+  }
+  const d =
+    (STATE.master.drivers || []).find(x =>
+      String(x.email || "").trim().toLowerCase() === email
+    ) || null;
+
   STATE.auth.driver = d;
   return d;
 }
 
+/* -------------------------
+ * Eventos
+ * ------------------------- */
+
 export async function loadEvents() {
+  // Si dateStart es ISO string, orderBy funciona si todos tienen ese campo.
   const snap = await getDocs(query(collection(db, "events"), orderBy("dateStart")));
   const arr = snap.docs.map(d => ({ id: d.id, ...d.data() }));
   STATE.events = arr;
@@ -159,27 +222,45 @@ export function renderEventSelect() {
   if (!sel) return;
 
   const current = getSelectedEventId();
-  sel.innerHTML = (STATE.events || []).map(ev => {
+
+  const opts = (STATE.events || []).map(ev => {
     const name = ev.name ? ` — ${ev.name}` : "";
     return `<option value="${escapeHtml(ev.id)}">${escapeHtml(ev.id + name)}</option>`;
-  }).join("") || `<option value="">(sin eventos)</option>`;
-
-  // Si no hay eventId guardado pero el select tiene un valor, persistirlo
-  if (!current && sel.value) {
-    localStorage.setItem("eventId", sel.value);
-    STATE.event.id = sel.value;
-  }
-
-  sel.addEventListener("change", () => {
-    setSelectedEventId(sel.value);
-    document.dispatchEvent(new CustomEvent("eventChanged", { detail: { eventId: getSelectedEventId() }}));
-    const hint = $("eventHint");
-    if (hint) hint.textContent = getSelectedEventId() ? `Evento activo: ${getSelectedEventId()}` : "No hay evento seleccionado";
   });
 
+  sel.innerHTML = opts.join("") || `<option value="">(sin eventos)</option>`;
+
+  // Persistir si no hay guardado pero hay valor
+  if (!current && sel.value) {
+    setSelectedEventId(sel.value);
+  }
+
+  // Importante: evitar duplicar listeners si renderizás muchas veces
+  if (!sel.dataset.bound) {
+    sel.addEventListener("change", () => {
+      setSelectedEventId(sel.value);
+      document.dispatchEvent(
+        new CustomEvent("eventChanged", { detail: { eventId: getSelectedEventId() } })
+      );
+      const hint = $("eventHint");
+      if (hint) {
+        hint.textContent = getSelectedEventId()
+          ? `Evento activo: ${getSelectedEventId()}`
+          : "No hay evento seleccionado";
+      }
+    });
+    sel.dataset.bound = "1";
+  }
+
   const hint = $("eventHint");
-  if (hint) hint.textContent = current ? `Evento activo: ${current}` : "No hay evento seleccionado";
+  if (hint) {
+    hint.textContent = current ? `Evento activo: ${current}` : "No hay evento seleccionado";
+  }
 }
+
+/* -------------------------
+ * Contexto por evento (subcolecciones)
+ * ------------------------- */
 
 export async function loadEventContext(eventId) {
   const id = (eventId || getSelectedEventId() || "").trim();
@@ -235,8 +316,13 @@ export function assignedDriverIdForPassenger(passengerId) {
   return meta.assignedDriverId || "";
 }
 
+/* -------------------------
+ * Mutaciones: eventos / links / asignaciones / tracking
+ * ------------------------- */
+
 export async function saveEvent({ id, name, dateStart, dateEnd, address, localidad }) {
   if (!STATE.auth.isAdmin) throw new Error("Solo Admin puede guardar eventos");
+
   const eventId = (id || "").trim();
   if (!eventId) throw new Error("Falta ID del evento");
 
@@ -248,7 +334,7 @@ export async function saveEvent({ id, name, dateStart, dateEnd, address, localid
     localidad: (localidad || "").trim(),
     updatedAt: serverTimestamp()
   };
-  // create/update
+
   await setDoc(doc(db, "events", eventId), payload, { merge: true });
 }
 
@@ -336,13 +422,15 @@ export async function unassignPassenger({ passengerId, driverId }) {
 }
 
 export async function updateTrackingAsDriver({ passengerId, trackingStatus, trackingNote }) {
-  // Driver solo puede actualizar tracking de un pasajero que está en SU lista (en este evento).
   if (!STATE.event.id) throw new Error("No hay evento seleccionado");
+
   const driver = STATE.auth.driver;
   if (!driver) throw new Error("No sos chofer en el sistema");
 
   const a = assignmentForDriver(driver.id);
-  if (!a.passengerIds.includes(passengerId)) throw new Error("Ese pasajero no está asignado a vos");
+  if (!a.passengerIds.includes(passengerId)) {
+    throw new Error("Ese pasajero no está asignado a vos");
+  }
 
   const pRef = doc(db, "events", STATE.event.id, "eventPassengers", passengerId);
   await updateDoc(pRef, {
@@ -353,25 +441,39 @@ export async function updateTrackingAsDriver({ passengerId, trackingStatus, trac
   });
 }
 
+/* -------------------------
+ * Inicialización por página
+ * ------------------------- */
+
+/**
+ * initCorePage:
+ * - engancha botones login/logout (si existen)
+ * - ensureAuth()
+ * - carga masters (drivers) para resolver rol chofer
+ * - carga eventos + render selector
+ * - carga contexto del evento activo (si existe)
+ *
+ * page: "home" | "events" | "drivers" | "passengers" | "assignments" | "tracking"
+ */
 export async function initCorePage({ page }) {
   // Botones auth (si existen)
   $("btnLogin")?.addEventListener("click", async () => {
     try { await loginGoogle(); } catch (e) { console.error(e); toast(e.message || String(e)); }
   });
+
   $("btnLogout")?.addEventListener("click", async () => {
     try { await logout(); } catch (e) { console.error(e); toast(e.message || String(e)); }
   });
 
+  // 1) Auth
   await ensureAuth();
-  // carga master para resolver rol chofer
-  await loadMasterDrivers();
-  resolveDriverRoleFromMaster();
 
+  // UI status
   const st = $("authStatus");
   if (st) {
     const u = STATE.auth.user;
     st.textContent = u
-      ? `Ingresado: ${u.email}${STATE.auth.isAdmin ? " (Admin)" : (STATE.auth.driver ? " (Chofer)" : "")}`
+      ? `Ingresado: ${u.email}${STATE.auth.isAdmin ? " (Admin)" : ""}`
       : "No ingresado";
   }
 
@@ -380,7 +482,19 @@ export async function initCorePage({ page }) {
     return;
   }
 
-  // events + selector
+  // 2) Master drivers -> resolver rol chofer
+  await loadMasterDrivers();
+  resolveDriverRoleFromMaster();
+
+  // Update status con rol chofer si aplica
+  if (st) {
+    const u = STATE.auth.user;
+    st.textContent = u
+      ? `Ingresado: ${u.email}${STATE.auth.isAdmin ? " (Admin)" : (STATE.auth.driver ? " (Chofer)" : "")}`
+      : "No ingresado";
+  }
+
+  // 3) Eventos + selector
   await loadEvents();
   renderEventSelect();
 
@@ -390,14 +504,19 @@ export async function initCorePage({ page }) {
     toast("Eventos recargados");
   });
 
-  // evento inicial
+  // 4) Evento inicial
   setSelectedEventId(getSelectedEventId());
-  if (getSelectedEventId()) await loadEventContext(getSelectedEventId());
+  if (getSelectedEventId()) {
+    await loadEventContext(getSelectedEventId());
+  }
 
-  // home: solo muestra hint
+  // Home: hint
   if (page === "home") {
     const hint = $("eventHint");
-    if (hint) hint.textContent = getSelectedEventId() ? `Evento activo: ${getSelectedEventId()}` : "No hay evento seleccionado";
+    if (hint) {
+      hint.textContent = getSelectedEventId()
+        ? `Evento activo: ${getSelectedEventId()}`
+        : "No hay evento seleccionado";
+    }
   }
 }
-window.STATE = STATE;
