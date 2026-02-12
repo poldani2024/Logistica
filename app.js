@@ -471,11 +471,6 @@ function renderZones(){
   });
 }
 
-
-function escapeHtml(s){
-  return (s??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");
-}
-
 function norm(s){ return String(s||"").trim().toLowerCase(); }
 
 // Cache simple para no pedir el bbox todo el tiempo
