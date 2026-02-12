@@ -7,24 +7,55 @@
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
-  <header class="topbar">
-    <a class="btnSecondary" href="./index.html">← Home</a>
-
-    <div style="flex:1"></div>
-
-    <div class="row">
-      <select id="eventSelect" class="select"></select>
-      <button id="btnReloadEvents" class="btnSecondary">Recargar</button>
+ <div class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <div class="title">Logística Jóvenes</div>
+      <div class="subtitle">Rosario / Gran Rosario</div>
     </div>
 
-    <div class="authBox">
-      <div id="authStatus" class="muted"></div>
-      <div class="authBtns">
-        <button id="btnLogin" class="btnPrimary">Ingresar</button>
-        <button id="btnLogout" class="btnSecondary">Salir</button>
+    <div class="row grow">
+      <div class="grow">
+        <label>Evento activo</label>
+        <select id="eventSelect"></select>
       </div>
     </div>
-  </header>
+
+    <div class="row">
+      <button class="btn" id="btnHome">🏠</button>
+      <button class="btn danger" id="btnLogout">Salir</button>
+    </div>
+  </div>
+</div>
+
+<div class="container">
+  <div class="grid cols-2">
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; gap:10px; align-items:center;">
+        <div>
+          <div style="font-weight:800; font-size:18px;">Choferes</div>
+          <div style="color:var(--muted); font-size:13px;">Master data</div>
+        </div>
+        <button class="btn primary" id="btnAddDriver">+ Agregar</button>
+      </div>
+      <!-- tabla desktop -->
+      <div class="desktop-only" style="margin-top:12px;">
+        <table class="table" id="driversTable"></table>
+      </div>
+      <!-- cards mobile -->
+      <div class="mobile-only" style="margin-top:12px;">
+        <div class="cards-list" id="driversCards"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <!-- otra columna -->
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
 
   <main class="container">
     <section class="card">
