@@ -555,9 +555,7 @@ async function geocodeOSM(address, localidad){
   };
 }
 
-function driverAssignment(driverId){
-  return STATE.assignments.find(a=>a.driverId === driverId) || null;
-}
+
 
 function assignedCount(driverId){
   const a = driverAssignment(driverId);
@@ -565,7 +563,6 @@ function assignedCount(driverId){
 }
 
 function passengerById(id){ return STATE.passengers.find(p=>p.id===id); }
-function driverById(id){ return STATE.drivers.find(d=>d.id===id); }
 
 /* -------------------- DASHBOARD -------------------- */
 function renderDashboard(){
@@ -1347,8 +1344,8 @@ $("btnDangerClearEvent").addEventListener("click", async ()=>{
       renderAuthBar();
       // Clear UI
       if(typeof renderDashboard==="function") renderDashboard();
-      if(typeof renderDrivers==="function") renderDrivers();
-      if(typeof renderPassengers==="function") renderPassengers();
+      if(typeof renderDriversTable==="function") renderDriversTable();
+      if(typeof renderPassengersTable==="function") renderPassengersTable();
       if(typeof renderAssignments==="function") renderAssignments();
       if(typeof renderTracking==="function") renderTracking();
       return;
@@ -1542,10 +1539,6 @@ function driverAssignment(driverId){
   return (STATE.assignments || []).find(a => a.driverId === driverId) || null;
 }
 
-function assignedCount(driverId){
-  const a = driverAssignment(driverId);
-  return Array.isArray(a?.passengerIds) ? a.passengerIds.length : 0;
-}
 
 function ensureDriversZoneFilter(){
   const sel = $("driverZoneFilter");
