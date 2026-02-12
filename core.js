@@ -150,7 +150,11 @@ export function renderEventSelect() {
     return `<option value="${escapeHtml(ev.id)}">${escapeHtml(ev.id + name)}</option>`;
   }).join("") || `<option value="">(sin eventos)</option>`;
 
-  if (current) sel.value = current;
+  // Si no hay eventId guardado pero el select tiene un valor, persistirlo
+  if (!current && sel.value) {
+    localStorage.setItem("eventId", sel.value);
+    STATE.event.id = sel.value;
+  }
 
   sel.addEventListener("change", () => {
     setSelectedEventId(sel.value);
@@ -382,3 +386,4 @@ export async function initCorePage({ page }) {
     if (hint) hint.textContent = getSelectedEventId() ? `Evento activo: ${getSelectedEventId()}` : "No hay evento seleccionado";
   }
 }
+window.STATE = STATE;
