@@ -1,40 +1,263 @@
-<div class="container">
-  <div class="grid cols-2">
-    <a class="navbtn" href="events.html">
-      <div class="navbtn-main">
-        <div class="navbtn-title">Eventos</div>
-      </div>
-      <button class="iconbtn" type="button" data-tip="Crear/editar evento y seleccionar evento activo">i</button>
-    </a>
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Logística Jóvenes</title>
 
-    <a class="navbtn" href="drivers.html">
-      <div class="navbtn-main">
-        <div class="navbtn-title">Choferes</div>
-      </div>
-      <button class="iconbtn" type="button" data-tip="Master data de choferes">i</button>
-    </a>
+  <!-- Si ya tenés styles.css, dejalo. Esto suma un estilo decente solo para la Home -->
+  <link rel="stylesheet" href="styles.css" />
 
-    <a class="navbtn" href="passengers.html">
-      <div class="navbtn-main">
-        <div class="navbtn-title">Pasajeros</div>
-      </div>
-      <button class="iconbtn" type="button" data-tip="Master data de pasajeros">i</button>
-    </a>
+  <style>
+    :root{
+      --bg:#0b1220; --card:#111a2e; --muted:#9fb0d0; --text:#e8eefc;
+      --border: rgba(255,255,255,.10); --shadow: 0 14px 34px rgba(0,0,0,.35);
+      --radius:18px; --primary:#6ea8fe;
+    }
+    *{ box-sizing:border-box; }
+    body{
+      margin:0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      background:
+        radial-gradient(900px 480px at 15% 0%, rgba(110,168,254,.22), transparent 55%),
+        radial-gradient(800px 420px at 90% 10%, rgba(77,212,198,.18), transparent 55%),
+        var(--bg);
+      color:var(--text);
+    }
+    a{ color:inherit; text-decoration:none; }
 
-    <a class="navbtn" href="assignments.html">
-      <div class="navbtn-main">
-        <div class="navbtn-title">Asignaciones</div>
-      </div>
-      <button class="iconbtn" type="button" data-tip="Asignar pasajeros a choferes dentro del evento">i</button>
-    </a>
+    .topbar{
+      position: sticky; top:0; z-index:20;
+      backdrop-filter: blur(10px);
+      background: rgba(11,18,32,.65);
+      border-bottom:1px solid var(--border);
+    }
+    .topbar-inner{
+      width:min(980px, 100%);
+      margin:0 auto;
+      padding: 14px 16px;
+      display:flex; align-items:center; justify-content:space-between; gap:12px;
+    }
+    .brand{ display:flex; flex-direction:column; line-height:1.1; }
+    .brand .title{ font-weight:850; font-size:16px; }
+    .brand .sub{ font-size:12px; color:var(--muted); margin-top:3px; }
 
-    <a class="navbtn" href="tracking.html">
-      <div class="navbtn-main">
-        <div class="navbtn-title">Tracking</div>
+    .pill{
+      border:1px solid var(--border);
+      background: rgba(255,255,255,.06);
+      padding: 10px 12px;
+      border-radius: 999px;
+      min-height: 40px;
+      display:flex; align-items:center; gap:8px;
+      color: var(--muted);
+      font-size: 13px;
+      max-width: 46vw;
+      overflow:hidden;
+      white-space:nowrap;
+      text-overflow: ellipsis;
+    }
+
+    .container{
+      width:min(980px, 100%);
+      margin:0 auto;
+      padding: 18px 16px 84px;
+    }
+
+    .hero{
+      display:flex; flex-direction:column; gap:6px;
+      margin: 8px 0 14px;
+    }
+    .hero h1{ margin:0; font-size:22px; letter-spacing:.2px; }
+    .hero p{ margin:0; color:var(--muted); font-size:13px; }
+
+    .grid{
+      display:grid;
+      grid-template-columns: 1fr;
+      gap:12px;
+    }
+    @media (min-width: 720px){
+      .grid{ grid-template-columns: 1fr 1fr; }
+    }
+
+    .navbtn{
+      position:relative;
+      display:flex; align-items:center; justify-content:space-between; gap:12px;
+      padding: 16px;
+      border-radius: var(--radius);
+      border:1px solid var(--border);
+      background: linear-gradient(180deg, rgba(255,255,255,.05), transparent 45%), rgba(255,255,255,.03);
+      box-shadow: var(--shadow);
+      min-height: 78px;
+      transition: transform .12s ease;
+    }
+    .navbtn:active{ transform: scale(.99); }
+    .nav-left{ display:flex; flex-direction:column; gap:4px; }
+    .nav-title{ font-weight:900; font-size:18px; }
+    .nav-hint{ font-size:12px; color:var(--muted); }
+
+    .iconbtn{
+      width:42px; height:42px;
+      border-radius:999px;
+      border:1px solid var(--border);
+      background: rgba(255,255,255,.06);
+      color: var(--muted);
+      font-weight:900;
+      cursor:pointer;
+      flex: 0 0 auto;
+    }
+
+    /* Tooltip tipo toast */
+    .tooltip{
+      position:fixed;
+      left:50%;
+      transform:translateX(-50%);
+      bottom:18px;
+      max-width:min(92vw, 560px);
+      padding:10px 14px;
+      border-radius:999px;
+      border:1px solid var(--border);
+      background: rgba(17,26,46,.92);
+      box-shadow: var(--shadow);
+      display:none;
+      z-index:999;
+      font-size: 13px;
+      color: var(--text);
+    }
+    .tooltip.show{ display:block; }
+
+    /* Barra inferior (mobile) para que parezca app */
+    .bottombar{
+      position: fixed;
+      left:0; right:0; bottom:0;
+      background: rgba(11,18,32,.75);
+      border-top:1px solid var(--border);
+      backdrop-filter: blur(10px);
+      padding: 10px 14px;
+      display:flex; justify-content:center;
+      z-index:30;
+    }
+    .bottombar .inner{
+      width:min(980px,100%);
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+    }
+    .btn{
+      border:1px solid var(--border);
+      background: rgba(255,255,255,.06);
+      color: var(--text);
+      padding: 10px 12px;
+      border-radius: 14px;
+      min-height:44px;
+      font-weight:700;
+      cursor:pointer;
+    }
+    .btn.primary{
+      border-color: rgba(110,168,254,.35);
+      background: linear-gradient(180deg, rgba(110,168,254,.25), rgba(110,168,254,.10));
+    }
+  </style>
+</head>
+
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <div class="title">Logística Jóvenes</div>
+        <div class="sub">Rosario / Gran Rosario</div>
       </div>
-      <button class="iconbtn" type="button" data-tip="Estado del viaje por chofer/pasajero">i</button>
-    </a>
-  </div>
+
+      <!-- Si tenés auth en core.js, podés reemplazar esto por el email real -->
+      <div class="pill" id="userPill">👤 admin</div>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="hero">
+      <h1>Panel</h1>
+      <p>Elegí un módulo. El detalle aparece tocando la “i”.</p>
+    </section>
+
+    <section class="grid">
+      <a class="navbtn" href="events.html">
+        <div class="nav-left">
+          <div class="nav-title">Eventos</div>
+          <div class="nav-hint">Crear y elegir evento activo</div>
+        </div>
+        <button class="iconbtn" type="button"
+          data-tip="Eventos: alta/edición y selección del evento activo. Todo lo demás trabaja dentro del evento elegido.">i</button>
+      </a>
+
+      <a class="navbtn" href="drivers.html">
+        <div class="nav-left">
+          <div class="nav-title">Choferes</div>
+          <div class="nav-hint">Datos maestros</div>
+        </div>
+        <button class="iconbtn" type="button"
+          data-tip="Choferes: master data global (histórico). No se guarda eventId acá.">i</button>
+      </a>
+
+      <a class="navbtn" href="passengers.html">
+        <div class="nav-left">
+          <div class="nav-title">Pasajeros</div>
+          <div class="nav-hint">Datos maestros</div>
+        </div>
+        <button class="iconbtn" type="button"
+          data-tip="Pasajeros: master data global (histórico). No se asigna desde acá.">i</button>
+      </a>
+
+      <a class="navbtn" href="assignments.html">
+        <div class="nav-left">
+          <div class="nav-title">Asignaciones</div>
+          <div class="nav-hint">Chofer ↔ Pasajeros</div>
+        </div>
+        <button class="iconbtn" type="button"
+          data-tip="Asignaciones: relación chofer–pasajero dentro del evento (subcolección events/{eventId}/assignments).">i</button>
+      </a>
+
+      <a class="navbtn" href="tracking.html">
+        <div class="nav-left">
+          <div class="nav-title">Tracking</div>
+          <div class="nav-hint">Estado del viaje</div>
+        </div>
+        <button class="iconbtn" type="button"
+          data-tip="Tracking: estado por pasajero dentro del evento (Pendiente/En tránsito/En destino/Ausente).">i</button>
+      </a>
+    </section>
+  </main>
 
   <div class="tooltip" id="tooltip"></div>
-</div>
+
+  <footer class="bottombar">
+    <div class="inner">
+      <button class="btn primary" id="btnSelectEvent">📍 Evento</button>
+      <button class="btn" id="btnLogout">Salir</button>
+    </div>
+  </footer>
+
+  <script>
+    // Tooltips: tocar "i" no navega (aunque esté dentro del <a>)
+    (function(){
+      const tip = document.getElementById("tooltip");
+      document.addEventListener("click", (e) => {
+        const btn = e.target.closest(".iconbtn");
+        if(!btn) return;
+        e.preventDefault();
+        e.stopPropagation();
+        tip.textContent = btn.dataset.tip || "";
+        tip.classList.add("show");
+        clearTimeout(window.__tipTimer);
+        window.__tipTimer = setTimeout(()=> tip.classList.remove("show"), 2600);
+      });
+    })();
+
+    // Placeholder: si querés, después lo conectás con core.js (user email + logout)
+    document.getElementById("btnLogout").addEventListener("click", () => {
+      alert("Acá llamarías a signOut() de Firebase.");
+    });
+
+    document.getElementById("btnSelectEvent").addEventListener("click", () => {
+      // Lo ideal: abrir events.html o mostrar modal selector (según cómo lo tengas)
+      location.href = "events.html";
+    });
+  </script>
+</body>
+</html>
