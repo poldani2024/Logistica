@@ -2,7 +2,11 @@
 /* styles.css – UI dark, mobile-first, coherent cards/buttons/tables
    Drop-in replacement. Keeps your existing class names.
 */
-
+.topbar-center{
+  flex: 1;
+  display:flex;
+  justify-content:center;
+}
 :root{
   --bg0:#050B16;
   --bg1:#071226;
