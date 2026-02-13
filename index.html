@@ -10,17 +10,38 @@
 
 <header class="topbar">
   <div class="topbar-inner">
+    <!-- Izquierda: Marca -->
     <div class="brand">
-      <div class="title">Logística Jóvenes</div>
+      <div class="title">Gestión de Transporte Soka Gakkai</div>
       <div class="sub">Rosario / Gran Rosario</div>
     </div>
-    <div class="pill" id="userPill">
-      <span id="authStatus">No ingresado</span>
-      <button id="btnLogin" type="button">Ingresar</button>
-      <button id="btnLogout" type="button" style="display:none">Salir</button>
+
+    <!-- Centro: Evento activo -->
+    <div class="topbar-center">
+      <div class="field" style="min-width:min(620px, 48vw);">
+        <label>Evento activo</label>
+
+        <!-- Si la página tiene selector, dejá este <select>. Si NO, lo podés borrar y dejar solo el span -->
+        <select id="eventSelect"></select>
+
+        <!-- Siempre presente: muestra el texto del evento activo -->
+        <div class="subtitle" id="eventHint">No hay evento seleccionado</div>
+      </div>
+    </div>
+
+    <!-- Derecha: Home + Usuario + Salir -->
+    <div class="row">
+      <a href="index.html" class="iconbtn primary" title="Inicio">🏠</a>
+
+      <div class="pill">
+        <span id="authStatus">No ingresado</span>
+        <button id="btnLogin" type="button" style="display:none">Ingresar</button>
+        <button id="btnLogout" type="button">Salir</button>
+      </div>
     </div>
   </div>
 </header>
+
 
 <main class="container">
   <h2>Inicio</h2>
