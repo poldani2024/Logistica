@@ -136,14 +136,40 @@ function renderModalList(){
   if (!wrap) return;
 
   const q = ($("modalSearch")?.value || "").trim().toLowerCase();
+
   const list = unassignedPassengers().filter(p => {
     if (!q) return true;
     const hay = `${p.firstName||""} ${p.lastName||""} ${p.phone||""} ${p.address||""} ${p.localidad||""}`.toLowerCase();
     return hay.includes(q);
   });
 
-  // Fix for JS: Python True -> true
+  if (!list.length){
+    wrap.innerHTML = `<div class="emptyBox">No hay pasajeros pendientes para asignar.</div>`;
+    return;
+  }
+
+  wrap.innerHTML = list.map(p => {
+    const meta = p._event || {};
+    const status = meta.trackingStatus || meta.status || "Pendiente";
+    return `
+      <div class="passRow">
+        <div class="passMeta">
+          <div class="passName">${escapeHtml(fullName(p))}</div>
+          <div class="passSub">${escapeHtml(status)}${escapeHtml(passengerLine(p))}</div>
+        </div>
+        <button class="btn primary" data-assign="${escapeHtml(p.id)}">Asignar</button>
+      </div>
+    `;
+  }).join("");
+
+  wrap.querySelectorAll("[data-assign]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const passengerId = btn.getAttribute("data-assign");
+      await doAssign({ driverId: modalDriverId, passengerId });
+    });
+  });
 }
+
 
 
 
