@@ -3,83 +3,89 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Choferes (Master) · Logística Jóvenes</title>
+  <title>Choferes · Gestión de Transporte Soka Gakkai</title>
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
-  <div class="topbar">
+
+<header class="topbar">
   <div class="topbar-inner">
     <div class="brand">
-      <div class="title">Logística Jóvenes</div>
-      <div class="subtitle">Rosario / Gran Rosario</div>
+      <div class="title">Gestión de Transporte Soka Gakkai</div>
+      <div class="sub">Rosario / Gran Rosario</div>
     </div>
 
-    <div class="row grow">
-      <div class="grow">
+    <div class="topbar-center">
+      <div class="field" style="min-width:min(620px, 48vw);">
         <label>Evento activo</label>
         <select id="eventSelect"></select>
+        <div class="subtitle" id="eventHint">No hay evento seleccionado</div>
       </div>
     </div>
 
     <div class="row">
-      <button class="btn" id="btnHome">🏠</button>
-      <button class="btn danger" id="btnLogout">Salir</button>
+      <a href="index.html" class="iconbtn primary" title="Inicio">🏠</a>
+      <div class="pill">
+        <span id="authStatus">No ingresado</span>
+        <button id="btnLogin" type="button" style="display:none">Ingresar</button>
+        <button id="btnLogout" type="button" class="danger">Salir</button>
+      </div>
     </div>
   </div>
-</div>
+</header>
 
-<div class="container">
+<main class="container">
   <div class="grid cols-2">
-    <div class="card">
-      <div style="display:flex; justify-content:space-between; gap:10px; align-items:center;">
+    <section class="card">
+      <div class="rowBetween">
         <div>
-          <div style="font-weight:800; font-size:18px;">Choferes</div>
-          <div style="color:var(--muted); font-size:13px;">Master data</div>
+          <div class="cardTitle">Choferes</div>
+          <div class="subtitle">Master data (acá no se asignan pasajeros)</div>
         </div>
-        <button class="btn primary" id="btnAddDriver">+ Agregar</button>
+        <div class="row">
+          <button class="btn primary" id="btnAddDriver">+ Nuevo</button>
+          <button class="btn" id="btnReloadDrivers" title="Recargar">↻</button>
+        </div>
       </div>
-      <!-- tabla desktop -->
+
+      <div class="row" style="margin-top:12px;">
+        <input id="driverSearch" placeholder="Buscar por nombre, teléfono o email…" />
+      </div>
+
       <div class="desktop-only" style="margin-top:12px;">
-        <table class="table" id="driversTable"></table>
+        <div class="tableWrap">
+          <table id="driversTable">
+            <thead>
+              <tr><th>Chofer</th><th>Email</th><th>Tel</th><th>Cap</th><th></th></tr>
+            </thead>
+            <tbody id="driversTableBody"></tbody>
+          </table>
+        </div>
       </div>
-      <!-- cards mobile -->
+
       <div class="mobile-only" style="margin-top:12px;">
         <div class="cards-list" id="driversCards"></div>
       </div>
-    </div>
+    </section>
 
-    <div class="card">
-      <!-- otra columna -->
-    </div>
+    <section class="card">
+      <div class="rowBetween">
+        <div>
+          <div class="cardTitle">Detalle</div>
+          <div class="subtitle" id="detailMode">Seleccioná un chofer…</div>
+        </div>
+        <button class="btnDanger" id="btnDeleteDriver" style="display:none;">Eliminar</button>
+      </div>
+
+      <div id="driverDetail" style="margin-top:12px;" class="muted">
+        Seleccioná un chofer o tocá <strong>+ Nuevo</strong>.
+      </div>
+    </section>
   </div>
-</div>
+</main>
 
 <div class="toast" id="toast"></div>
 
-
-  <main class="container">
-    <section class="card">
-      <div class="row">
-        <input id="driverSearch" placeholder="Buscar…" />
-        <button id="btnNewDriver" class="btnPrimary">Nuevo</button>
-        <button id="btnReloadDrivers" class="btnSecondary">Recargar</button>
-      </div>
-      <div id="driversTable"></div>
-    </section>
-
-    <section class="card">
-      <h2>Detalle</h2>
-      <div id="driverDetail" class="muted">Seleccioná un chofer…</div>
-    </section>
-  </main>
-
-  <div id="toast" class="toast"></div>
-
-  <script type="module" src="./drivers.js"></script>
-
-<script type="module" src="./firebase-init.js"></script>
-<script type="module" src="./core.js"></script>
-
+<script type="module" src="./drivers.js"></script>
 </body>
 </html>
-
