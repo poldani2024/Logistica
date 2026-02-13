@@ -3,111 +3,126 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Asignaciones · Logística Jóvenes</title>
+  <title>Asignaciones · Gestión de Transporte Soka Gakkai</title>
   <link rel="stylesheet" href="./styles.css" />
+  <style>
+    /* Modal simple para asignar pasajeros */
+    .modalOverlay{
+      position:fixed; inset:0;
+      background: rgba(0,0,0,.55);
+      display:none;
+      align-items:center;
+      justify-content:center;
+      padding: 18px;
+      z-index: 100;
+    }
+    .modalOverlay.show{ display:flex; }
+    .modal{
+      width:min(820px, 100%);
+      max-height: min(80vh, 720px);
+      overflow:auto;
+    }
+    .pillSmall{
+      display:inline-flex; align-items:center; gap:8px;
+      padding:6px 10px;
+      border:1px solid rgba(255,255,255,.10);
+      border-radius:999px;
+      background: rgba(255,255,255,.04);
+      color: rgba(234,241,255,.72);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    .driverHead{
+      display:flex; align-items:flex-start; justify-content:space-between; gap:12px;
+    }
+    .passRow{
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+      padding:10px 10px;
+      border:1px solid rgba(255,255,255,.08);
+      border-radius: 12px;
+      background: rgba(255,255,255,.03);
+      margin-top: 10px;
+    }
+    .passRow:first-child{ margin-top: 0; }
+    .passMeta{ display:flex; flex-direction:column; gap:2px; }
+    .passName{ font-weight: 750; }
+    .passSub{ font-size: 12px; color: rgba(234,241,255,.62); }
+    .emptyBox{
+      border:1px dashed rgba(255,255,255,.14);
+      border-radius: 14px;
+      padding: 12px;
+      color: rgba(234,241,255,.62);
+      background: rgba(255,255,255,.02);
+    }
+    @media (max-width: 620px){
+      .driverHead{ flex-direction:column; align-items:stretch; }
+      .modal{ max-height: 82vh; }
+    }
+  </style>
 </head>
 <body>
- <header class="topbar">
+
+<header class="topbar">
   <div class="topbar-inner">
-    <!-- Izquierda: Marca -->
     <div class="brand">
       <div class="title">Gestión de Transporte Soka Gakkai</div>
       <div class="sub">Rosario / Gran Rosario</div>
     </div>
 
-    <!-- Centro: Evento activo -->
     <div class="topbar-center">
       <div class="field" style="min-width:min(620px, 48vw);">
         <label>Evento activo</label>
-
-        <!-- Si la página tiene selector, dejá este <select>. Si NO, lo podés borrar y dejar solo el span -->
         <select id="eventSelect"></select>
-
-        <!-- Siempre presente: muestra el texto del evento activo -->
         <div class="subtitle" id="eventHint">No hay evento seleccionado</div>
       </div>
     </div>
 
-    <!-- Derecha: Home + Usuario + Salir -->
     <div class="row">
       <a href="index.html" class="iconbtn primary" title="Inicio">🏠</a>
-
       <div class="pill">
         <span id="authStatus">No ingresado</span>
         <button id="btnLogin" type="button" style="display:none">Ingresar</button>
-        <button id="btnLogout" type="button">Salir</button>
+        <button id="btnLogout" type="button" class="danger">Salir</button>
       </div>
     </div>
   </div>
 </header>
 
+<main class="container">
+  <div class="rowBetween" style="margin-bottom:12px;">
+    <div>
+      <h2 style="margin:0;">Asignaciones</h2>
+      <div class="subtitle">Asigná pasajeros desde cada chofer (más ágil)</div>
+    </div>
+    <div class="row">
+      <button class="btn" id="btnReloadContext" title="Recargar">↻</button>
+    </div>
+  </div>
 
-<div class="container">
-  <div class="grid cols-2">
-    <div class="card">
-      <div style="display:flex; justify-content:space-between; gap:10px; align-items:center;">
-        <div>
-          <div style="font-weight:800; font-size:18px;">Choferes</div>
-          <div style="color:var(--muted); font-size:13px;">Master data</div>
-        </div>
-        <button class="btn primary" id="btnAddDriver">+ Agregar</button>
+  <div class="cards-list" id="driversBoard"></div>
+</main>
+
+<!-- Modal: agregar pasajero a chofer -->
+<div class="modalOverlay" id="assignModal">
+  <div class="card modal">
+    <div class="rowBetween">
+      <div>
+        <div class="cardTitle" id="modalTitle">Agregar pasajero</div>
+        <div class="subtitle" id="modalSub">Seleccioná un pasajero pendiente…</div>
       </div>
-      <!-- tabla desktop -->
-      <div class="desktop-only" style="margin-top:12px;">
-        <table class="table" id="driversTable"></table>
-      </div>
-      <!-- cards mobile -->
-      <div class="mobile-only" style="margin-top:12px;">
-        <div class="cards-list" id="driversCards"></div>
-      </div>
+      <button class="btn" id="btnCloseModal">Cerrar</button>
     </div>
 
-    <div class="card">
-      <!-- otra columna -->
+    <div class="row" style="margin-top:12px;">
+      <input id="modalSearch" placeholder="Buscar pasajero por nombre / teléfono / dirección…" />
     </div>
+
+    <div style="margin-top:12px;" id="modalList"></div>
   </div>
 </div>
 
 <div class="toast" id="toast"></div>
 
-
-  <main class="container">
-    <section class="card">
-      <h2>Asignaciones (por evento)</h2>
-      <div class="muted" id="eventHint"></div>
-
-      <div class="grid2">
-        <div>
-          <h3>Choferes del evento</h3>
-          <div id="driversBox"></div>
-        </div>
-
-        <div>
-          <h3>Pasajeros del evento</h3>
-          <div id="passengersBox"></div>
-        </div>
-      </div>
-    </section>
-
-    <section class="card">
-      <h2>Asignar</h2>
-      <div class="row">
-        <select id="selDriver" class="select"></select>
-        <select id="selPassenger" class="select"></select>
-        <button id="btnAssign" class="btnPrimary">Asignar</button>
-        <button id="btnUnassign" class="btnSecondary">Quitar</button>
-      </div>
-      <div class="muted">Admin: asigna/quita. Chofer: solo tracking (en pantalla Tracking).</div>
-    </section>
-  </main>
-
-  <div id="toast" class="toast"></div>
-
-  <script type="module" src="./assignments.js"></script>
-
-<script type="module" src="./firebase-init.js"></script>
-<script type="module" src="./core.js"></script>
-
+<script type="module" src="./assignments.js"></script>
 </body>
 </html>
-
