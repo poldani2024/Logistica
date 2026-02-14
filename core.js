@@ -48,6 +48,14 @@ export async function loadEvents(){
 
 export function setActivePhase(pid){ STATE.ui.activePhase = pid; }
 export function getActivePhase(){ return STATE.ui.activePhase; }
+export function getSelectedEventId(){
+  return localStorage.getItem("eventId") || "";
+}
+
+export function setSelectedEventId(id){
+  localStorage.setItem("eventId", id || "");
+  STATE.event.id = id || null;
+}
 
 export async function loadEventContext(eventId){
   STATE.event.id = eventId;
