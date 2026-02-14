@@ -33,31 +33,44 @@ function applyFilter(){
   if (passengersLayer) map.removeLayer(passengersLayer);
 
   if (currentFilter === "all"){
-    if (driversLayer) driversLayer.addTo(map);
-    if (passengersLayer) passengersLayer.addTo(map);
+    driversLayer?.addTo(map);
+    passengersLayer?.addTo(map);
   } else if (currentFilter === "drivers"){
-    if (driversLayer) driversLayer.addTo(map);
+    driversLayer?.addTo(map);
   } else if (currentFilter === "passengers"){
-    if (passengersLayer) passengersLayer.addTo(map);
+    passengersLayer?.addTo(map);
   }
 }
 
-function divEmojiIcon(emoji){
+/**
+ * Ícono grande con contraste (se ve bien sobre mapas claros/amarillos).
+ * Usamos HTML inline para no depender de styles.css.
+ */
+function bubbleIcon({ emoji, bg, border }){
   return L.divIcon({
     className: "",
-    html: `<div class="emojiIcon">${emoji}</div>`,
-    iconSize: [40, 40],
-    iconAnchor: [20, 20],
-    popupAnchor: [0, -10]
+    html: `
+      <div style="
+        width:56px;height:56px;border-radius:18px;
+        display:flex;align-items:center;justify-content:center;
+        background:${bg};
+        border:3px solid ${border};
+        box-shadow: 0 8px 18px rgba(0,0,0,.35);
+        font-size:30px;
+        line-height:1;
+        transform: translateZ(0);
+      ">${emoji}</div>
+    `,
+    iconSize: [56, 56],
+    iconAnchor: [28, 56],     // “apoya” abajo
+    popupAnchor: [0, -54]
   });
 }
 
+const DRIVER_ICON = bubbleIcon({ emoji: "🚗", bg: "rgba(0,122,255,.95)", border: "rgba(255,255,255,.95)" });
+const PASSENGER_ICON = bubbleIcon({ emoji: "🧍", bg: "rgba(168,85,247,.95)", border: "rgba(255,255,255,.95)" });
+
 function pickLatLng(obj){
-  // Soporta varias formas comunes:
-  // - obj.lat / obj.lng
-  // - obj.latitude / obj.longitude
-  // - obj.location = { lat, lng }
-  // - obj.geo = { lat, lng }
   const lat = obj?.lat ?? obj?.latitude ?? obj?.location?.lat ?? obj?.geo?.lat;
   const lng = obj?.lng ?? obj?.lon ?? obj?.longitude ?? obj?.location?.lng ?? obj?.geo?.lng ?? obj?.geo?.lon;
   const la = Number(lat);
@@ -83,16 +96,26 @@ function ensureMap(){
   // Centro Rosario aprox.
   map.setView([-32.9468, -60.6393], 12);
 
+  // Tiles más neutros (si querés, se puede cambiar a Carto light, etc.)
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 19,
     attribution: "&copy; OpenStreetMap"
   }).addTo(map);
 }
 
+function popupHtml({ title, lines }){
+  const safeLines = (lines || []).filter(Boolean).map(x => `<div style="color:#111;opacity:.92;font-size:13px;line-height:1.25;margin-top:4px;">${x}</div>`).join("");
+  return `
+    <div style="color:#0f172a; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; min-width: 220px;">
+      <div style="font-weight:900; font-size:14px; color:#0b1220;">${title}</div>
+      ${safeLines}
+    </div>
+  `;
+}
+
 function rebuildLayers(){
   ensureMap();
 
-  // borrar layers previos
   if (driversLayer) { map.removeLayer(driversLayer); driversLayer = null; }
   if (passengersLayer) { map.removeLayer(passengersLayer); passengersLayer = null; }
 
@@ -111,14 +134,21 @@ function rebuildLayers(){
     const ll = pickLatLng(d);
     if (!ll){ missingDrivers++; continue; }
     bounds.push(ll);
-    const m = L.marker(ll, { icon: divEmojiIcon("🚗") });
-    const cap = d.capacity ?? "";
-    const phone = d.phone ? `<div class="subtitle">${escapeHtml(d.phone)}</div>` : "";
-    m.bindPopup(`
-      <div style="font-weight:800;">🚗 ${escapeHtml(fullName(d))}</div>
-      <div class="subtitle">${escapeHtml(d.email||"")}${cap!=="" ? " · Cap: " + escapeHtml(String(cap)) : ""}</div>
-      ${phone}
-    `);
+
+    const m = L.marker(ll, { icon: DRIVER_ICON, riseOnHover: true });
+
+    const cap = (d.capacity ?? "");
+    const lines = [
+      escapeHtml(d.email||""),
+      cap !== "" ? `Capacidad: <strong>${escapeHtml(String(cap))}</strong>` : "",
+      d.phone ? `Tel: ${escapeHtml(d.phone)}` : ""
+    ];
+
+    m.bindPopup(popupHtml({
+      title: `🚗 ${escapeHtml(fullName(d))}`,
+      lines
+    }), { closeButton: true });
+
     driversLayer.addLayer(m);
   }
 
@@ -128,24 +158,29 @@ function rebuildLayers(){
     bounds.push(ll);
 
     const meta = p._event || {};
-    const assigned = meta.assignedDriverId ? `<div class="subtitle">Asignado: ${escapeHtml(meta.assignedDriverId)}</div>` : `<div class="subtitle">No asignado</div>`;
-    const status = meta.trackingStatus || meta.status || "Pendiente";
+    const assigned = meta.assignedDriverId ? `Asignado: <strong>${escapeHtml(meta.assignedDriverId)}</strong>` : `No asignado`;
+    const status = escapeHtml(meta.trackingStatus || meta.status || "Pendiente");
 
-    const m = L.marker(ll, { icon: divEmojiIcon("🧍") });
-    m.bindPopup(`
-      <div style="font-weight:800;">🧍 ${escapeHtml(fullName(p))}</div>
-      <div class="subtitle">${escapeHtml(status)}</div>
-      ${assigned}
-      ${p.phone ? `<div class="subtitle">${escapeHtml(p.phone)}</div>` : ""}
-      ${p.address ? `<div class="subtitle">${escapeHtml(p.address)}</div>` : ""}
-      ${p.localidad ? `<div class="subtitle">${escapeHtml(p.localidad)}</div>` : ""}
-    `);
+    const m = L.marker(ll, { icon: PASSENGER_ICON, riseOnHover: true });
+
+    const lines = [
+      `Estado: <strong>${status}</strong>`,
+      assigned,
+      p.phone ? `Tel: ${escapeHtml(p.phone)}` : "",
+      p.address ? `Dir: ${escapeHtml(p.address)}` : "",
+      p.localidad ? `Loc: ${escapeHtml(p.localidad)}` : ""
+    ];
+
+    m.bindPopup(popupHtml({
+      title: `🧍 ${escapeHtml(fullName(p))}`,
+      lines
+    }), { closeButton: true });
+
     passengersLayer.addLayer(m);
   }
 
   applyFilter();
 
-  // Fit bounds
   if (bounds.length){
     const b = L.latLngBounds(bounds);
     map.fitBounds(b.pad(0.15));
@@ -171,6 +206,7 @@ function wireUI(){
   $("btnShowAll")?.addEventListener("click", () => setActiveFilter("all"));
   $("btnShowDrivers")?.addEventListener("click", () => setActiveFilter("drivers"));
   $("btnShowPassengers")?.addEventListener("click", () => setActiveFilter("passengers"));
+
   $("btnRefreshMap")?.addEventListener("click", async () => {
     await loadMasterDrivers();
     await loadMasterPassengers();
