@@ -265,54 +265,130 @@ function buildQuery({ address, localidad }){
 }
 
 async function geocodeQuery({ address, localidad, passengerId, name }){
-  const query = buildQuery({ address, localidad });
-  const url = `https://nominatim.openstreetmap.org/search?format=json&limit=3&q=${encodeURIComponent(query)}`;
+  // Normalización mínima (evita dobles espacios/comas raras)
+  const addrRaw = String(address || "").trim().replace(/\s+/g, " ");
+  const cityRaw = String(localidad || "").trim().replace(/\s+/g, " ");
 
-  geoLog({ type: "REQUEST", passengerId, name, query, url });
+  const country = "Argentina";
+  const state = "Santa Fe";
 
-  let res;
-  let text = "";
-  try{
-    res = await fetch(url, {
-      headers: { "Accept": "application/json", "Accept-Language": "es" }
+  const fullQuery = buildQuery({ address: addrRaw, localidad: cityRaw });
+
+  // helper fetch+parse with logging
+  async function fetchJson(url, meta){
+    geoLog({ type: "REQUEST", passengerId, name, query: meta.query || fullQuery, url, resultSummary: meta.note || "" });
+
+    let res, text = "";
+    try{
+      res = await fetch(url, { headers: { "Accept": "application/json", "Accept-Language": "es" }});
+      geoLog({ type: "HTTP", passengerId, name, query: meta.query || fullQuery, url, httpStatus: res.status, httpOk: res.ok, resultSummary: meta.note || "" });
+      text = await res.text();
+    }catch(e){
+      geoLog({ type: "ERROR", passengerId, name, query: meta.query || fullQuery, url, error: `fetch: ${e.message || String(e)}`, resultSummary: meta.note || "" });
+      return null;
+    }
+
+    let data = null;
+    try{
+      data = JSON.parse(text);
+    }catch(e){
+      geoLog({ type: "ERROR", passengerId, name, query: meta.query || fullQuery, url, error: `json: ${e.message || String(e)}`, resultSummary: (text || "").slice(0, 240) });
+      return null;
+    }
+
+    if (!Array.isArray(data) || !data.length) return [];
+    return data;
+  }
+
+  function pickBest(data){
+    const first = data[0] || {};
+    const lat = Number(first.lat);
+    const lon = Number(first.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+
+    return {
+      lat,
+      lng: lon,
+      query: fullQuery,
+      source: "nominatim",
+      first,
+      count: data.length
+    };
+  }
+
+  // 0) derive street parts (for structured queries)
+  const addrForStreet = addrRaw; // keep number if present
+  const addrNoNumber = addrRaw.replace(/\b\d+\w*\b/g, "").replace(/\s+/g, " ").trim(); // remove number-ish tokens
+
+  // Attempt list (in order)
+  const attempts = [
+    {
+      label: "STRUCTURED_EXACT",
+      url: `https://nominatim.openstreetmap.org/search?format=json&limit=3&street=${encodeURIComponent(addrForStreet)}&city=${encodeURIComponent(cityRaw)}&state=${encodeURIComponent(state)}&country=${encodeURIComponent(country)}`,
+      note: "structured exact",
+      query: `${addrForStreet}, ${cityRaw}, ${state}, ${country}`
+    },
+    {
+      label: "Q_EXACT",
+      url: `https://nominatim.openstreetmap.org/search?format=json&limit=3&q=${encodeURIComponent(fullQuery)}`,
+      note: "q exact",
+      query: fullQuery
+    },
+  ];
+
+  // If address has a number, add fallbacks without number
+  if (addrNoNumber && addrNoNumber !== addrRaw){
+    attempts.push(
+      {
+        label: "STRUCTURED_STREET_ONLY",
+        url: `https://nominatim.openstreetmap.org/search?format=json&limit=3&street=${encodeURIComponent(addrNoNumber)}&city=${encodeURIComponent(cityRaw)}&state=${encodeURIComponent(state)}&country=${encodeURIComponent(country)}`,
+        note: "structured street-only",
+        query: `${addrNoNumber}, ${cityRaw}, ${state}, ${country}`
+      },
+      {
+        label: "Q_STREET_ONLY",
+        url: `https://nominatim.openstreetmap.org/search?format=json&limit=3&q=${encodeURIComponent([addrNoNumber, cityRaw, state, country].filter(Boolean).join(", "))}`,
+        note: "q street-only",
+        query: [addrNoNumber, cityRaw, state, country].filter(Boolean).join(", ")
+      }
+    );
+  }
+
+  // Run attempts
+  for (let i=0; i<attempts.length; i++){
+    const a = attempts[i];
+    const data = await fetchJson(a.url, { query: a.query, note: a.note + ` (${a.label})` });
+    if (data === null) continue;
+
+    if (!data.length){
+      geoLog({ type: "NO_RESULT", passengerId, name, query: a.query, url: a.url, resultSummary: `[] (${a.label})` });
+      continue;
+    }
+
+    const picked = pickBest(data);
+    geoLog({
+      type: "RESULT",
+      passengerId, name,
+      query: a.query,
+      url: a.url,
+      resultSummary: `count=${data.length} | first.display_name=${(data[0]?.display_name||"").slice(0,120)} | lat=${data[0]?.lat} lon=${data[0]?.lon} (${a.label})`
     });
-    geoLog({ type: "HTTP", passengerId, name, query, url, httpStatus: res.status, httpOk: res.ok });
-    text = await res.text();
-  }catch(e){
-    geoLog({ type: "ERROR", passengerId, name, query, url, error: `fetch: ${e.message || String(e)}` });
-    return null;
+
+    if (!picked){
+      geoLog({ type: "ERROR", passengerId, name, query: a.query, url: a.url, error: `coords inválidas (${a.label})`, resultSummary: JSON.stringify(data[0]||{}).slice(0,240) });
+      continue;
+    }
+
+    if (i > 0){
+      geoLog({ type: "FALLBACK_USED", passengerId, name, query: a.query, url: a.url, resultSummary: `used ${a.label}` });
+    }
+
+    return { ...picked, query: a.query, usedAttempt: a.label };
   }
 
-  let data = null;
-  try{
-    data = JSON.parse(text);
-  }catch(e){
-    geoLog({ type: "ERROR", passengerId, name, query, url, error: `json: ${e.message || String(e)}`, resultSummary: (text || "").slice(0, 240) });
-    return null;
-  }
-
-  if (!Array.isArray(data) || !data.length){
-    geoLog({ type: "NO_RESULT", passengerId, name, query, url, resultSummary: Array.isArray(data) ? "[]" : `type:${typeof data}` });
-    return null;
-  }
-
-  const first = data[0] || {};
-  const lat = Number(first.lat);
-  const lon = Number(first.lon);
-
-  geoLog({
-    type: "RESULT",
-    passengerId, name, query, url,
-    resultSummary: `count=${data.length} | first.display_name=${(first.display_name||"").slice(0,120)} | lat=${first.lat} lon=${first.lon}`
-  });
-
-  if (!Number.isFinite(lat) || !Number.isFinite(lon)){
-    geoLog({ type: "ERROR", passengerId, name, query, url, error: "coords inválidas", resultSummary: JSON.stringify(first).slice(0, 240) });
-    return null;
-  }
-
-  return { lat, lng: lon, query, source: "nominatim", first };
+  return null;
 }
+
 
 async function geocodePassengerIfNeeded(payload, { force=false, passengerId=null, passengerName="" } = {}){
   const has = Number.isFinite(Number(payload.lat)) && Number.isFinite(Number(payload.lng));
