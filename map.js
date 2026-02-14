@@ -46,8 +46,8 @@ function divEmojiIcon(emoji){
   return L.divIcon({
     className: "",
     html: `<div class="emojiIcon">${emoji}</div>`,
-    iconSize: [24, 24],
-    iconAnchor: [12, 12],
+    iconSize: [40, 40],
+    iconAnchor: [20, 20],
     popupAnchor: [0, -10]
   });
 }
