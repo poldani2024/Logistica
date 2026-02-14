@@ -113,6 +113,12 @@ function popupHtml({ title, lines }){
   `;
 }
 
+function driverNameById(driverId){
+  if (!driverId) return "";
+  const d = (STATE.master.drivers || []).find(x => x.id === driverId);
+  return d ? `${d.lastName || ""} ${d.firstName || ""}`.trim() : driverId;
+}
+
 function rebuildLayers(){
   ensureMap();
 
@@ -158,7 +164,7 @@ function rebuildLayers(){
     bounds.push(ll);
 
     const meta = p._event || {};
-    const assigned = meta.assignedDriverId ? `Asignado: <strong>${escapeHtml(meta.assignedDriverId)}</strong>` : `No asignado`;
+    const assigned = meta.assignedDriverId ? `Asignado: <strong>${escapeHtml(driverNameById(meta.assignedDriverId))}</strong>`: `No asignado`;
     const status = escapeHtml(meta.trackingStatus || meta.status || "Pendiente");
 
     const m = L.marker(ll, { icon: PASSENGER_ICON, riseOnHover: true });
