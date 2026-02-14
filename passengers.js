@@ -400,13 +400,15 @@ async function geocodeMissingPassengers(){
     const snap = await getDocs(collection(db, "passengers"));
     const list = snap.docs.map(d => ({ id:d.id, ...d.data() }));
 
+    // Tomamos TODOS los que NO tienen lat/lng válidos.
     const targets = list.filter(p => {
-      const has = Number.isFinite(Number(p.lat)) && Number.isFinite(Number(p.lng));
-      const okAddr = (p.address || "").trim() && (p.localidad || "").trim();
-      return !has && !!okAddr;
+      const lat = Number(p.lat);
+      const lng = Number(p.lng);
+      const has = Number.isFinite(lat) && Number.isFinite(lng);
+      return !has;
     });
 
-    geoLog({ type: "BULK_START", resultSummary: `targets=${targets.length}` });
+    geoLog({ type: "BULK_START", resultSummary: `targets(no-geo)=${targets.length}` });
 
     if (!targets.length){
       toast("No hay pasajeros para geocodificar");
@@ -415,27 +417,54 @@ async function geocodeMissingPassengers(){
     }
 
     let okCount = 0;
+    let skipCount = 0;
     let failCount = 0;
 
     for (const p of targets){
       const nm = `${p.lastName||""} ${p.firstName||""}`.trim() || "(sin nombre)";
-      const r = await geocodeQuery({ address: p.address, localidad: p.localidad, passengerId: p.id, name: nm });
+      const address = (p.address || "").trim();
+      const localidad = (p.localidad || "").trim();
+
+      // Si falta info mínima, lo registramos como SKIP (antes quedaba afuera y parecía “bug”)
+      if (!address || !localidad){
+        skipCount++;
+        geoLog({
+          type: "SKIP",
+          passengerId: p.id,
+          name: nm,
+          query: [address, localidad].filter(Boolean).join(", "),
+          error: `Falta ${!address && !localidad ? "dirección y localidad" : (!address ? "dirección" : "localidad")}`
+        });
+        continue;
+      }
+
+      const r = await geocodeQuery({ address, localidad, passengerId: p.id, name: nm });
       if (r){
-        await setDoc(doc(db, "passengers", p.id), { lat: r.lat, lng: r.lng, geocodeSource: r.source, geocodeQuery: r.query, geocodedAt: serverTimestamp(), updatedAt: serverTimestamp() }, { merge:true });
+        await setDoc(doc(db, "passengers", p.id), {
+          lat: r.lat,
+          lng: r.lng,
+          geocodeSource: r.source,
+          geocodeQuery: r.query,
+          geocodedAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        }, { merge:true });
+
         okCount++;
         geoLog({ type: "SAVE_OK", passengerId: p.id, name: nm, resultSummary: `lat=${r.lat} lng=${r.lng}` });
       } else {
         failCount++;
-        geoLog({ type: "SAVE_SKIP", passengerId: p.id, name: nm, error: "Sin resultado / error (ver entradas previas)" });
+        geoLog({ type: "SAVE_FAIL", passengerId: p.id, name: nm, error: "Sin resultado / error (ver entradas previas)" });
       }
+
+      // Rate limit Nominatim
       await sleep(1100);
     }
 
-    geoLog({ type: "BULK_DONE", resultSummary: `ok=${okCount} fail=${failCount}` });
+    geoLog({ type: "BULK_DONE", resultSummary: `ok=${okCount} skip=${skipCount} fail=${failCount}` });
 
     await loadMasterPassengers();
     renderAll();
-    toast(`Geocodificados: ${okCount}/${targets.length}`);
+    toast(`Geocodificados: ${okCount} · Saltados: ${skipCount} · Fallidos: ${failCount}`);
     document.getElementById("geoLogDetails")?.setAttribute("open", "open");
     renderGeoLog();
   }catch(e){
@@ -444,6 +473,7 @@ async function geocodeMissingPassengers(){
     toast(e.message || String(e));
   }
 }
+
 
 /* ---------------------------
    init
