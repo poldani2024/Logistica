@@ -87,3 +87,34 @@ export async function saveDriverPhase(driverId, phaseId, enabled){
   const ref = doc(db,"events",STATE.event.id,"eventDrivers",driverId);
   await setDoc(ref,{ phases:{ [phaseId]:enabled }, updatedAt:serverTimestamp() },{merge:true});
 }
+// ===== MASTER DATA =====
+
+export async function loadMasterDrivers(){
+  const snap = await getDocs(
+    query(collection(db, "drivers"), orderBy("lastName"))
+  );
+
+  const arr = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  arr.sort((a,b) =>
+    `${a.lastName||""} ${a.firstName||""}`
+      .localeCompare(`${b.lastName||""} ${b.firstName||""}`)
+  );
+
+  STATE.master.drivers = arr;
+  return arr;
+}
+
+export async function loadMasterPassengers(){
+  const snap = await getDocs(
+    query(collection(db, "passengers"), orderBy("lastName"))
+  );
+
+  const arr = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  arr.sort((a,b) =>
+    `${a.lastName||""} ${a.firstName||""}`
+      .localeCompare(`${b.lastName||""} ${b.firstName||""}`)
+  );
+
+  STATE.master.passengers = arr;
+  return arr;
+}
