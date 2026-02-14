@@ -83,6 +83,12 @@ function fullName(x){
   return `${x.lastName||""} ${x.firstName||""}`.trim() || "(sin nombre)";
 }
 
+function driverNameById(driverId){
+  if (!driverId) return "";
+  const d = (STATE.master.drivers || []).find(x => x.id === driverId);
+  return d ? `${d.lastName||""} ${d.firstName||""}`.trim() : driverId;
+}
+
 function renderStats({driversShown, passengersShown, driversTotal, passengersTotal, missingDrivers, missingPassengers}){
   const el = $("mapStats");
   if (!el) return;
@@ -111,12 +117,6 @@ function popupHtml({ title, lines }){
       ${safeLines}
     </div>
   `;
-}
-
-function driverNameById(driverId){
-  if (!driverId) return "";
-  const d = (STATE.master.drivers || []).find(x => x.id === driverId);
-  return d ? `${d.lastName || ""} ${d.firstName || ""}`.trim() : driverId;
 }
 
 function rebuildLayers(){
@@ -164,7 +164,9 @@ function rebuildLayers(){
     bounds.push(ll);
 
     const meta = p._event || {};
-    const assigned = meta.assignedDriverId ? `Asignado: <strong>${escapeHtml(driverNameById(meta.assignedDriverId))}</strong>`: `No asignado`;
+    const phaseId = (STATE.event?.activePhaseId || "ida");
+    const assignedId = (meta.assigned && meta.assigned[phaseId]) ? meta.assigned[phaseId] : (phaseId==="ida" ? (meta.assignedDriverId||"") : "");
+    const assigned = assignedId ? `Asignado: <strong>${escapeHtml(driverNameById(assignedId))}</strong>` : `No asignado`;
     const status = escapeHtml(meta.trackingStatus || meta.status || "Pendiente");
 
     const m = L.marker(ll, { icon: PASSENGER_ICON, riseOnHover: true });

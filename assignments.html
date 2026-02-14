@@ -6,58 +6,32 @@
   <title>Asignaciones · Gestión de Transporte Soka Gakkai</title>
   <link rel="stylesheet" href="./styles.css" />
   <style>
-    /* Modal simple para asignar pasajeros */
-    .modalOverlay{
-      position:fixed; inset:0;
-      background: rgba(0,0,0,.55);
-      display:none;
-      align-items:center;
-      justify-content:center;
-      padding: 18px;
-      z-index: 100;
-    }
-    .modalOverlay.show{ display:flex; }
-    .modal{
-      width:min(820px, 100%);
-      max-height: min(80vh, 720px);
-      overflow:auto;
-    }
-    .pillSmall{
-      display:inline-flex; align-items:center; gap:8px;
-      padding:6px 10px;
-      border:1px solid rgba(255,255,255,.10);
-      border-radius:999px;
-      background: rgba(255,255,255,.04);
-      color: rgba(234,241,255,.72);
-      font-size: 12px;
-      white-space: nowrap;
-    }
-    .driverHead{
-      display:flex; align-items:flex-start; justify-content:space-between; gap:12px;
-    }
-    .passRow{
-      display:flex; align-items:center; justify-content:space-between; gap:10px;
-      padding:10px 10px;
-      border:1px solid rgba(255,255,255,.08);
-      border-radius: 12px;
-      background: rgba(255,255,255,.03);
-      margin-top: 10px;
-    }
-    .passRow:first-child{ margin-top: 0; }
-    .passMeta{ display:flex; flex-direction:column; gap:2px; }
-    .passName{ font-weight: 750; }
-    .passSub{ font-size: 12px; color: rgba(234,241,255,.62); }
-    .emptyBox{
-      border:1px dashed rgba(255,255,255,.14);
-      border-radius: 14px;
-      padding: 12px;
-      color: rgba(234,241,255,.62);
-      background: rgba(255,255,255,.02);
-    }
-    @media (max-width: 620px){
-      .driverHead{ flex-direction:column; align-items:stretch; }
-      .modal{ max-height: 82vh; }
-    }
+    .phasebar{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:10px; }
+    .chip{ border:1px solid rgba(255,255,255,.16); background: rgba(0,0,0,.18); color: rgba(234,241,255,.9);
+      padding:8px 12px; border-radius: 999px; cursor:pointer; user-select:none; font-weight:800; }
+    .chip.active{ background: rgba(255,255,255,.16); border-color: rgba(255,255,255,.24); }
+    .grid3{ display:grid; grid-template-columns: 1fr 1.2fr; gap:16px; align-items:start; }
+    @media (max-width: 980px){ .grid3{ grid-template-columns: 1fr; } }
+    .list{ display:flex; flex-direction:column; gap:10px; }
+    .driverCard{ padding:14px; border-radius:16px; border:1px solid rgba(255,255,255,.10); background: rgba(0,0,0,.18); cursor:pointer; }
+    .driverCard.active{ outline:2px solid rgba(255,255,255,.35); background: rgba(0,0,0,.24); }
+    .kpi{ display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
+    .badge{ padding:6px 10px; border-radius:999px; border:1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.08); font-weight:800; font-size:12px; }
+    .passCard{ padding:14px; border-radius:16px; border:1px solid rgba(255,255,255,.10); background: rgba(0,0,0,.18); }
+    .rowBetween{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+    .muted2{ color: rgba(234,241,255,.72); font-size:12px; }
+    .btnSm{ padding:8px 10px; border-radius:12px; font-weight:900; }
+    .seg{ display:flex; gap:8px; flex-wrap:wrap; }
+    .seg .chip{ font-weight:800; padding:7px 10px; }
+    .rightTop{ display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+    .emptyBox{ padding:14px; border-radius:16px; border:1px dashed rgba(255,255,255,.18); color: rgba(234,241,255,.78); background: rgba(0,0,0,.12); }
+    .modal{ position:fixed; inset:0; display:none; align-items:center; justify-content:center; padding:16px; background: rgba(0,0,0,.55); z-index:9999; }
+    .modal.show{ display:flex; }
+    .modalCard{ width:min(720px, 96vw); border-radius:18px; border:1px solid rgba(255,255,255,.12); background: rgba(12,16,24,.96); padding:16px; }
+    .modalGrid{ display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+    @media (max-width: 720px){ .modalGrid{ grid-template-columns:1fr; } }
+    .field{ display:flex; flex-direction:column; gap:6px; }
+    .field input{ width:100%; }
   </style>
 </head>
 <body>
@@ -89,40 +63,78 @@
 </header>
 
 <main class="container">
-  <div class="rowBetween" style="margin-bottom:12px;">
-    <div>
-      <h2 style="margin:0;">Asignaciones</h2>
-      <div class="subtitle">Asigná pasajeros desde cada chofer (más ágil)</div>
-    </div>
-    <div class="row">
-      <button class="btn" id="btnReloadContext" title="Recargar">↻</button>
-    </div>
-  </div>
-
-  <div class="cards-list" id="driversBoard"></div>
-</main>
-
-<!-- Modal: agregar pasajero a chofer -->
-<div class="modalOverlay" id="assignModal">
-  <div class="card modal">
+  <section class="card">
     <div class="rowBetween">
       <div>
-        <div class="cardTitle" id="modalTitle">Agregar pasajero</div>
-        <div class="subtitle" id="modalSub">Seleccioná un pasajero pendiente…</div>
+        <div class="cardTitle">Asignaciones</div>
+        <div class="subtitle">Asignar chofer ↔ pasajero por <strong>fase</strong> (Ida/Vuelta/…)</div>
       </div>
-      <button class="btn" id="btnCloseModal">Cerrar</button>
+      <div class="row" style="gap:10px; flex-wrap:wrap;">
+        <button class="btn" id="btnRefresh">↻ Actualizar</button>
+        <button class="btn" id="btnCopyIdaVuelta" title="Copiar asignaciones de Ida a Vuelta (solo donde Vuelta está vacía)">⇢ Copiar Ida→Vuelta</button>
+        <button class="btn" id="btnManagePhases" title="Editar fases del evento (Admin)">⚙ Fases</button>
+      </div>
     </div>
 
-    <div class="row" style="margin-top:12px;">
-      <input id="modalSearch" placeholder="Buscar pasajero por nombre / teléfono / dirección…" />
-    </div>
+    <div class="phasebar" id="phaseBar"></div>
 
-    <div style="margin-top:12px;" id="modalList"></div>
-  </div>
-</div>
+    <div class="grid3" style="margin-top:14px;">
+      <div class="card" style="padding:14px;">
+        <div class="rightTop">
+          <div>
+            <div style="font-weight:900;">Choferes</div>
+            <div class="muted2">Tocá un chofer para activarlo y asignar rápido</div>
+          </div>
+          <div class="badge" id="activeDriverBadge">Chofer activo: —</div>
+        </div>
+        <div class="list" id="driversList" style="margin-top:12px;"></div>
+      </div>
+
+      <div class="card" style="padding:14px;">
+        <div class="rightTop">
+          <div>
+            <div style="font-weight:900;">Pasajeros</div>
+            <div class="muted2">Mostrando asignación en la fase seleccionada</div>
+          </div>
+          <div class="seg" id="passFilter">
+            <div class="chip active" data-filter="pending">Pendientes</div>
+            <div class="chip" data-filter="assigned">Asignados</div>
+            <div class="chip" data-filter="all">Todos</div>
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:10px;">
+          <input id="passSearch" placeholder="Buscar pasajero..." />
+        </div>
+
+        <div class="list" id="passengersList" style="margin-top:12px;"></div>
+      </div>
+    </div>
+  </section>
+</main>
 
 <div class="toast" id="toast"></div>
 
-<script type="module" src="./assignments.js"></script>
+<!-- Modal fases -->
+<div class="modal" id="phasesModal">
+  <div class="modalCard">
+    <div class="rowBetween">
+      <div>
+        <div style="font-weight:900; font-size:16px;">Fases del evento</div>
+        <div class="muted2">Admin: definí el orden y el nombre. Guardar actualiza el evento.</div>
+      </div>
+      <button class="btnDanger" id="btnClosePhases">Cerrar</button>
+    </div>
+
+    <div id="phasesEditor" style="margin-top:12px;"></div>
+
+    <div class="row" style="margin-top:12px; gap:10px; flex-wrap:wrap;">
+      <button class="btn" id="btnAddPhase">+ Agregar fase</button>
+      <button class="btnPrimary primary" id="btnSavePhases">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="./assignments.js?v=phase1"></script>
 </body>
 </html>
