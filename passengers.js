@@ -265,26 +265,27 @@ function buildQuery({ address, localidad }){
 }
 
 async function geocodeQuery({ address, localidad, passengerId, name }){
-  // Normalización mínima (evita dobles espacios/comas raras)
+  // Normalización mínima
   const addrRaw = String(address || "").trim().replace(/\s+/g, " ");
   const cityRaw = String(localidad || "").trim().replace(/\s+/g, " ");
 
   const country = "Argentina";
   const state = "Santa Fe";
 
-  const fullQuery = buildQuery({ address: addrRaw, localidad: cityRaw });
+  const fullWithState = [addrRaw, cityRaw, state, country].filter(Boolean).join(", ");
+  const fullNoState   = [addrRaw, cityRaw, country].filter(Boolean).join(", ");
 
   // helper fetch+parse with logging
   async function fetchJson(url, meta){
-    geoLog({ type: "REQUEST", passengerId, name, query: meta.query || fullQuery, url, resultSummary: meta.note || "" });
+    geoLog({ type: "REQUEST", passengerId, name, query: meta.query, url, resultSummary: meta.note || "" });
 
     let res, text = "";
     try{
       res = await fetch(url, { headers: { "Accept": "application/json", "Accept-Language": "es" }});
-      geoLog({ type: "HTTP", passengerId, name, query: meta.query || fullQuery, url, httpStatus: res.status, httpOk: res.ok, resultSummary: meta.note || "" });
+      geoLog({ type: "HTTP", passengerId, name, query: meta.query, url, httpStatus: res.status, httpOk: res.ok, resultSummary: meta.note || "" });
       text = await res.text();
     }catch(e){
-      geoLog({ type: "ERROR", passengerId, name, query: meta.query || fullQuery, url, error: `fetch: ${e.message || String(e)}`, resultSummary: meta.note || "" });
+      geoLog({ type: "ERROR", passengerId, name, query: meta.query, url, error: `fetch: ${e.message || String(e)}`, resultSummary: meta.note || "" });
       return null;
     }
 
@@ -292,7 +293,7 @@ async function geocodeQuery({ address, localidad, passengerId, name }){
     try{
       data = JSON.parse(text);
     }catch(e){
-      geoLog({ type: "ERROR", passengerId, name, query: meta.query || fullQuery, url, error: `json: ${e.message || String(e)}`, resultSummary: (text || "").slice(0, 240) });
+      geoLog({ type: "ERROR", passengerId, name, query: meta.query, url, error: `json: ${e.message || String(e)}`, resultSummary: (text || "").slice(0, 240) });
       return null;
     }
 
@@ -305,59 +306,78 @@ async function geocodeQuery({ address, localidad, passengerId, name }){
     const lat = Number(first.lat);
     const lon = Number(first.lon);
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
-
-    return {
-      lat,
-      lng: lon,
-      query: fullQuery,
-      source: "nominatim",
-      first,
-      count: data.length
-    };
+    return { lat, lng: lon, source: "nominatim", first, count: data.length };
   }
 
-  // 0) derive street parts (for structured queries)
-  const addrForStreet = addrRaw; // keep number if present
-  const addrNoNumber = addrRaw.replace(/\b\d+\w*\b/g, "").replace(/\s+/g, " ").trim(); // remove number-ish tokens
+  // street-only fallback
+  const addrNoNumber = addrRaw.replace(/\b\d+\w*\b/g, "").replace(/\s+/g, " ").trim();
+  const streetOnlyWithState = [addrNoNumber, cityRaw, state, country].filter(Boolean).join(", ");
+  const streetOnlyNoState   = [addrNoNumber, cityRaw, country].filter(Boolean).join(", ");
 
-  // Attempt list (in order)
+  // Attempts order requested:
   const attempts = [
+    // WITH state
     {
-      label: "STRUCTURED_EXACT",
-      url: `https://nominatim.openstreetmap.org/search?format=json&limit=3&street=${encodeURIComponent(addrForStreet)}&city=${encodeURIComponent(cityRaw)}&state=${encodeURIComponent(state)}&country=${encodeURIComponent(country)}`,
-      note: "structured exact",
-      query: `${addrForStreet}, ${cityRaw}, ${state}, ${country}`
+      label: "STRUCTURED_WITH_STATE",
+      url: `https://nominatim.openstreetmap.org/search?format=json&limit=3&street=${encodeURIComponent(addrRaw)}&city=${encodeURIComponent(cityRaw)}&state=${encodeURIComponent(state)}&country=${encodeURIComponent(country)}`,
+      query: fullWithState,
+      note: "structured with state"
     },
     {
-      label: "Q_EXACT",
-      url: `https://nominatim.openstreetmap.org/search?format=json&limit=3&q=${encodeURIComponent(fullQuery)}`,
-      note: "q exact",
-      query: fullQuery
+      label: "Q_WITH_STATE",
+      url: `https://nominatim.openstreetmap.org/search?format=json&limit=3&q=${encodeURIComponent(fullWithState)}`,
+      query: fullWithState,
+      note: "q with state"
+    },
+    // WITHOUT state
+    {
+      label: "STRUCTURED_NO_STATE",
+      url: `https://nominatim.openstreetmap.org/search?format=json&limit=3&street=${encodeURIComponent(addrRaw)}&city=${encodeURIComponent(cityRaw)}&country=${encodeURIComponent(country)}`,
+      query: fullNoState,
+      note: "structured no state"
+    },
+    {
+      label: "Q_NO_STATE",
+      url: `https://nominatim.openstreetmap.org/search?format=json&limit=3&q=${encodeURIComponent(fullNoState)}`,
+      query: fullNoState,
+      note: "q no state"
     },
   ];
 
-  // If address has a number, add fallbacks without number
   if (addrNoNumber && addrNoNumber !== addrRaw){
     attempts.push(
+      // street-only WITH state
       {
-        label: "STRUCTURED_STREET_ONLY",
+        label: "STRUCTURED_STREET_ONLY_WITH_STATE",
         url: `https://nominatim.openstreetmap.org/search?format=json&limit=3&street=${encodeURIComponent(addrNoNumber)}&city=${encodeURIComponent(cityRaw)}&state=${encodeURIComponent(state)}&country=${encodeURIComponent(country)}`,
-        note: "structured street-only",
-        query: `${addrNoNumber}, ${cityRaw}, ${state}, ${country}`
+        query: streetOnlyWithState,
+        note: "street-only structured with state"
       },
       {
-        label: "Q_STREET_ONLY",
-        url: `https://nominatim.openstreetmap.org/search?format=json&limit=3&q=${encodeURIComponent([addrNoNumber, cityRaw, state, country].filter(Boolean).join(", "))}`,
-        note: "q street-only",
-        query: [addrNoNumber, cityRaw, state, country].filter(Boolean).join(", ")
+        label: "Q_STREET_ONLY_WITH_STATE",
+        url: `https://nominatim.openstreetmap.org/search?format=json&limit=3&q=${encodeURIComponent(streetOnlyWithState)}`,
+        query: streetOnlyWithState,
+        note: "street-only q with state"
+      },
+      // street-only WITHOUT state
+      {
+        label: "STRUCTURED_STREET_ONLY_NO_STATE",
+        url: `https://nominatim.openstreetmap.org/search?format=json&limit=3&street=${encodeURIComponent(addrNoNumber)}&city=${encodeURIComponent(cityRaw)}&country=${encodeURIComponent(country)}`,
+        query: streetOnlyNoState,
+        note: "street-only structured no state"
+      },
+      {
+        label: "Q_STREET_ONLY_NO_STATE",
+        url: `https://nominatim.openstreetmap.org/search?format=json&limit=3&q=${encodeURIComponent(streetOnlyNoState)}`,
+        query: streetOnlyNoState,
+        note: "street-only q no state"
       }
     );
   }
 
-  // Run attempts
   for (let i=0; i<attempts.length; i++){
     const a = attempts[i];
-    const data = await fetchJson(a.url, { query: a.query, note: a.note + ` (${a.label})` });
+    const data = await fetchJson(a.url, { query: a.query, note: `${a.note} (${a.label})` });
     if (data === null) continue;
 
     if (!data.length){
@@ -365,7 +385,6 @@ async function geocodeQuery({ address, localidad, passengerId, name }){
       continue;
     }
 
-    const picked = pickBest(data);
     geoLog({
       type: "RESULT",
       passengerId, name,
@@ -374,6 +393,7 @@ async function geocodeQuery({ address, localidad, passengerId, name }){
       resultSummary: `count=${data.length} | first.display_name=${(data[0]?.display_name||"").slice(0,120)} | lat=${data[0]?.lat} lon=${data[0]?.lon} (${a.label})`
     });
 
+    const picked = pickBest(data);
     if (!picked){
       geoLog({ type: "ERROR", passengerId, name, query: a.query, url: a.url, error: `coords inválidas (${a.label})`, resultSummary: JSON.stringify(data[0]||{}).slice(0,240) });
       continue;
