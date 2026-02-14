@@ -53,31 +53,50 @@ export function getSelectedEventId(){
 }
 
 export function setSelectedEventId(id){
-  localStorage.setItem("eventId", id || "");
+  if (id) localStorage.setItem("eventId", id);
+else localStorage.removeItem("eventId");
   STATE.event.id = id || null;
 }
 
 export async function loadEventContext(eventId){
-  STATE.event.id = eventId;
+  const id = (eventId || getSelectedEventId() || "").trim();
+
+  if (!id){
+    console.warn("⛔ loadEventContext abortado: eventId inválido", eventId);
+    return;
+  }
+
+  STATE.event.id = id;
+
   STATE.event.driverPhases.clear();
   STATE.event.passengersMeta.clear();
   STATE.event.assignments.clear();
 
-  const ev = STATE.events.find(e=>e.id===eventId);
+  const ev = STATE.events.find(e => e.id === id);
   STATE.event.phases = ev?.phases || [];
+
   if (!STATE.ui.activePhase && STATE.event.phases.length){
     STATE.ui.activePhase = STATE.event.phases[0].id;
   }
 
-  const dSnap = await getDocs(collection(db,"events",eventId,"eventDrivers"));
-  dSnap.forEach(d=>STATE.event.driverPhases.set(d.id, d.data().phases||{}));
+  console.log("✅ loadEventContext usando eventId =", id);
 
-  const pSnap = await getDocs(collection(db,"events",eventId,"eventPassengers"));
-  pSnap.forEach(p=>STATE.event.passengersMeta.set(p.id, p.data()));
+  const dSnap = await getDocs(collection(db,"events", id, "eventDrivers"));
+  dSnap.forEach(d =>
+    STATE.event.driverPhases.set(d.id, d.data().phases || {})
+  );
 
-  const aSnap = await getDocs(collection(db,"events",eventId,"assignments"));
-  aSnap.forEach(a=>STATE.event.assignments.set(a.id, a.data()));
+  const pSnap = await getDocs(collection(db,"events", id, "eventPassengers"));
+  pSnap.forEach(p =>
+    STATE.event.passengersMeta.set(p.id, p.data())
+  );
+
+  const aSnap = await getDocs(collection(db,"events", id, "assignments"));
+  aSnap.forEach(a =>
+    STATE.event.assignments.set(a.id, a.data())
+  );
 }
+
 
 export function driversForPhase(phaseId){
   return STATE.master.drivers.filter(d=>STATE.event.driverPhases.get(d.id)?.[phaseId]);
