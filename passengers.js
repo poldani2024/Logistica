@@ -15,6 +15,75 @@ import {
   getDocs
 } from "https://www.gstatic.com/firebasejs/10.7.2/firebase-firestore.js";
 
+/* ---------------------------
+   GEO LOG (UI + persistence)
+----------------------------*/
+const GEO_LOG_KEY = "geoLogPassengers";
+let GEO_LOG = [];
+
+function loadGeoLog(){
+  try{
+    const raw = localStorage.getItem(GEO_LOG_KEY);
+    GEO_LOG = raw ? (JSON.parse(raw) || []) : [];
+  }catch{ GEO_LOG = []; }
+}
+function saveGeoLog(){
+  try{
+    localStorage.setItem(GEO_LOG_KEY, JSON.stringify(GEO_LOG.slice(-200)));
+  }catch{}
+}
+function geoLog(entry){
+  const row = { at: new Date().toISOString(), ...entry };
+  GEO_LOG.push(row);
+  GEO_LOG = GEO_LOG.slice(-200);
+  saveGeoLog();
+  console.info("[GEO]", row);
+  renderGeoLog();
+}
+function renderGeoLog(){
+  const box = document.getElementById("geoLogBox");
+  if (!box) return;
+  if (!GEO_LOG.length){
+    box.textContent = "(sin logs todavía)";
+    return;
+  }
+  const lines = GEO_LOG.slice(-80).map(l => {
+    const who = l.name ? ` | ${l.name}` : "";
+    const pid = l.passengerId ? ` | id:${l.passengerId}` : "";
+    const q = l.query ? `\n  query: ${l.query}` : "";
+    const url = l.url ? `\n  url: ${l.url}` : "";
+    const http = (l.httpStatus != null) ? `\n  http: ${l.httpStatus}${l.httpOk===false ? " (not ok)" : ""}` : "";
+    const resp = (l.resultSummary != null) ? `\n  result: ${l.resultSummary}` : "";
+    const err = l.error ? `\n  error: ${l.error}` : "";
+    return `${l.at} | ${l.type}${who}${pid}${q}${url}${http}${resp}${err}`;
+  });
+  box.textContent = lines.join("\n\n");
+}
+function wireGeoLogButtons(){
+  document.getElementById("btnClearGeoLog")?.addEventListener("click", () => {
+    const ok = confirm("¿Limpiar el log de geolocalización?");
+    if (!ok) return;
+    GEO_LOG = [];
+    saveGeoLog();
+    renderGeoLog();
+    toast("Log limpiado");
+  });
+
+  document.getElementById("btnCopyGeoLog")?.addEventListener("click", async () => {
+    try{
+      const txt = document.getElementById("geoLogBox")?.textContent || "";
+      await navigator.clipboard.writeText(txt);
+      toast("Log copiado");
+    }catch(e){
+      console.error(e);
+      toast("No se pudo copiar (permiso del navegador)");
+    }
+  });
+}
+
+/* ---------------------------
+   UI / CRUD
+----------------------------*/
 function fullName(p){ return `${p.lastName||""} ${p.firstName||""}`.trim() || "(sin nombre)"; }
 
 let currentPassengerId = null;
@@ -142,9 +211,9 @@ function wireFormButtons({ isNew }){
   $("btnSavePassenger")?.addEventListener("click", savePassenger);
   $("btnGeocodeOne")?.addEventListener("click", async () => {
     try{
-      const payload = getPayloadFromForm();
-      const upd = await geocodePassengerIfNeeded(payload, { force:true });
-      // pintar en inputs
+      const base = getPayloadFromForm();
+      const nm = `${base.lastName||""} ${base.firstName||""}`.trim();
+      const upd = await geocodePassengerIfNeeded(base, { force:true, passengerId: currentPassengerId, passengerName: nm || base.firstName || base.lastName });
       if (upd && (upd.lat != null) && (upd.lng != null)){
         $("p_lat").value = String(upd.lat);
         $("p_lng").value = String(upd.lng);
@@ -152,8 +221,10 @@ function wireFormButtons({ isNew }){
       } else {
         toast("No se pudo geolocalizar (revisá dirección/localidad)");
       }
+      document.getElementById("geoLogDetails")?.setAttribute("open", "open");
     }catch(e){
       console.error(e);
+      geoLog({ type:"ERROR", passengerId: currentPassengerId, name:"(detalle)", error: e.message || String(e) });
       toast(e.message || String(e));
     }
   });
@@ -186,48 +257,84 @@ function getPayloadFromForm(){
 
 function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
 
-async function geocodeQuery({ address, localidad }){
-  const q = [address, localidad, "Santa Fe", "Argentina"].filter(Boolean).join(", ");
-  const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`;
-
-  // Nominatim pide rate-limit y uso responsable.
-  const res = await fetch(url, {
-    headers: {
-      "Accept": "application/json",
-      "Accept-Language": "es"
-    }
-  });
-  if (!res.ok) throw new Error("Geocoding: respuesta no OK");
-  const data = await res.json();
-  if (!Array.isArray(data) || !data.length) return null;
-
-  const lat = Number(data[0].lat);
-  const lon = Number(data[0].lon);
-  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
-
-  return { lat, lng: lon, query: q, source: "nominatim" };
+/* ---------------------------
+   GEOCODING (Nominatim)
+----------------------------*/
+function buildQuery({ address, localidad }){
+  return [address, localidad, "Santa Fe", "Argentina"].filter(Boolean).join(", ");
 }
 
-async function geocodePassengerIfNeeded(payload, { force=false } = {}){
+async function geocodeQuery({ address, localidad, passengerId, name }){
+  const query = buildQuery({ address, localidad });
+  const url = `https://nominatim.openstreetmap.org/search?format=json&limit=3&q=${encodeURIComponent(query)}`;
+
+  geoLog({ type: "REQUEST", passengerId, name, query, url });
+
+  let res;
+  let text = "";
+  try{
+    res = await fetch(url, {
+      headers: { "Accept": "application/json", "Accept-Language": "es" }
+    });
+    geoLog({ type: "HTTP", passengerId, name, query, url, httpStatus: res.status, httpOk: res.ok });
+    text = await res.text();
+  }catch(e){
+    geoLog({ type: "ERROR", passengerId, name, query, url, error: `fetch: ${e.message || String(e)}` });
+    return null;
+  }
+
+  let data = null;
+  try{
+    data = JSON.parse(text);
+  }catch(e){
+    geoLog({ type: "ERROR", passengerId, name, query, url, error: `json: ${e.message || String(e)}`, resultSummary: (text || "").slice(0, 240) });
+    return null;
+  }
+
+  if (!Array.isArray(data) || !data.length){
+    geoLog({ type: "NO_RESULT", passengerId, name, query, url, resultSummary: Array.isArray(data) ? "[]" : `type:${typeof data}` });
+    return null;
+  }
+
+  const first = data[0] || {};
+  const lat = Number(first.lat);
+  const lon = Number(first.lon);
+
+  geoLog({
+    type: "RESULT",
+    passengerId, name, query, url,
+    resultSummary: `count=${data.length} | first.display_name=${(first.display_name||"").slice(0,120)} | lat=${first.lat} lon=${first.lon}`
+  });
+
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)){
+    geoLog({ type: "ERROR", passengerId, name, query, url, error: "coords inválidas", resultSummary: JSON.stringify(first).slice(0, 240) });
+    return null;
+  }
+
+  return { lat, lng: lon, query, source: "nominatim", first };
+}
+
+async function geocodePassengerIfNeeded(payload, { force=false, passengerId=null, passengerName="" } = {}){
   const has = Number.isFinite(Number(payload.lat)) && Number.isFinite(Number(payload.lng));
   if (has && !force) return null;
 
   const address = (payload.address || "").trim();
   const localidad = (payload.localidad || "").trim();
-  if (!address || !localidad) return null;
 
-  const r = await geocodeQuery({ address, localidad });
+  if (!address || !localidad){
+    geoLog({ type: "SKIP", passengerId, name: passengerName, query: buildQuery({ address, localidad }), error: "Falta dirección o localidad" });
+    return null;
+  }
+
+  const r = await geocodeQuery({ address, localidad, passengerId, name: passengerName });
   if (!r) return null;
 
-  return {
-    lat: r.lat,
-    lng: r.lng,
-    geocodeSource: r.source,
-    geocodeQuery: r.query,
-    geocodedAt: serverTimestamp()
-  };
+  return { lat: r.lat, lng: r.lng, geocodeSource: r.source, geocodeQuery: r.query, geocodedAt: serverTimestamp() };
 }
 
+/* ---------------------------
+   Save / Delete + bulk geocode
+----------------------------*/
 async function savePassenger(){
   try{
     if (!isAdmin()) throw new Error("Solo Admin");
@@ -235,22 +342,15 @@ async function savePassenger(){
     const base = getPayloadFromForm();
     if (!base.firstName && !base.lastName) throw new Error("Poné nombre o apellido");
 
-    // Auto-geolocalizar si faltan coords y hay dirección+localidad
-    let geo = await geocodePassengerIfNeeded(base, { force:false });
-    // Rate-limit friendly (si geocodificó)
+    const nm = `${base.lastName||""} ${base.firstName||""}`.trim() || base.firstName || base.lastName || "(sin nombre)";
+
+    const geo = await geocodePassengerIfNeeded(base, { force:false, passengerId: currentPassengerId, passengerName: nm });
     if (geo) await sleep(1100);
 
-    const payload = {
-      ...base,
-      ...(geo ? { lat: geo.lat, lng: geo.lng, geocodeSource: geo.geocodeSource, geocodeQuery: geo.geocodeQuery, geocodedAt: geo.geocodedAt } : {}),
-      updatedAt: serverTimestamp()
-    };
+    const payload = { ...base, ...(geo ? { lat: geo.lat, lng: geo.lng, geocodeSource: geo.geocodeSource, geocodeQuery: geo.geocodeQuery, geocodedAt: geo.geocodedAt } : {}), updatedAt: serverTimestamp() };
 
     if (!currentPassengerId){
-      const ref = await addDoc(collection(db, "passengers"), {
-        ...payload,
-        createdAt: serverTimestamp()
-      });
+      const ref = await addDoc(collection(db, "passengers"), { ...payload, createdAt: serverTimestamp() });
       currentPassengerId = ref.id;
       toast("Pasajero creado");
     } else {
@@ -263,6 +363,7 @@ async function savePassenger(){
     openDetail(currentPassengerId);
   }catch(e){
     console.error(e);
+    geoLog({ type:"ERROR", passengerId: currentPassengerId, name:"(save)", error: e.message || String(e) });
     toast(e.message || String(e));
   }
 }
@@ -286,65 +387,75 @@ async function deleteCurrent(){
     $("btnDeletePassenger").style.display = "none";
   }catch(e){
     console.error(e);
+    geoLog({ type:"ERROR", passengerId: currentPassengerId, name:"(delete)", error: e.message || String(e) });
     toast(e.message || String(e));
   }
 }
 
-// Geocodificar SOLO los que no tienen lat/lng (master)
 async function geocodeMissingPassengers(){
   try{
     if (!isAdmin()) throw new Error("Solo Admin");
     toast("Geocodificando faltantes…");
 
-    // Releer colección para asegurar datos completos (y no cache viejo)
-    // (igual podrías usar STATE.master.passengers)
     const snap = await getDocs(collection(db, "passengers"));
     const list = snap.docs.map(d => ({ id:d.id, ...d.data() }));
 
     const targets = list.filter(p => {
-      const lat = Number(p.lat);
-      const lng = Number(p.lng);
-      const has = Number.isFinite(lat) && Number.isFinite(lng);
+      const has = Number.isFinite(Number(p.lat)) && Number.isFinite(Number(p.lng));
       const okAddr = (p.address || "").trim() && (p.localidad || "").trim();
       return !has && !!okAddr;
     });
 
+    geoLog({ type: "BULK_START", resultSummary: `targets=${targets.length}` });
+
     if (!targets.length){
       toast("No hay pasajeros para geocodificar");
+      geoLog({ type: "BULK_DONE", resultSummary: "0 (sin targets)" });
       return;
     }
 
-    let done = 0;
+    let okCount = 0;
+    let failCount = 0;
+
     for (const p of targets){
-      const r = await geocodeQuery({ address: p.address, localidad: p.localidad });
+      const nm = `${p.lastName||""} ${p.firstName||""}`.trim() || "(sin nombre)";
+      const r = await geocodeQuery({ address: p.address, localidad: p.localidad, passengerId: p.id, name: nm });
       if (r){
-        await setDoc(doc(db, "passengers", p.id), {
-          lat: r.lat,
-          lng: r.lng,
-          geocodeSource: r.source,
-          geocodeQuery: r.query,
-          geocodedAt: serverTimestamp(),
-          updatedAt: serverTimestamp()
-        }, { merge:true });
-        done++;
+        await setDoc(doc(db, "passengers", p.id), { lat: r.lat, lng: r.lng, geocodeSource: r.source, geocodeQuery: r.query, geocodedAt: serverTimestamp(), updatedAt: serverTimestamp() }, { merge:true });
+        okCount++;
+        geoLog({ type: "SAVE_OK", passengerId: p.id, name: nm, resultSummary: `lat=${r.lat} lng=${r.lng}` });
+      } else {
+        failCount++;
+        geoLog({ type: "SAVE_SKIP", passengerId: p.id, name: nm, error: "Sin resultado / error (ver entradas previas)" });
       }
-      // Rate limit Nominatim
       await sleep(1100);
     }
 
+    geoLog({ type: "BULK_DONE", resultSummary: `ok=${okCount} fail=${failCount}` });
+
     await loadMasterPassengers();
     renderAll();
-    toast(`Geocodificados: ${done}/${targets.length}`);
+    toast(`Geocodificados: ${okCount}/${targets.length}`);
+    document.getElementById("geoLogDetails")?.setAttribute("open", "open");
+    renderGeoLog();
   }catch(e){
     console.error(e);
+    geoLog({ type: "ERROR", error: e.message || String(e) });
     toast(e.message || String(e));
   }
 }
 
+/* ---------------------------
+   init
+----------------------------*/
 (async function init(){
   try{
     await initCorePage({ page: "passengers" });
     if (!STATE.auth.user) return;
+
+    loadGeoLog();
+    renderGeoLog();
+    wireGeoLogButtons();
 
     $("passSearch")?.addEventListener("input", renderAll);
     $("btnReloadPassengers")?.addEventListener("click", async () => {
