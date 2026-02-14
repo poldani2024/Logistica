@@ -3,11 +3,11 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Pasajeros (Master) · >Gestión de Transporte Soka Gakkai</title>
+  <title>Pasajeros · Gestión de Transporte Soka Gakkai</title>
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
-  
+
 <header class="topbar">
   <div class="topbar-inner">
     <div class="brand">
@@ -34,29 +34,57 @@
   </div>
 </header>
 
-
-  <main class="container">
+<main class="container">
+  <div class="grid cols-2">
     <section class="card">
-      <div class="row">
-        <input id="passSearch" placeholder="Buscar…" />
-        <button id="btnReloadPassengers" class="btnSecondary">Recargar</button>
+      <div class="rowBetween">
+        <div>
+          <div class="cardTitle">Pasajeros</div>
+          <div class="subtitle">Master data (la asignación es por evento)</div>
+        </div>
+        <div class="row" style="flex-wrap:wrap;">
+          <button class="btn primary" id="btnAddPassenger">+ Nuevo</button>
+          <button class="btn" id="btnGeocodeMissing" title="Geocodificar pasajeros sin lat/lng">📍 Geocodificar</button>
+          <button class="btn" id="btnReloadPassengers" title="Recargar">↻</button>
+        </div>
       </div>
-      <div id="passengersTable"></div>
+
+      <div class="row" style="margin-top:12px;">
+        <input id="passSearch" placeholder="Buscar por nombre, teléfono, dirección…" />
+      </div>
+
+      <div class="desktop-only" style="margin-top:12px;">
+        <div class="tableWrap">
+          <table>
+            <thead><tr><th>Pasajero</th><th>Localidad</th><th>Tel</th><th>Geo</th><th></th></tr></thead>
+            <tbody id="passengersTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="mobile-only" style="margin-top:12px;">
+        <div class="cards-list" id="passengersCards"></div>
+      </div>
     </section>
 
     <section class="card">
-      <h2>Detalle</h2>
-      <div id="passengerDetail" class="muted">Seleccioná un pasajero…</div>
+      <div class="rowBetween">
+        <div>
+          <div class="cardTitle">Detalle</div>
+          <div class="subtitle" id="detailMode">Seleccioná un pasajero…</div>
+        </div>
+        <button class="btnDanger" id="btnDeletePassenger" style="display:none;">Eliminar</button>
+      </div>
+
+      <div id="passengerDetail" style="margin-top:12px;" class="muted">
+        Seleccioná un pasajero o tocá <strong>+ Nuevo</strong>.
+      </div>
     </section>
-  </main>
+  </div>
+</main>
 
-  <div id="toast" class="toast"></div>
+<div class="toast" id="toast"></div>
 
-  <script type="module" src="./passengers.js"></script>
-
-<script type="module" src="./firebase-init.js"></script>
-<script type="module" src="./core.js"></script>
-
+<script type="module" src="./passengers.js"></script>
 </body>
 </html>
-
