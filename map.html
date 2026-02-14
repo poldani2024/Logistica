@@ -3,66 +3,95 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Mapa · Logística Jóvenes</title>
+  <title>Mapa · Gestión de Transporte Soka Gakkai</title>
   <link rel="stylesheet" href="./styles.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <style>
+    #map{ height: 70vh; border-radius: 16px; overflow: hidden; border:1px solid rgba(255,255,255,.10); }
+    .segmented{
+      display:inline-flex; gap:8px; padding:6px;
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.04);
+      border-radius: 999px;
+    }
+    .segmented button{
+      border-radius: 999px;
+      padding: 9px 12px;
+    }
+    .segmented button.active{
+      background: rgba(59,130,246,.28);
+      border-color: rgba(59,130,246,.65);
+    }
+    .legendDot{
+      width:10px; height:10px; border-radius:999px; display:inline-block;
+      margin-right:6px; border:1px solid rgba(255,255,255,.18);
+      background: rgba(255,255,255,.20);
+    }
+    .legendRow{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+    .legendItem{ display:flex; align-items:center; gap:8px; color: rgba(234,241,255,.72); font-size: 12px; }
+    .emojiIcon{
+      font-size: 18px;
+      filter: drop-shadow(0 6px 10px rgba(0,0,0,.45));
+    }
+  </style>
 </head>
 <body>
-  
+
 <header class="topbar">
   <div class="topbar-inner">
-    <!-- Izquierda: Marca -->
     <div class="brand">
       <div class="title">Gestión de Transporte Soka Gakkai</div>
       <div class="sub">Rosario / Gran Rosario</div>
     </div>
 
-    <!-- Centro: Evento activo -->
     <div class="topbar-center">
       <div class="field" style="min-width:min(620px, 48vw);">
         <label>Evento activo</label>
-
-        <!-- Si la página tiene selector, dejá este <select>. Si NO, lo podés borrar y dejar solo el span -->
         <select id="eventSelect"></select>
-
-        <!-- Siempre presente: muestra el texto del evento activo -->
         <div class="subtitle" id="eventHint">No hay evento seleccionado</div>
       </div>
     </div>
 
-    <!-- Derecha: Home + Usuario + Salir -->
     <div class="row">
       <a href="index.html" class="iconbtn primary" title="Inicio">🏠</a>
-
       <div class="pill">
         <span id="authStatus">No ingresado</span>
         <button id="btnLogin" type="button" style="display:none">Ingresar</button>
-        <button id="btnLogout" type="button">Salir</button>
+        <button id="btnLogout" type="button" class="danger">Salir</button>
       </div>
     </div>
   </div>
 </header>
 
+<main class="container">
+  <div class="rowBetween" style="margin-bottom:12px;">
+    <div>
+      <h2 style="margin:0;">Mapa</h2>
+      <div class="subtitle">Choferes y pasajeros del evento</div>
+    </div>
 
-
-  <main class="container">
-    <section class="card">
-      <div class="row">
-        <div class="muted" id="eventHint"></div>
-        <button id="btnRefreshMap" class="btnSecondary">Redibujar</button>
+    <div class="row" style="flex-wrap:wrap;">
+      <div class="segmented" role="group" aria-label="Filtros de mapa">
+        <button class="btn" id="btnShowAll" type="button">Todo</button>
+        <button class="btn" id="btnShowDrivers" type="button">Choferes</button>
+        <button class="btn" id="btnShowPassengers" type="button">Pasajeros</button>
       </div>
-      <div id="map" style="height:70vh;border-radius:12px;overflow:hidden;"></div>
-    </section>
-  </main>
+      <button class="btn" id="btnRefreshMap" type="button" title="Redibujar">↻</button>
+    </div>
+  </div>
 
-  <div id="toast" class="toast"></div>
+  <div class="legendRow" style="margin-bottom:10px;">
+    <div class="legendItem"><span class="emojiIcon">🚗</span> Chofer</div>
+    <div class="legendItem"><span class="emojiIcon">🧍</span> Pasajero</div>
+    <div class="legendItem" id="mapStats">—</div>
+  </div>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script type="module" src="./map.js"></script>
+  <div id="map"></div>
+</main>
 
-<script type="module" src="./firebase-init.js"></script>
-<script type="module" src="./core.js"></script>
+<div class="toast" id="toast"></div>
 
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script type="module" src="./map.js"></script>
 </body>
 </html>
-
