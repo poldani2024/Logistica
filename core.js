@@ -55,7 +55,10 @@ export const STATE = {
   },
   event: {
     id: null,
-    driversIds: new Set(),
+    
+    driverPhases: new Map(), // driverId -> {phaseId:true}
+    phases: [],
+driversIds: new Set(),
     passengersIds: new Set(),
     passengersMeta: new Map(), // passengerId -> meta (status/tracking/assignedDriverId/etc)
     assignments: new Map()     // driverId -> { driverId, passengerIds: [] }
@@ -262,35 +265,37 @@ export function renderEventSelect() {
  * Contexto por evento (subcolecciones)
  * ------------------------- */
 
-export async function loadEventContext(eventId){
+export async function loadEventContext(eventId) {
   const id = (eventId || getSelectedEventId() || "").trim();
-  if (!id){
-    console.warn("loadEventContext: eventId inválido", eventId);
-    return;
-  }
-  STATE.event.id = id;
+  STATE.event.id = id || null;
 
-  STATE.event.driverPhases.clear();
-  STATE.event.passengersMeta.clear();
-  STATE.event.assignments.clear();
+  STATE.event.driversIds = new Set();
+  STATE.event.passengersIds = new Set();
+  STATE.event.passengersMeta = new Map();
+  STATE.event.assignments = new Map();
 
-  const ev = STATE.events.find(e=>e.id===id);
-  STATE.event.phases = ev?.phases || [];
-  if (!STATE.ui.activePhase && STATE.event.phases.length){
-    STATE.ui.activePhase = STATE.event.phases[0].id;
-  }
+  if (!STATE.event.id) return;
 
-  // eventDrivers -> fases habilitadas por chofer
-  const dSnap = await getDocs(collection(db,"events",STATE.event.id,"eventDrivers"));
-  dSnap.forEach(d=>STATE.event.driverPhases.set(d.id, d.data().phases||{}));
+  // drivers links
+  const dSnap = await getDocs(collection(db, "events", STATE.event.id, "eventDrivers"));
+  dSnap.forEach(x => STATE.event.driversIds.add(x.id));
 
-  // eventPassengers -> meta por pasajero
-  const pSnap = await getDocs(collection(db,"events",STATE.event.id,"eventPassengers"));
-  pSnap.forEach(p=>STATE.event.passengersMeta.set(p.id, p.data()));
+  // passengers links + meta
+  const pSnap = await getDocs(collection(db, "events", STATE.event.id, "eventPassengers"));
+  pSnap.forEach(x => {
+    STATE.event.passengersIds.add(x.id);
+    STATE.event.passengersMeta.set(x.id, x.data() || {});
+  });
 
-  // assignments -> índice rápido
-  const aSnap = await getDocs(collection(db,"events",STATE.event.id,"assignments"));
-  aSnap.forEach(a=>STATE.event.assignments.set(a.id, a.data()));
+  // assignments (1 doc por driverId)
+  const aSnap = await getDocs(collection(db, "events", STATE.event.id, "assignments"));
+  aSnap.forEach(x => {
+    const data = x.data() || {};
+    STATE.event.assignments.set(x.id, {
+      driverId: x.id,
+      passengerIds: Array.isArray(data.passengerIds) ? data.passengerIds : []
+    });
+  });
 }
 
 export function driversInEvent() {
