@@ -19,12 +19,10 @@ function passengerLine(p){
 
 let modalDriverId = null;
 
-function isAdmin(){
-  return !!STATE.auth.isAdmin;
-}
+function isAdmin(){ return !!STATE.auth.isAdmin; }
 
 function capacityOf(driver){
-  const c = Number(driver.capacity ?? 4);
+  const c = Number(driver?.capacity ?? 4);
   return Number.isFinite(c) && c > 0 ? c : 4;
 }
 
@@ -40,79 +38,82 @@ function unassignedPassengers(){
 
 function renderBoard(){
   const board = $("driversBoard");
-  if (!board) return;
+  if (!board) { return; }
 
-  const drivers = driversInEvent();
-  if (!STATE.event.id){
+  const eventId = STATE.event.id;
+
+  if (!eventId){
     board.innerHTML = '<div class="card"><div class="subtitle">Seleccioná un evento arriba.</div></div>';
-    return;
+  } else {
+    const drivers = driversInEvent();
+
+    if (!drivers.length){
+      board.innerHTML = '<div class="card"><div class="subtitle">No hay choferes vinculados a este evento. Vinculalos en Eventos.</div></div>';
+    } else {
+      const passById = new Map((passengersInEvent() || []).map(p => [p.id, p]));
+
+      board.innerHTML = drivers.map(d => {
+        const cap = capacityOf(d);
+        const cnt = assignedCount(d.id);
+        const full = cnt >= cap;
+
+        const a = assignmentForDriver(d.id);
+        const assigned = (a.passengerIds || [])
+          .map(pid => passById.get(pid))
+          .filter(Boolean);
+
+        const pill = `<span class="pillSmall">${escapeHtml(String(cnt))} / ${escapeHtml(String(cap))} cupo</span>`;
+        const addBtn = isAdmin()
+          ? `<button class="btn primary" data-add="${escapeHtml(d.id)}" ${full ? "disabled" : ""}>+ Agregar pasajero</button>`
+          : `<span class="pillSmall">Solo Admin asigna</span>`;
+
+        const listHtml = assigned.length ? assigned.map(p => {
+          const meta = p._event || {};
+          const status = meta.trackingStatus || meta.status || "Pendiente";
+          return `
+            <div class="passRow">
+              <div class="passMeta">
+                <div class="passName">${escapeHtml(fullName(p))}</div>
+                <div class="passSub">${escapeHtml(status)}${escapeHtml(passengerLine(p))}</div>
+              </div>
+              ${isAdmin() ? `<button class="btnDanger" data-unassign="${escapeHtml(d.id)}" data-p="${escapeHtml(p.id)}">Quitar</button>` : ``}
+            </div>
+          `;
+        }).join("") : `<div class="emptyBox">Sin pasajeros asignados todavía.</div>`;
+
+        return `
+          <section class="card">
+            <div class="driverHead">
+              <div>
+                <div class="cardTitle">${escapeHtml(fullName(d))}</div>
+                <div class="subtitle">${escapeHtml(d.email||"")}${d.phone ? " · " + escapeHtml(d.phone) : ""}</div>
+              </div>
+              <div class="row" style="align-items:center;">
+                ${pill}
+                ${addBtn}
+              </div>
+            </div>
+
+            <div style="margin-top:12px;">
+              ${listHtml}
+            </div>
+          </section>
+        `;
+      }).join("");
+
+      board.querySelectorAll("[data-add]").forEach(btn => {
+        btn.addEventListener("click", () => openModal(btn.getAttribute("data-add")));
+      });
+
+      board.querySelectorAll("[data-unassign]").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const driverId = btn.getAttribute("data-unassign");
+          const passengerId = btn.getAttribute("data-p");
+          await doUnassign({ driverId, passengerId });
+        });
+      });
+    }
   }
-  if (!drivers.length){
-    board.innerHTML = '<div class="card"><div class="subtitle">No hay choferes vinculados a este evento. Vinculalos en Eventos.</div></div>';
-    return;
-  }
-
-  const passById = new Map((passengersInEvent() || []).map(p => [p.id, p]));
-  board.innerHTML = drivers.map(d => {
-    const cap = capacityOf(d);
-    const cnt = assignedCount(d.id);
-    const full = cnt >= cap;
-
-    const a = assignmentForDriver(d.id);
-    const assigned = (a.passengerIds || [])
-      .map(pid => passById.get(pid))
-      .filter(Boolean);
-
-    const pill = `<span class="pillSmall">${escapeHtml(String(cnt))} / ${escapeHtml(String(cap))} cupo</span>`;
-    const addBtn = isAdmin()
-      ? `<button class="btn primary" data-add="${escapeHtml(d.id)}" ${full ? "disabled" : ""}>+ Agregar pasajero</button>`
-      : `<span class="pillSmall">Solo Admin asigna</span>`;
-
-    const listHtml = assigned.length ? assigned.map(p => {
-      const meta = p._event || {};
-      const status = meta.trackingStatus || meta.status || "Pendiente";
-      return `
-        <div class="passRow">
-          <div class="passMeta">
-            <div class="passName">${escapeHtml(fullName(p))}</div>
-            <div class="passSub">${escapeHtml(status)}${escapeHtml(passengerLine(p))}</div>
-          </div>
-          ${isAdmin() ? `<button class="btnDanger" data-unassign="${escapeHtml(d.id)}" data-p="${escapeHtml(p.id)}">Quitar</button>` : ``}
-        </div>
-      `;
-    }).join("") : `<div class="emptyBox">Sin pasajeros asignados todavía.</div>`;
-
-    return `
-      <section class="card">
-        <div class="driverHead">
-          <div>
-            <div class="cardTitle">${escapeHtml(fullName(d))}</div>
-            <div class="subtitle">${escapeHtml(d.email||"")}${d.phone ? " · " + escapeHtml(d.phone) : ""}</div>
-          </div>
-          <div class="row" style="align-items:center;">
-            ${pill}
-            ${addBtn}
-          </div>
-        </div>
-
-        <div style="margin-top:12px;">
-          ${listHtml}
-        </div>
-      </section>
-    `;
-  }).join("");
-
-  board.querySelectorAll("[data-add]").forEach(btn => {
-    btn.addEventListener("click", () => openModal(btn.getAttribute("data-add")));
-  });
-
-  board.querySelectorAll("[data-unassign]").forEach(btn => {
-    btn.addEventListener("click", async () => {
-      const driverId = btn.getAttribute("data-unassign");
-      const passengerId = btn.getAttribute("data-p");
-      await doUnassign({ driverId, passengerId });
-    });
-  });
 }
 
 function openModal(driverId){
@@ -133,7 +134,7 @@ function closeModal(){
 
 function renderModalList(){
   const wrap = $("modalList");
-  if (!wrap) return;
+  if (!wrap) { return; }
 
   const q = ($("modalSearch")?.value || "").trim().toLowerCase();
 
@@ -145,79 +146,48 @@ function renderModalList(){
 
   if (!list.length){
     wrap.innerHTML = `<div class="emptyBox">No hay pasajeros pendientes para asignar.</div>`;
-    return;
-  }
-
-  wrap.innerHTML = list.map(p => {
-    const meta = p._event || {};
-    const status = meta.trackingStatus || meta.status || "Pendiente";
-    return `
-      <div class="passRow">
-        <div class="passMeta">
-          <div class="passName">${escapeHtml(fullName(p))}</div>
-          <div class="passSub">${escapeHtml(status)}${escapeHtml(passengerLine(p))}</div>
+  } else {
+    wrap.innerHTML = list.map(p => {
+      const meta = p._event || {};
+      const status = meta.trackingStatus || meta.status || "Pendiente";
+      return `
+        <div class="passRow">
+          <div class="passMeta">
+            <div class="passName">${escapeHtml(fullName(p))}</div>
+            <div class="passSub">${escapeHtml(status)}${escapeHtml(passengerLine(p))}</div>
+          </div>
+          <button class="btn primary" data-assign="${escapeHtml(p.id)}">Asignar</button>
         </div>
-        <button class="btn primary" data-assign="${escapeHtml(p.id)}">Asignar</button>
-      </div>
-    `;
-  }).join("");
+      `;
+    }).join("");
 
-  wrap.querySelectorAll("[data-assign]").forEach(btn => {
-    btn.addEventListener("click", async () => {
-      const passengerId = btn.getAttribute("data-assign");
-      await doAssign({ driverId: modalDriverId, passengerId });
+    wrap.querySelectorAll("[data-assign]").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const passengerId = btn.getAttribute("data-assign");
+        await doAssign({ driverId: modalDriverId, passengerId });
+      });
     });
-  });
-}
-
-
-
-
-  if (!list.length){
-    wrap.innerHTML = `<div class="emptyBox">No hay pasajeros pendientes para asignar.</div>`;
-    return;
   }
-
-  wrap.innerHTML = list.map(p => {
-    const meta = p._event || {};
-    const status = meta.trackingStatus || meta.status || "Pendiente";
-    return `
-      <div class="passRow">
-        <div class="passMeta">
-          <div class="passName">${escapeHtml(fullName(p))}</div>
-          <div class="passSub">${escapeHtml(status)}${escapeHtml(passengerLine(p))}</div>
-        </div>
-        <button class="btn primary" data-assign="${escapeHtml(p.id)}">Asignar</button>
-      </div>
-    `;
-  }).join("");
-
-  wrap.querySelectorAll("[data-assign]").forEach(btn => {
-    btn.addEventListener("click", async () => {
-      const passengerId = btn.getAttribute("data-assign");
-      await doAssign({ driverId: modalDriverId, passengerId });
-    });
-  });
 }
 
 async function doAssign({ driverId, passengerId }){
   try{
     if (!isAdmin()) throw new Error("Solo Admin");
     if (!STATE.event.id) throw new Error("No hay evento seleccionado");
-    if (!driverId || !passengerId) return;
 
-    // Chequeo cupo rápido
-    const driver = (STATE.master.drivers || []).find(x => x.id === driverId);
-    const cap = capacityOf(driver || {});
-    const cnt = assignedCount(driverId);
-    if (cnt >= cap) throw new Error("Cupo completo para ese chofer");
+    if (driverId && passengerId){
+      const driver = (STATE.master.drivers || []).find(x => x.id === driverId);
+      const cap = capacityOf(driver || {});
+      const cnt = assignedCount(driverId);
+      if (cnt >= cap) throw new Error("Cupo completo para ese chofer");
 
-    await assignPassengerToDriver({ driverId, passengerId });
+      await assignPassengerToDriver({ driverId, passengerId });
 
-    await loadEventContext(getSelectedEventId());
-    renderBoard();
-    renderModalList();
-    toast("Asignado");
+      await loadEventContext(getSelectedEventId());
+      renderBoard();
+      renderModalList();
+      toast("Asignado");
+    }
   }catch(e){
     console.error(e);
     toast(e.message || String(e));
@@ -227,14 +197,14 @@ async function doAssign({ driverId, passengerId }){
 async function doUnassign({ driverId, passengerId }){
   try{
     if (!isAdmin()) throw new Error("Solo Admin");
+
     const ok = confirm("¿Quitar este pasajero del chofer?");
-    if (!ok) return;
-
-    await unassignPassenger({ driverId, passengerId });
-
-    await loadEventContext(getSelectedEventId());
-    renderBoard();
-    toast("Quitado");
+    if (ok){
+      await unassignPassenger({ driverId, passengerId });
+      await loadEventContext(getSelectedEventId());
+      renderBoard();
+      toast("Quitado");
+    }
   }catch(e){
     console.error(e);
     toast(e.message || String(e));
@@ -255,7 +225,7 @@ function wireModal(){
 (async function init(){
   try{
     await initCorePage({ page: "assignments" });
-    if (!STATE.auth.user) return;
+    if (!STATE.auth.user) { return; }
 
     wireModal();
 
@@ -267,14 +237,12 @@ function wireModal(){
       toast("Recargado");
     });
 
-    // cuando cambia el evento
     document.addEventListener("eventChanged", async () => {
       await loadEventContext(getSelectedEventId());
       renderBoard();
       closeModal();
     });
 
-    // carga inicial
     await loadMasterDrivers();
     await loadMasterPassengers();
     await loadEventContext(getSelectedEventId());
