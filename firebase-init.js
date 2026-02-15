@@ -7,14 +7,13 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.2/firebas
 import { getAuth, GoogleAuthProvider } from "https://www.gstatic.com/firebasejs/10.7.2/firebase-auth.js";
 import { getFirestore } from "https://www.gstatic.com/firebasejs/10.7.2/firebase-firestore.js";
 
-// ⚠️ Reemplazar por tu config real:
 export const firebaseConfig = {
-  apiKey: "REEMPLAZAR",
-  authDomain: "REEMPLAZAR",
-  projectId: "REEMPLAZAR",
-  storageBucket: "REEMPLAZAR",
-  messagingSenderId: "REEMPLAZAR",
-  appId: "REEMPLAZAR"
+  apiKey: "AIzaSyATJicgCiFF3d_EUUw5GQbzPox5M2uSkcw",
+  authDomain: "logistica-d964e.firebaseapp.com",
+  projectId: "logistica-d964e",
+  storageBucket: "logistica-d964e.firebasestorage.app",
+  messagingSenderId: "8417668413",
+  appId: "1:8417668413:web:22b7b111e797949616a954"
 };
 
 export const app = initializeApp(firebaseConfig);
