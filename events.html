@@ -33,23 +33,58 @@
     <div class="container">
       <div class="pageHead">
         <h1 class="pageTitle">Eventos</h1>
-        <div class="pageSub">Gestión de eventos y fases del evento. (La disponibilidad está en "Choferes x Fase").</div>
+        <div class="pageSub">Gestión de eventos y fases del evento. (La disponibilidad está en <b>Choferes x Fase</b>).</div>
       </div>
+
+      <section class="card" style="margin-bottom:14px">
+        <div class="cardHead">
+          <div>
+            <div class="cardTitle">Lista de eventos</div>
+            <div class="cardSub">Seleccioná un evento para editar y gestionar sus fases.</div>
+          </div>
+          <div class="cardActions">
+            <button class="btn" id="btnNewEvent" type="button">+ Evento</button>
+          </div>
+        </div>
+        <div id="eventsListBox" class="stack"></div>
+        <div class="hint" style="margin-top:10px">
+          Tip: el selector de arriba define el <b>evento activo</b> para toda la app.
+        </div>
+      </section>
 
       <div class="grid2">
         <section class="card">
           <div class="cardHead">
             <div>
+              <div class="cardTitle">Fases del evento</div>
+              <div class="cardSub">Definís los tramos (Ida, Vuelta, etc.).</div>
+            </div>
+            <div class="cardActions">
+              <button class="btn" id="btnAddPhase" type="button">+ Fase</button>
+              <button class="btn" id="btnSeedDefault" type="button">Crear Ida/Vuelta</button>
+              <button class="btn" id="btnSavePhases" type="button">Guardar</button>
+            </div>
+          </div>
+
+          <div id="phasesBox" class="stack"></div>
+          <div class="hint" style="margin-top:10px">
+            Cada fase puede tener <b>domicilio</b>, <b>localidad</b> y <b>horario</b>. Podés copiarlo del evento al editar.
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="cardHead">
+            <div>
               <div class="cardTitle">Disponibilidad de choferes</div>
-              <div class="cardSub">Se gestiona en la pantalla "Choferes x Fase".</div>
+              <div class="cardSub">Se gestiona en la pantalla “Choferes x Fase”.</div>
             </div>
             <div class="cardActions">
               <a class="btn" href="choferes-x-fase.html">Ir a Choferes x Fase</a>
             </div>
           </div>
-          <div class="emptyBox">Movido a "Choferes x Fase" para mantener Asignaciones más simple.</div>
+          <div class="emptyBox">Movido a “Choferes x Fase” para mantener Asignaciones más simple.</div>
         </section>
-</div>
+      </div>
     </div>
   </main>
 
