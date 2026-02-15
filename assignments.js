@@ -8,7 +8,7 @@ import { $, STATE, ensureAuth, loadEventContext, driversForPhase, getActivePhase
 })();
 
 function render(){
-  const phase = getActivePhase();
+  const phase = getActivePhaseId();
   const drivers = driversForPhase(phase);
   $("drivers").innerHTML = drivers.map(d=>`<div>${d.lastName}</div>`).join("");
 }
