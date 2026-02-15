@@ -14,11 +14,14 @@ import {
 import { db } from "./firebase-init.js";
 import { doc, getDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.2/firebase-firestore.js";
 
+let clicksWired = false;
+
 (async function init(){
   await initCorePage({ page: "assignments" });
 
-  // Compat: algunas versiones no traen ui
   if (!STATE.ui) STATE.ui = { activePhase: null };
+  if (STATE.ui.passFilter == null) STATE.ui.passFilter = "pendientes";
+  if (STATE.ui.activeDriverId == null) STATE.ui.activeDriverId = null;
 
   await loadMasterPassengers();
 
@@ -26,14 +29,13 @@ import { doc, getDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/fi
     await loadEventContext(STATE.event.id);
   }
 
-  wireGlobal();
+  wireOnce();
   renderAll();
 
   document.addEventListener("eventChanged", async (ev) => {
     const id = ev?.detail?.eventId;
     if (!id) return;
     await loadEventContext(id);
-    // reset chofer activo al cambiar evento
     STATE.ui.activeDriverId = null;
     renderAll();
   });
@@ -42,22 +44,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/fi
   toast(e?.message || String(e));
 });
 
-function wireGlobal(){
-  // Filtros pasajeros: delegación robusta por texto
-  document.addEventListener("click", (ev) => {
-    const btn = ev.target.closest("button");
-    if (!btn) return;
-    const t = (btn.textContent || "").trim().toLowerCase();
-    const key = t.includes("pend") ? "pendientes" : (t.includes("asign") ? "asignados" : (t.includes("todo") ? "todos" : null));
-    if (key){
-      if (!STATE.ui) STATE.ui = { activePhase: null };
-      STATE.ui.passFilter = t;
-      markPassengerFilterButtons();
-      renderPassengers();
-    }
-  });
+function wireOnce(){
+  if (clicksWired) return;
+  clicksWired = true;
 
-  // botón actualizar (si existe)
   $("btnRefresh")?.addEventListener("click", async ()=>{
     if (!STATE.event?.id) return toast("Seleccioná un evento arriba.");
     await loadEventContext(STATE.event.id);
@@ -65,37 +55,69 @@ function wireGlobal(){
     toast("Actualizado");
   });
 
-  // buscador pasajeros (id más probable: passSearch)
   ($("passSearch") || $("passengerSearch"))?.addEventListener("input", ()=>renderPassengers());
 
-  // filtros pasajeros: buscamos botones con texto Pendientes/Asignados/Todos
-  const passPanel = $("passengersBox") || $("passengersPanel") || document;
-  passPanel.querySelectorAll("button").forEach(btn=>{
-    const t = (btn.textContent || "").trim().toLowerCase();
-    const key = t.includes("pend") ? "pendientes" : (t.includes("asign") ? "asignados" : (t.includes("todo") ? "todos" : null));
-    if (key){
-      btn.addEventListener("click", ()=>{
-        STATE.ui.passFilter = t; // "pendientes" | "asignados" | "todos"
-        // marcar visualmente
-        markPassengerFilterButtons();
-        renderPassengers();
-      });
-    }
-  });
+  // Delegación global: filtros, fases, chofer activo, asignar/quitar
+  document.addEventListener("click", async (ev) => {
+    const btn = ev.target.closest("button");
+    if (!btn) return;
 
-  // fase tabs: renderPhaseBar() crea botones, pero por si tu HTML ya los tiene:
-  const phaseHost = $("phaseBar") || document;
-  phaseHost.querySelectorAll("button").forEach(btn=>{
+    // 1) Filtros pasajeros por texto
     const t = (btn.textContent || "").trim().toLowerCase();
-    if (t === "ida" || t === "vuelta"){
-      btn.addEventListener("click", ()=>{
-        if (!STATE.ui) STATE.ui = { activePhase: null };
-        STATE.ui.activePhase = t; // usamos ids típicos
+    const key =
+      t.includes("pend") ? "pendientes" :
+      t.includes("asign") ? "asignados" :
+      t.includes("todo") ? "todos" :
+      null;
+
+    if (key) {
+      STATE.ui.passFilter = key;
+      markPassengerFilterButtons();
+      renderPassengers();
+      return;
+    }
+
+    // 2) Cambio de fase (botones creados por renderPhaseBar)
+    const phaseBtn = btn.closest("button[data-phase]");
+    if (phaseBtn) {
+      STATE.ui.activePhase = phaseBtn.dataset.phase || null;
+      renderAll();
+      return;
+    }
+
+    // 3) Selección de chofer (botones creados por renderDrivers)
+    const drvBtn = btn.closest("button[data-driver]");
+    if (drvBtn) {
+      STATE.ui.activeDriverId = drvBtn.dataset.driver || null;
+      renderDrivers();
+      renderActiveDriverPill();
+      renderPassengers();
+      return;
+    }
+
+    // 4) Asignar / Quitar pasajero (botones creados por renderPassengers)
+    const passBtn = btn.closest("button[data-passenger]");
+    if (passBtn) {
+      const pid = passBtn.dataset.passenger;
+      if (!pid) return;
+
+      const driverId = STATE.ui.activeDriverId;
+      if (!driverId) return toast("Primero seleccioná un chofer (izquierda).");
+
+      const phaseId = getActivePhaseId();
+      if (!phaseId) return toast("Seleccioná una fase.");
+
+      try{
+        await toggleAssign(driverId, pid, phaseId);
+        await loadEventContext(STATE.event.id);
         renderDrivers();
         renderPassengers();
-      });
+      }catch(err){
+        console.error("ASSIGN ERROR", err);
+        toast(err?.message || String(err));
+      }
     }
-  });
+  }, true); // capture=true por si algún contenedor frena bubbling
 }
 
 function renderAll(){
@@ -117,42 +139,30 @@ function renderPhaseBar(){
   }
 
   const current = getActivePhaseId() || phases[0].id;
-  if (!STATE.ui) STATE.ui = { activePhase: null };
   STATE.ui.activePhase = current;
 
   host.innerHTML = phases.map(p=>{
     const active = p.id === current;
     return `<button class="btn ${active ? "primary" : ""}" data-phase="${escapeHtml(p.id)}" type="button">${escapeHtml(p.name || p.id)}</button>`;
   }).join(" ");
-
-  host.querySelectorAll("button[data-phase]").forEach(b=>{
-    b.addEventListener("click", ()=>{
-      if (!STATE.ui) STATE.ui = { activePhase: null };
-      STATE.ui.activePhase = b.dataset.phase;
-      renderDrivers();
-      renderPassengers();
-      renderPhaseBar(); // repintar activo
-    });
-  });
 }
 
 function renderActiveDriverPill(){
   const pill = $("activeDriverPill") || $("driverActivePill") || $("driverActive");
   if (!pill) return;
+
   const id = STATE.ui?.activeDriverId;
   if (!id){
     pill.textContent = "Chofer activo: —";
     return;
   }
   const d = (STATE.master?.drivers || []).find(x=>x.id===id);
-  const name = driverLabel(d || { id });
-  pill.textContent = `Chofer activo: ${name}`;
+  pill.textContent = `Chofer activo: ${driverLabel(d || { id })}`;
 }
 
 function driverLabel(d){
   return `${d.lastName || ""} ${d.firstName || ""}`.trim() || d.name || d.email || d.id;
 }
-
 function passengerLabel(p){
   return `${p.lastName || ""} ${p.firstName || ""}`.trim() || p.name || p.email || p.id;
 }
@@ -161,8 +171,8 @@ function renderDrivers(){
   const host = $("driversList");
   if (!host) return;
 
-  const phaseId = getActivePhaseId();
   const eventId = STATE.event?.id;
+  const phaseId = getActivePhaseId();
 
   if (!eventId){
     host.innerHTML = '<div class="emptyBox">Seleccioná un evento.</div>';
@@ -175,57 +185,37 @@ function renderDrivers(){
 
   const drivers = driversForPhase(phaseId) || [];
   if (!drivers.length){
-    host.innerHTML = '<div class="emptyBox">No hay choferes disponibles para esta fase.</div>';
+    host.innerHTML = '<div class="emptyBox">No hay choferes disponibles para esta fase (ver Choferes x Fase).</div>';
     return;
   }
 
-  const activeDriverId = STATE.ui?.activeDriverId || null;
+  const active = STATE.ui.activeDriverId;
 
   host.innerHTML = drivers.map(d=>{
-    const active = d.id === activeDriverId;
+    const isActive = d.id === active;
     return `
       <div class="row" style="justify-content:space-between; gap:10px; padding:12px; border:1px solid rgba(255,255,255,.08); border-radius:16px;">
         <div>
           <div style="font-weight:800">${escapeHtml(driverLabel(d))}</div>
           <div class="hint">${escapeHtml(d.email || "")}</div>
         </div>
-        <button class="btn ${active ? "primary" : ""}" data-driver="${escapeHtml(d.id)}" type="button">${active ? "Activo" : "Ver"}</button>
+        <button class="btn ${isActive ? "primary" : ""}" data-driver="${escapeHtml(d.id)}" type="button">${isActive ? "Activo" : "Ver"}</button>
       </div>
     `;
   }).join("");
-
-  host.querySelectorAll("button[data-driver]").forEach(btn=>{
-    btn.addEventListener("click", ()=>{
-      const id = btn.dataset.driver;
-      if (!id) return;
-      if (!STATE.ui) STATE.ui = { activePhase: null };
-      STATE.ui.activeDriverId = id;
-      renderDrivers();
-      renderPassengers();
-      renderActiveDriverPill();
-    });
-  });
 }
 
 function getPhaseAssignments(){
-  // Devuelve:
-  // - byDriver: Map(driverId -> Set(passengerId))
-  // - assignedAll: Set(passengerId)
   const phaseId = getActivePhaseId();
   const byDriver = new Map();
   const assignedAll = new Set();
-
   const map = STATE.event?.assignments || new Map();
 
-  // compat:
-  // a) formato nuevo: { phases: { ida:[], vuelta:[] } }
-  // b) formato viejo: { passengerIds: [...] } (lo tratamos como "ida" si no hay fases)
   for (const [driverId, a] of map.entries()){
     let ids = [];
     if (a?.phases && phaseId){
       ids = Array.isArray(a.phases[phaseId]) ? a.phases[phaseId] : [];
     } else if (Array.isArray(a?.passengerIds)) {
-      // fallback viejo: solo si la fase es "ida" o si no hay phases definidas
       if (!phaseId || phaseId === "ida") ids = a.passengerIds;
     }
 
@@ -233,19 +223,21 @@ function getPhaseAssignments(){
     byDriver.set(driverId, set);
     for (const pid of set) assignedAll.add(pid);
   }
-
   return { byDriver, assignedAll };
 }
 
 function markPassengerFilterButtons(){
   const filter = (STATE.ui?.passFilter || "pendientes");
-  const scope = $("passengersBox") || $("passengersPanel") || document;
+  const scope = document; // global
   scope.querySelectorAll("button").forEach(btn=>{
     const t = (btn.textContent || "").trim().toLowerCase();
-    const key = t.includes("pend") ? "pendientes" : (t.includes("asign") ? "asignados" : (t.includes("todo") ? "todos" : null));
-    if (key){
-      btn.classList.toggle("primary", key === filter);
-    }
+    const key =
+      t.includes("pend") ? "pendientes" :
+      t.includes("asign") ? "asignados" :
+      t.includes("todo") ? "todos" :
+      null;
+    if (!key) return;
+    btn.classList.toggle("primary", key === filter);
   });
 }
 
@@ -265,26 +257,22 @@ function renderPassengers(){
     return;
   }
 
-  const activeDriverId = STATE.ui?.activeDriverId || null;
-
   const { byDriver, assignedAll } = getPhaseAssignments();
+  const activeDriverId = STATE.ui?.activeDriverId || null;
   const assignedToActive = activeDriverId ? (byDriver.get(activeDriverId) || new Set()) : new Set();
 
-  // pasajeros vinculados al evento
   const eventPassengerIds = Array.from(STATE.event?.passengersIds || []);
   const master = STATE.master?.passengers || [];
   const byId = new Map(master.map(p => [p.id, p]));
   let list = eventPassengerIds.map(id => byId.get(id) || { id });
 
   const q = (($("passSearch") || $("passengerSearch"))?.value || "").trim().toLowerCase();
-  if (q){
-    list = list.filter(p => passengerLabel(p).toLowerCase().includes(q));
-  }
+  if (q) list = list.filter(p => passengerLabel(p).toLowerCase().includes(q));
 
   const filter = (STATE.ui?.passFilter || "pendientes").toLowerCase();
   if (filter === "pendientes" || filter === "pending") list = list.filter(p => !assignedAll.has(p.id));
   if (filter === "asignados" || filter === "assigned") list = list.filter(p => assignedAll.has(p.id));
-  // "todos"/"all" no filtra
+  // todos/all no filtra
 
   if (!list.length){
     host.innerHTML = '<div class="emptyBox">Sin resultados.</div>';
@@ -297,8 +285,6 @@ function renderPassengers(){
     const isAssignedActive = assignedToActive.has(pid);
     const status = isAssignedActive ? "Asignado a este chofer" : (isAssignedAny ? "Asignado" : "Pendiente");
     const actionLabel = activeDriverId ? (isAssignedActive ? "Quitar" : "Asignar") : "Asignar";
-    // siempre habilitado; si no hay chofer activo mostramos toast al click
-
     return `
       <div class="row" style="justify-content:space-between; gap:10px; padding:12px; border:1px solid rgba(255,255,255,.08); border-radius:16px;">
         <div>
@@ -309,28 +295,6 @@ function renderPassengers(){
       </div>
     `;
   }).join("");
-
-  // click asignar/quitar (delegación, así no se pierde por re-render)
-  host.onclick = async (e) => {
-    const btn = e.target.closest('button[data-passenger]');
-    if (!btn) return;
-    const pid = btn.dataset.passenger;
-    if (!pid) return;
-
-    const driverId = STATE.ui?.activeDriverId;
-    if (!driverId) return toast("Primero seleccioná un chofer (izquierda).");
-
-    const phaseIdNow = getActivePhaseId();
-    try{
-      await toggleAssign(driverId, pid, phaseIdNow);
-      await loadEventContext(STATE.event.id); // refrescar desde Firestore
-      renderPassengers();
-      renderDrivers();
-    }catch(err){
-      console.error("ASSIGN ERROR", err);
-      toast(err?.message || String(err));
-    }
-  };
 }
 
 async function toggleAssign(driverId, passengerId, phaseId){
@@ -338,7 +302,6 @@ async function toggleAssign(driverId, passengerId, phaseId){
   if (!eventId) throw new Error("No hay evento seleccionado");
   if (!phaseId) throw new Error("No hay fase activa");
 
-  // Leer doc actual (evita pisar otras fases)
   const ref = doc(db, "events", eventId, "assignments", driverId);
   const snap = await getDoc(ref);
 
@@ -350,10 +313,7 @@ async function toggleAssign(driverId, passengerId, phaseId){
   if (i >= 0) arr.splice(i, 1);
   else arr.push(passengerId);
 
-  // dedupe + limpieza
-  const uniq = Array.from(new Set(arr.filter(Boolean)));
-
-  data.phases[phaseId] = uniq;
+  data.phases[phaseId] = Array.from(new Set(arr.filter(Boolean)));
   data.updatedAt = serverTimestamp();
 
   await setDoc(ref, data, { merge: true });
