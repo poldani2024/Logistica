@@ -297,6 +297,24 @@ export async function loadEventContext(eventId) {
     });
   });
 }
+export async function saveDriverPhase(driverId, phaseId, enabled){
+  if (!STATE.event?.id) throw new Error("No hay evento seleccionado");
+  if (!driverId) throw new Error("Falta driverId");
+  if (!phaseId) throw new Error("Falta phaseId");
+
+  const ref = doc(db, "events", STATE.event.id, "eventDrivers", driverId);
+
+  await setDoc(ref, {
+    phases: { [phaseId]: !!enabled },
+    updatedAt: serverTimestamp()
+  }, { merge: true });
+
+  // mantener STATE sincronizado en memoria
+  STATE.event.driverPhases = STATE.event.driverPhases || new Map();
+  const current = STATE.event.driverPhases.get(driverId) || {};
+  current[phaseId] = !!enabled;
+  STATE.event.driverPhases.set(driverId, current);
+}
 
 export function driversInEvent() {
   const ids = STATE.event.driversIds;
