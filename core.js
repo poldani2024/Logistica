@@ -135,12 +135,15 @@ export function driversForPhase(phaseId){
   });
 }
 export function getActivePhaseId() {
-  if (!STATE.event?.phases?.length) return null;
+  // compat: algunas versiones no traen STATE.ui
+  if (!STATE.ui) STATE.ui = { activePhase: null };
 
-  const active = STATE.ui.activePhase;
+  const phase = STATE.ui.activePhase;
+  if (phase) return phase;
 
-  const exists = STATE.event.phases.some(p => p.id === active);
-  return exists ? active : null;
+  // fallback: primera fase del evento
+  const phases = STATE.event?.phases || [];
+  return phases.length ? phases[0].id : null;
 }
 
 /* -------------------------
