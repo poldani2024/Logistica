@@ -111,6 +111,28 @@ export function setSelectedEventId(id) {
   localStorage.setItem("eventId", v);
   STATE.event.id = v || null;
 }
+export function driversForPhase(phaseId){
+  const pid = String(phaseId || STATE.ui?.activePhase || "").trim();
+  if (!pid) return [];
+
+  const drivers = STATE.master?.drivers || [];
+  const linked = STATE.event?.driversIds; // si usás el modelo viejo con Set()
+  const map = STATE.event?.driverPhases;  // Map(driverId -> {phaseId:true})
+
+  return drivers.filter(d => {
+    // Si existe vínculo por evento (modelo viejo), respetarlo
+    if (linked && typeof linked.has === "function" && !linked.has(d.id)) return false;
+
+    // Si existe driverPhases (modelo nuevo), filtrar por fase
+    if (map && typeof map.get === "function") {
+      const phasesObj = map.get(d.id) || {};
+      return phasesObj[pid] === true;
+    }
+
+    // Si no hay info de fases, no filtramos por fase
+    return true;
+  });
+}
 
 /* -------------------------
  * Auth
