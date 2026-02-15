@@ -21,7 +21,6 @@ import {
   collection,
   doc,
   getDocs,
-  getDoc,
   setDoc,
   updateDoc,
   query,
@@ -300,6 +299,9 @@ export async function loadEventContext(eventId) {
   const id = (eventId || getSelectedEventId() || "").trim();
   STATE.event.id = id || null;
 
+  // reset contexto en memoria
+  STATE.event.phases = [];
+  STATE.event.driverPhases = new Map();
   STATE.event.driversIds = new Set();
   STATE.event.passengersIds = new Set();
   STATE.event.passengersMeta = new Map();
@@ -307,18 +309,39 @@ export async function loadEventContext(eventId) {
 
   if (!STATE.event.id) return;
 
-  // drivers links
-  const dSnap = await getDocs(collection(db, "events", STATE.event.id, "eventDrivers"));
-  dSnap.forEach(x => STATE.event.driversIds.add(x.id));
+  // 1) Doc del evento: fases
+  const evSnap = await getDoc(doc(db, "events", STATE.event.id));
+  if (evSnap.exists()) {
+    const ev = evSnap.data() || {};
+    const phases = Array.isArray(ev.phases) ? ev.phases : [];
+    STATE.event.phases = phases
+      .map(p => ({
+        id: String(p.id || "").trim(),
+        name: String(p.name || p.id || "").trim(),
+        address: p.address || "",
+        localidad: p.localidad || "",
+        time: p.time || ""
+      }))
+      .filter(p => p.id);
+  }
 
-  // passengers links + meta
+  // 2) drivers links + disponibilidad por fase
+  const dSnap = await getDocs(collection(db, "events", STATE.event.id, "eventDrivers"));
+  dSnap.forEach(x => {
+    STATE.event.driversIds.add(x.id);
+    const data = x.data() || {};
+    const phasesObj = (data.phases && typeof data.phases === "object") ? data.phases : {};
+    STATE.event.driverPhases.set(x.id, phasesObj);
+  });
+
+  // 3) passengers links + meta
   const pSnap = await getDocs(collection(db, "events", STATE.event.id, "eventPassengers"));
   pSnap.forEach(x => {
     STATE.event.passengersIds.add(x.id);
     STATE.event.passengersMeta.set(x.id, x.data() || {});
   });
 
-  // assignments (1 doc por driverId)
+  // 4) assignments (1 doc por driverId)
   const aSnap = await getDocs(collection(db, "events", STATE.event.id, "assignments"));
   aSnap.forEach(x => {
     const data = x.data() || {};
