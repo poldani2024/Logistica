@@ -116,7 +116,6 @@ function wireOnce(){
 }
 
 function renderAll(){
-(){
   renderPhaseBar();
   renderDrivers();
   renderPassengers();
