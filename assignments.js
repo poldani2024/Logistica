@@ -7,8 +7,12 @@ import { $, STATE, ensureAuth, loadEventContext, driversForPhase, getActivePhase
   render();
 })();
 
-function render(){
-  const phase = getActivePhaseId();
-  const drivers = driversForPhase(phase);
-  $("drivers").innerHTML = drivers.map(d=>`<div>${d.lastName}</div>`).join("");
+function render() {
+  const host = $("driversList"); // 👈 ESTE id debe existir en assignments.html
+  if (!host) {
+    console.warn("[assignments] Falta #driversList en el HTML");
+    return;
+  }
+
+  host.innerHTML = "...";
 }
