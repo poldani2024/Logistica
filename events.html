@@ -1,6 +1,38 @@
-<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><title>Eventos</title></head>
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Eventos · Gestión de Transporte Soka Gakkai</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <div class="title">Gestión de Transporte Soka Gakkai</div>
+      <div class="sub">Rosario / Gran Rosario</div>
+    </div>
+
+    <div class="topbar-center">
+      <div class="field" style="min-width:min(620px, 48vw);">
+        <label>Evento activo</label>
+        <select id="eventSelect"></select>
+        <div class="subtitle" id="eventHint">No hay evento seleccionado</div>
+      </div>
+    </div>
+
+    <div class="row">
+      <a href="index.html" class="iconbtn primary" title="Inicio">🏠</a>
+      <div class="pill">
+        <span id="authStatus">No ingresado</span>
+        <button id="btnLogin" type="button" style="display:none">Ingresar</button>
+        <button id="btnLogout" type="button" class="danger">Salir</button>
+      </div>
+    </div>
+  </div>
+</header>
 <body>
 <h2>Eventos - Fases y Choferes</h2>
 <div id="eventDetail"></div>
