@@ -7,37 +7,51 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
- <header class="topbar">
-  <div class="topbar-inner">
-    <div class="brand">
-      <div class="title">Gestión de Transporte Soka Gakkai</div>
-      <div class="sub">Rosario / Gran Rosario</div>
-    </div>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <div class="title">Gestión de Transporte Soka Gakkai</div>
+        <div class="sub">Rosario / Gran Rosario</div>
+      </div>
 
-    <div class="topbar-center">
-      <div class="field" style="min-width:min(620px, 48vw);">
-        <label>Evento activo</label>
-        <select id="eventSelect"></select>
-        <div class="subtitle" id="eventHint">No hay evento seleccionado</div>
+      <div class="topbar-right">
+        <div class="eventbox">
+          <div class="eventbox-label">Evento activo</div>
+          <select id="eventSelect" class="select"></select>
+          <div id="eventHint" class="hint"></div>
+        </div>
+
+        <a class="iconBtn" id="btnHome" href="index.html" title="Inicio">🏠</a>
+
+        <div class="pill" id="authStatus">No ingresado</div>
+        <button class="btn danger" id="btnLogout" type="button">Salir</button>
       </div>
     </div>
+  </header>
 
-    <div class="row">
-      <a href="index.html" class="iconbtn primary" title="Inicio">🏠</a>
-      <div class="pill">
-        <span id="authStatus">No ingresado</span>
-        <button id="btnLogin" type="button" style="display:none">Ingresar</button>
-        <button id="btnLogout" type="button" class="danger">Salir</button>
-      </div>
-    </div>
-  </div>
-</header>
   <main class="page">
     <div class="container">
       <div class="pageHead">
         <h1 class="pageTitle">Eventos</h1>
         <div class="pageSub">Gestión de fases del evento y disponibilidad de choferes por fase.</div>
       </div>
+
+      
+      <section class="card" style="margin-bottom:14px">
+        <div class="cardHead">
+          <div>
+            <div class="cardTitle">Lista de eventos</div>
+            <div class="cardSub">Ver, seleccionar y editar eventos existentes.</div>
+          </div>
+          <div class="cardActions">
+            <button class="btn" id="btnNewEvent" type="button">+ Evento</button>
+          </div>
+        </div>
+        <div id="eventsListBox" class="stack"></div>
+        <div class="hint" style="margin-top:10px">
+          Tip: el selector de arriba define el <b>evento activo</b> para toda la app.
+        </div>
+      </section>
 
       <div class="grid2">
         <section class="card">

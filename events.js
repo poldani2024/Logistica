@@ -5,6 +5,8 @@ import {
   initCorePage,
   loadEvents,
   loadEventContext,
+  renderEventSelect,
+  saveEvent,
   loadMasterDrivers,
   getSelectedEventId,
   setSelectedEventId,
@@ -193,8 +195,126 @@ function renderDriversPhases(){
   });
 }
 
+
+function formatDate(iso){
+  if (!iso) return "";
+  try{
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return String(iso);
+    return d.toLocaleDateString("es-AR");
+  }catch{ return String(iso); }
+}
+
+function renderEventsList(){
+  const host = $("eventsListBox");
+  if (!host) return;
+
+  const events = STATE.events || [];
+  if (!events.length){
+    host.innerHTML = '<div class="emptyBox">No hay eventos cargados (o no tenés permiso de lectura).</div>';
+    return;
+  }
+
+  const rows = events.map(ev=>{
+    const id = ev.id;
+    const name = escapeHtml(ev.name || ev.title || "");
+    const d1 = formatDate(ev.dateStart || ev.startDate);
+    const d2 = formatDate(ev.dateEnd || ev.endDate);
+    const active = (id === getSelectedEventId());
+    return `
+      <div class="row" style="justify-content:space-between; align-items:flex-start; gap:10px;">
+        <div style="min-width:220px;">
+          <div style="font-weight:700;">${name || escapeHtml(id)}</div>
+          <div class="hint">${escapeHtml(id)}${(d1||d2) ? ` — ${escapeHtml(d1)}${d2 ? ` → ${escapeHtml(d2)}` : ""}` : ""}</div>
+        </div>
+        <div class="row" style="gap:8px; flex-wrap:wrap; justify-content:flex-end;">
+          <button class="btn ${active ? "primary" : ""}" data-action="select" data-id="${escapeHtml(id)}" type="button">${active ? "Activo" : "Seleccionar"}</button>
+          <button class="btn" data-action="edit" data-id="${escapeHtml(id)}" type="button">Editar</button>
+        </div>
+      </div>
+      <div class="divider"></div>
+    `;
+  }).join("");
+
+  host.innerHTML = `<div class="stack">${rows}</div>`;
+
+  host.querySelectorAll("button[data-action]").forEach(btn=>{
+    btn.addEventListener("click", async ()=>{
+      const action = btn.dataset.action;
+      const id = btn.dataset.id;
+      if (!id) return;
+
+      if (action === "select"){
+        setSelectedEventId(id);
+        // sincronizar selector global
+        renderEventSelect();
+        // disparar flujo de recarga en esta misma página
+        document.dispatchEvent(new CustomEvent("eventChanged", { detail: { eventId: id }}));
+        return;
+      }
+
+      if (action === "edit"){
+        const ev = (STATE.events || []).find(x => x.id === id) || { id };
+        if (!STATE.auth.isAdmin) return toast("Solo Admin puede editar eventos.");
+
+        const name = prompt("Nombre del evento:", ev.name || ev.title || "");
+        if (name === null) return;
+
+        const dateStart = prompt("Fecha inicio (YYYY-MM-DD) — opcional:", (ev.dateStart || ev.startDate || "").slice(0,10));
+        if (dateStart === null) return;
+
+        const dateEnd = prompt("Fecha fin (YYYY-MM-DD) — opcional:", (ev.dateEnd || ev.endDate || "").slice(0,10));
+        if (dateEnd === null) return;
+
+        const address = prompt("Dirección (opcional):", ev.address || "");
+        if (address === null) return;
+
+        const localidad = prompt("Localidad (opcional):", ev.localidad || "");
+        if (localidad === null) return;
+
+        await saveEvent({ id, name, dateStart, dateEnd, address, localidad });
+        await loadEvents();
+        renderEventSelect();
+        renderEventsList();
+        toast("Evento guardado");
+        return;
+      }
+    });
+  });
+}
+
+async function createNewEvent(){
+  if (!STATE.auth.isAdmin) return toast("Solo Admin puede crear eventos.");
+
+  const id = prompt("ID del evento (sin espacios, ej: coro-kaneco-2026-02):");
+  if (!id) return;
+
+  const name = prompt("Nombre del evento:", "");
+  if (name === null) return;
+
+  const dateStart = prompt("Fecha inicio (YYYY-MM-DD) — opcional:", "");
+  if (dateStart === null) return;
+
+  const dateEnd = prompt("Fecha fin (YYYY-MM-DD) — opcional:", "");
+  if (dateEnd === null) return;
+
+  const address = prompt("Dirección (opcional):", "");
+  if (address === null) return;
+
+  const localidad = prompt("Localidad (opcional):", "");
+  if (localidad === null) return;
+
+  await saveEvent({ id, name, dateStart, dateEnd, address, localidad });
+  await loadEvents();
+  renderEventSelect();
+  renderEventsList();
+  toast("Evento creado");
+}
+
 async function reloadAll(){
   await loadEvents();
+  renderEventSelect();
+  renderEventsList();
   const eid = getSelectedEventId();
   if (eid) await loadEventContext(eid);
   await loadMasterDrivers();
@@ -209,6 +329,10 @@ async function init(){
 
   await loadMasterDrivers();
   await loadEvents();
+  renderEventsList();
+  $("btnNewEvent")?.addEventListener("click", async ()=>{
+    try{ await createNewEvent(); }catch(e){ console.error(e); toast(e.message||String(e)); }
+  });
 
   const eid = getSelectedEventId() || STATE.events[0]?.id || "";
   if (!eid){
@@ -217,6 +341,7 @@ async function init(){
   }
   setSelectedEventId(eid);
   await loadEventContext(eid);
+  renderEventsList();
 
   $("btnAddPhase")?.addEventListener("click", ()=>{
     ensureLocalPhases();
@@ -246,6 +371,7 @@ async function init(){
     await loadEventContext(id);
     renderPhases();
     renderDriversPhases();
+    renderEventsList();
   });
 
   renderPhases();
