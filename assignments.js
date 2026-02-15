@@ -235,7 +235,6 @@ function markPassengerFilterButtons(){
 }
 
 function renderPassengers(){
-(){
   const host = $("passengersList");
   if (!host) return;
 
