@@ -49,6 +49,9 @@ export const STATE = {
     driver: null // objeto driver master si matchea email
   },
   events: [],
+  ui: {
+  activePhase: null
+   },
   master: {
     drivers: [],
     passengers: []
@@ -67,6 +70,12 @@ driversIds: new Set(),
 
 // Exponer para debug (multipágina)
 window.STATE = STATE;
+// ✅ Compatibilidad con versiones viejas que importan ensureHeader()
+export function ensureHeader() {
+  // En esta versión el header ya está en el HTML, así que no hace nada.
+  return true;
+}
+window.ensureHeader = ensureHeader; // opcional, por si algún código viejo lo llama global
 
 /* -------------------------
  * UI: escape + toast
