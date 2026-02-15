@@ -1,32 +1,115 @@
+import {
+  initCorePage, STATE, $, toast, escapeHtml,
+  loadMasterDrivers, loadMasterPassengers,
+  loadEventContext, driversInEvent, passengersInEvent,
+  assignmentForDriver, updateTrackingAsDriver
+} from "./core.js";
 
-import { startAuth, ensureHeader, loadMasterData, loadEventContext, STATE, getSelectedEventId, driverName, passengerName } from "./core.js";
+function fullName(x){ return `${x.lastName||""} ${x.firstName||""}`.trim(); }
 
-function render(){
-  const host = document.getElementById("trackingBox");
+function render() {
+  const hint = $("eventHint");
+  if (hint) hint.textContent = STATE.event.id ? `Evento activo: ${STATE.event.id}` : "No hay evento seleccionado";
 
-  if(!STATE.event?.id){
-    host.innerHTML = `<span class="status-warn">Seleccioná un evento arriba.</span>`;
+  const driver = STATE.auth.driver;
+  const isAdmin = STATE.auth.isAdmin;
+
+  if (!driver && !isAdmin) {
+    $("trackingBox").innerHTML = `<p class="muted">No estás registrado como chofer y no sos Admin.</p>`;
     return;
   }
 
-  const rows = Array.from(STATE.event.assignments.entries()).map(([driverId, a])=>{
-    const names = (a.passengerIds || []).map(pid => passengerName(pid)).join(", ");
-    return `<tr><td><b>${driverName(driverId)}</b></td><td>${names || "<span class='muted'>—</span>"}</td></tr>`;
-  }).join("");
+  const ds = driversInEvent();
+  const ps = passengersInEvent();
 
-  host.innerHTML = `
-    <table class="table">
-      <thead><tr><th>Chofer</th><th>Pasajeros</th></tr></thead>
-      <tbody>${rows || ""}</tbody>
-    </table>
+  // Admin: puede elegir un chofer
+  let selectedDriverId = driver?.id || "";
+  if (isAdmin) {
+    selectedDriverId = selectedDriverId || (ds[0]?.id || "");
+  }
+
+  const selHtml = isAdmin ? `
+    <div class="row">
+      <label class="muted">Chofer:</label>
+      <select id="selDriver" class="select">
+        ${ds.map(d=> `<option value="${escapeHtml(d.id)}">${escapeHtml(fullName(d))}</option>`).join("")}
+      </select>
+    </div>
+  ` : "";
+
+  $("trackingBox").innerHTML = `
+    ${selHtml}
+    <div id="trackingList"></div>
   `;
+
+  const renderList = (driverId) => {
+    const a = assignmentForDriver(driverId);
+    const ids = new Set(a.passengerIds || []);
+    const list = ps.filter(p => ids.has(p.id));
+
+    $("trackingList").innerHTML = list.length ? `
+      <table>
+        <thead><tr><th>Pasajero</th><th>Estado</th><th>Obs</th><th></th></tr></thead>
+        <tbody>
+          ${list.map(p => {
+            const meta = p._event || {};
+            const st = meta.trackingStatus || "Pendiente";
+            const note = meta.trackingNote || "";
+            return `
+              <tr>
+                <td><strong>${escapeHtml(fullName(p))}</strong><div class="muted">${escapeHtml(p.address||"")} · ${escapeHtml(p.localidad||"")}</div></td>
+                <td>
+                  <select data-st="1" data-id="${escapeHtml(p.id)}">
+                    ${["Pendiente","En tránsito","En destino","Ausente"].map(x => `<option ${x===st?"selected":""}>${x}</option>`).join("")}
+                  </select>
+                </td>
+                <td><input data-note="1" data-id="${escapeHtml(p.id)}" value="${escapeHtml(note)}" placeholder="Observación…"></td>
+                <td><button class="btnPrimary" data-save="1" data-id="${escapeHtml(p.id)}">Guardar</button></td>
+              </tr>
+            `;
+          }).join("")}
+        </tbody>
+      </table>
+    ` : `<p class="muted">Este chofer no tiene pasajeros asignados en este evento.</p>`;
+
+    // bind save
+    document.querySelectorAll("button[data-save='1']").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        try {
+          const pid = btn.dataset.id;
+          const stEl = document.querySelector(`select[data-st='1'][data-id='${pid}']`);
+          const noteEl = document.querySelector(`input[data-note='1'][data-id='${pid}']`);
+          await updateTrackingAsDriver({
+            passengerId: pid,
+            trackingStatus: stEl.value,
+            trackingNote: noteEl.value
+          });
+          toast("Tracking actualizado");
+        } catch (e) { console.error(e); toast(e.message || String(e)); }
+      });
+    });
+  };
+
+  if (isAdmin) {
+    const sel = $("selDriver");
+    sel.value = selectedDriverId;
+    sel.addEventListener("change", () => renderList(sel.value));
+    renderList(sel.value);
+  } else {
+    renderList(driver.id);
+  }
 }
 
-(async function(){
-  await startAuth();
-  await ensureHeader();
-  await loadMasterData();
-  const eventId = getSelectedEventId();
-  if(eventId) await loadEventContext(eventId);
+async function refreshAll() {
+  await loadMasterDrivers();
+  await loadMasterPassengers();
+  await loadEventContext(STATE.event.id);
   render();
+}
+
+(async function init(){
+  await initCorePage({ page: "tracking" });
+  document.addEventListener("eventChanged", refreshAll);
+  await refreshAll();
 })();
+

@@ -3,51 +3,79 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Eventos — Gestión de Transporte</title>
-  <link rel="stylesheet" href="./styles.css" />
-  <script type="module" src="./events.js?v=phase1" defer></script>
+  <title>Eventos | Gestión de Transporte Soka Gakkai</title>
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div id="appHeader"></div>
-  <div class="container">
-    <div class="grid">
-      <div class="card">
-        <h2>📅 Eventos</h2>
-        <p class="muted">Creá eventos y definí fases (Ida/Vuelta o las que necesites).</p>
-        <div class="hr"></div>
-
-        <div class="split">
-          <div>
-            <h3>Crear evento</h3>
-            <div class="row">
-              <input id="newEventTitle" placeholder="Título (ej: Coro Kaneko a BsAs)" style="flex:1 1 auto; min-width:240px;" />
-              <input id="newEventStart" type="date" />
-              <input id="newEventEnd" type="date" />
-              <button id="btnCreateEvent" class="btn-primary">Crear</button>
-            </div>
-            <p class="small muted">Se guardan en <span class="kbd">events</span>. Después elegí el evento arriba para trabajar por evento.</p>
-          </div>
-
-          <div>
-            <h3>Fases del evento activo</h3>
-            <div class="row">
-              <input id="phaseId" placeholder="id (ej: ida)" />
-              <input id="phaseName" placeholder="Nombre (ej: Ida)" />
-              <button id="btnAddPhase" class="btn-primary">Agregar fase</button>
-              <button id="btnAddIdaVuelta">Crear Ida/Vuelta</button>
-              <button id="btnSavePhases" class="btn-primary">Guardar fases</button>
-            </div>
-            <div id="phasesList" class="small muted" style="margin-top:10px;"></div>
-          </div>
-        </div>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <div class="title">Gestión de Transporte Soka Gakkai</div>
+        <div class="sub">Rosario / Gran Rosario</div>
       </div>
 
-      <div class="card">
-        <h3>🚗 Disponibilidad de choferes por fase</h3>
-        <p class="muted small">Checkbox por chofer × fase (persistencia inmediata).</p>
-        <div id="driversPhaseGrid" class="muted">Cargando…</div>
+      <div class="topbar-right">
+        <div class="eventbox">
+          <div class="eventbox-label">Evento activo</div>
+          <select id="eventSelect" class="select"></select>
+          <div id="eventHint" class="hint"></div>
+        </div>
+
+        <a class="iconBtn" id="btnHome" href="index.html" title="Inicio">🏠</a>
+
+        <div class="pill" id="authStatus">No ingresado</div>
+        <button class="btn danger" id="btnLogout" type="button">Salir</button>
       </div>
     </div>
-  </div>
+  </header>
+
+  <main class="page">
+    <div class="container">
+      <div class="pageHead">
+        <h1 class="pageTitle">Eventos</h1>
+        <div class="pageSub">Gestión de fases del evento y disponibilidad de choferes por fase.</div>
+      </div>
+
+      <div class="grid2">
+        <section class="card">
+          <div class="cardHead">
+            <div>
+              <div class="cardTitle">Fases del evento</div>
+              <div class="cardSub">Definís los tramos (Ida, Vuelta, etc.).</div>
+            </div>
+            <div class="cardActions">
+              <button class="btn" id="btnAddPhase" type="button">+ Fase</button>
+              <button class="btn" id="btnSeedDefault" type="button">Crear Ida/Vuelta</button>
+              <button class="btn" id="btnSavePhases" type="button">Guardar</button>
+            </div>
+          </div>
+
+          <div id="phasesBox" class="stack"></div>
+          <div class="hint" style="margin-top:10px">
+            Tip: Arrastrar no está habilitado; usá ↑ / ↓ para ordenar.
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="cardHead">
+            <div>
+              <div class="cardTitle">Choferes por fase</div>
+              <div class="cardSub">Un chofer puede estar en una fase y no en otra.</div>
+            </div>
+            <div class="cardActions">
+              <button class="btn" id="btnReload" type="button">Recargar</button>
+            </div>
+          </div>
+
+          <div id="driversPhasesBox" class="stack"></div>
+          <div id="driversEmpty" class="emptyBox" style="display:none">El evento no tiene fases definidas.</div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <div id="toast" class="toast"></div>
+
+  <script type="module" src="events.js"></script>
 </body>
 </html>

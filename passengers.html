@@ -2,43 +2,122 @@
 <html lang="es">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Pasajeros — Gestión de Transporte</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Pasajeros · Gestión de Transporte Soka Gakkai</title>
   <link rel="stylesheet" href="./styles.css" />
-  <script type="module" src="./passengers.js" defer></script>
+  <style>
+    .grid2col{ display:grid; grid-template-columns: 1.1fr .9fr; gap: 16px; }
+    @media (max-width: 980px){ .grid2col{ grid-template-columns: 1fr; } }
+    .toolbarRow{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:space-between; }
+    .toolbarBtns{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    details summary{ cursor:pointer; user-select:none; }
+    .logBox{
+      max-height: 260px;
+      overflow:auto;
+      padding: 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(0,0,0,.18);
+      color: rgba(234,241,255,.80);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 12px;
+      line-height: 1.35;
+      white-space: pre-wrap;
+    }
+    .logActions{ display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; }
+  </style>
 </head>
 <body>
-  <div id="appHeader"></div>
-  <div class="container">
-    <div class="card">
-      <h2>👤 Pasajeros (Master Data)</h2>
-      <p class="muted">Alta / edición. Geocodificación con Nominatim.</p>
-      <div class="hr"></div>
 
-      <div class="row">
-        <input id="pName" placeholder="Nombre" style="flex:1 1 auto; min-width:220px;">
-        <input id="pAddress" placeholder="Dirección (ej: España 1447, Rosario)" style="flex:2 1 auto; min-width:280px;">
-        <button id="btnGeo" class="btn-primary">Geocodificar</button>
-        <button id="btnAddP" class="btn-primary">Agregar</button>
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <div class="title">Gestión de Transporte Soka Gakkai</div>
+      <div class="sub">Rosario / Gran Rosario</div>
+    </div>
+
+    <div class="topbar-center">
+      <div class="field" style="min-width:min(620px, 48vw);">
+        <label>Evento activo</label>
+        <select id="eventSelect"></select>
+        <div class="subtitle" id="eventHint">No hay evento seleccionado</div>
       </div>
+    </div>
 
-      <div class="hr"></div>
-
-      <div class="split">
-        <div>
-          <h3>Log de geocodificación</h3>
-          <div class="row">
-            <button id="btnCopyLog">Copiar</button>
-            <button id="btnClearLog" class="btn-danger">Limpiar</button>
-          </div>
-          <textarea id="geoLog" rows="10" style="width:100%; margin-top:10px;" readonly></textarea>
-        </div>
-        <div>
-          <h3>Listado</h3>
-          <div id="passengersTable" class="muted">Cargando…</div>
-        </div>
+    <div class="row">
+      <a href="index.html" class="iconbtn primary" title="Inicio">🏠</a>
+      <div class="pill">
+        <span id="authStatus">No ingresado</span>
+        <button id="btnLogin" type="button" style="display:none">Ingresar</button>
+        <button id="btnLogout" type="button" class="danger">Salir</button>
       </div>
     </div>
   </div>
+</header>
+
+<main class="container">
+  <div class="grid2col">
+    <section class="card">
+      <div class="toolbarRow">
+        <div>
+          <div class="cardTitle">Pasajeros</div>
+          <div class="subtitle">Master data · La asignación de chofer es por evento (Asignaciones)</div>
+        </div>
+        <div class="toolbarBtns">
+          <button class="btn primary" id="btnAddPassenger">+ Nuevo</button>
+          <button class="btn" id="btnGeocodeMissing" title="Geocodificar solo los que no tienen lat/lng">📍 Geocodificar</button>
+          <button class="btn" id="btnReloadPassengers" title="Recargar">↻</button>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:12px;">
+        <input id="passSearch" placeholder="Buscar por nombre, teléfono, dirección…" />
+      </div>
+
+      <div class="desktop-only" style="margin-top:12px;">
+        <div class="tableWrap">
+          <table>
+            <thead><tr><th>Pasajero</th><th>Localidad</th><th>Tel</th><th>Geo</th><th></th></tr></thead>
+            <tbody id="passengersTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="mobile-only" style="margin-top:12px;">
+        <div class="cards-list" id="passengersCards"></div>
+      </div>
+
+      <section class="card" style="margin-top:16px;">
+        <details id="geoLogDetails">
+          <summary>📍 Log de geolocalización (últimos 80)</summary>
+          <div class="subtitle" style="margin-top:8px;">Muestra parámetros usados, respuesta (resumen) y error / sin resultados.</div>
+          <div id="geoLogBox" class="logBox" style="margin-top:10px;">(sin logs todavía)</div>
+          <div class="logActions">
+            <button class="btn" id="btnCopyGeoLog" type="button">Copiar</button>
+            <button class="btnDanger" id="btnClearGeoLog" type="button">Limpiar</button>
+          </div>
+        </details>
+      </section>
+    </section>
+
+    <section class="card">
+      <div class="rowBetween">
+        <div>
+          <div class="cardTitle">Detalle</div>
+          <div class="subtitle" id="detailMode">Seleccioná un pasajero…</div>
+        </div>
+        <button class="btnDanger" id="btnDeletePassenger" style="display:none;">Eliminar</button>
+      </div>
+
+      <div id="passengerDetail" style="margin-top:12px;" class="muted">
+        Seleccioná un pasajero o tocá <strong>+ Nuevo</strong>.
+      </div>
+    </section>
+  </div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script type="module" src="./passengers.js?v=3"></script>
 </body>
 </html>

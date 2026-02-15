@@ -1,35 +1,91 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Gestión de Transporte Soka Gakkai</title>
-  <link rel="stylesheet" href="./styles.css" />
-  <script type="module" src="./index.js" defer></script>
+  <link rel="stylesheet" href="styles.css"/>
 </head>
 <body>
-  <div id="appHeader"></div>
-  <div class="container">
-    <div class="grid cards">
-      <div class="card">
-        <h2>Panel</h2>
-        <p class="muted">Elegí un evento y entrá a las secciones.</p>
-        <div class="hr"></div>
-        <div class="row">
-          <a class="pill" href="./events.html">📅 Eventos</a>
-          <a class="pill" href="./drivers.html">🚗 Choferes</a>
-          <a class="pill" href="./passengers.html">👤 Pasajeros</a>
-          <a class="pill" href="./assignments.html">🧩 Asignaciones</a>
-          <a class="pill" href="./map.html">🗺️ Mapa</a>
-          <a class="pill" href="./tracking.html">✅ Tracking</a>
-        </div>
-      </div>
 
-      <div class="card">
-        <h3>Estado rápido</h3>
-        <div id="homeStatus" class="muted">Cargando…</div>
+<header class="topbar">
+  <div class="topbar-inner">
+    <!-- Izquierda: Marca -->
+    <div class="brand">
+      <div class="title">Gestión de Transporte Soka Gakkai</div>
+      <div class="sub">Rosario / Gran Rosario</div>
+    </div>
+
+    <!-- Centro: Evento activo -->
+    <div class="topbar-center">
+      <div class="field" style="min-width:min(620px, 48vw);">
+        <label>Evento activo</label>
+
+        <!-- Si la página tiene selector, dejá este <select>. Si NO, lo podés borrar y dejar solo el span -->
+        <select id="eventSelect"></select>
+
+        <!-- Siempre presente: muestra el texto del evento activo -->
+        <div class="subtitle" id="eventHint">No hay evento seleccionado</div>
+      </div>
+    </div>
+
+    <!-- Derecha: Home + Usuario + Salir -->
+    <div class="row">
+      <a href="index.html" class="iconbtn primary" title="Inicio">🏠</a>
+
+      <div class="pill">
+        <span id="authStatus">No ingresado</span>
+        <button id="btnLogin" type="button" style="display:none">Ingresar</button>
+        <button id="btnLogout" type="button">Salir</button>
       </div>
     </div>
   </div>
+</header>
+
+
+<main class="container">
+  <h2>Inicio</h2>
+  <p>Seleccioná una sección:</p>
+
+  <div class="menu">
+    <a href="events.html">Eventos</a>
+    <a href="drivers.html">Choferes</a>
+    <a href="passengers.html">Pasajeros</a>
+    <a href="assignments.html">Asignaciones</a>
+    <a href="tracking.html">Tracking</a>
+    <a href="map.html">Mapa</a>
+  </div>
+</main>
+
+<script type="module">
+  import { initCorePage, STATE, $ } from "./core.js";
+
+  await initCorePage({ page: "home" });
+
+  const loginBtn = $("btnLogin");
+  const logoutBtn = $("btnLogout");
+  const status = $("authStatus");
+
+  function refreshAuthUI() {
+    const u = STATE.auth.user;
+    if (u) {
+      status.textContent = u.email;
+      loginBtn.style.display = "none";
+      logoutBtn.style.display = "inline-block";
+    } else {
+      status.textContent = "No ingresado";
+      loginBtn.style.display = "inline-block";
+      logoutBtn.style.display = "none";
+    }
+  }
+
+    import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.2/firebase-auth.js";
+  import { auth } from "./firebase-init.js";
+  
+  onAuthStateChanged(auth, () => {
+  refreshAuthUI();
+  });
+</script>
+
 </body>
 </html>

@@ -2,28 +2,90 @@
 <html lang="es">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Choferes — Gestión de Transporte</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Choferes · Gestión de Transporte Soka Gakkai</title>
   <link rel="stylesheet" href="./styles.css" />
-  <script type="module" src="./drivers.js" defer></script>
 </head>
 <body>
-  <div id="appHeader"></div>
-  <div class="container">
-    <div class="card">
-      <h2>🚗 Choferes (Master Data)</h2>
-      <p class="muted">Alta / edición / baja. La disponibilidad por fase se gestiona en Eventos.</p>
-      <div class="hr"></div>
 
-      <div class="row">
-        <input id="driverName" placeholder="Nombre" style="flex:1 1 auto; min-width:220px;">
-        <input id="driverPhone" placeholder="Teléfono (opcional)">
-        <button id="btnAddDriver" class="btn-primary">Agregar</button>
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <div class="title">Gestión de Transporte Soka Gakkai</div>
+      <div class="sub">Rosario / Gran Rosario</div>
+    </div>
+
+    <div class="topbar-center">
+      <div class="field" style="min-width:min(620px, 48vw);">
+        <label>Evento activo</label>
+        <select id="eventSelect"></select>
+        <div class="subtitle" id="eventHint">No hay evento seleccionado</div>
       </div>
+    </div>
 
-      <div class="hr"></div>
-      <div id="driversTable" class="muted">Cargando…</div>
+    <div class="row">
+      <a href="index.html" class="iconbtn primary" title="Inicio">🏠</a>
+      <div class="pill">
+        <span id="authStatus">No ingresado</span>
+        <button id="btnLogin" type="button" style="display:none">Ingresar</button>
+        <button id="btnLogout" type="button" class="danger">Salir</button>
+      </div>
     </div>
   </div>
+</header>
+
+<main class="container">
+  <div class="grid cols-2">
+    <section class="card">
+      <div class="rowBetween">
+        <div>
+          <div class="cardTitle">Choferes</div>
+          <div class="subtitle">Master data (acá no se asignan pasajeros)</div>
+        </div>
+        <div class="row">
+          <button class="btn primary" id="btnAddDriver">+ Nuevo</button>
+          <button class="btn" id="btnReloadDrivers" title="Recargar">↻</button>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:12px;">
+        <input id="driverSearch" placeholder="Buscar por nombre, teléfono o email…" />
+      </div>
+
+      <div class="desktop-only" style="margin-top:12px;">
+        <div class="tableWrap">
+          <table id="driversTable">
+            <thead>
+              <tr><th>Chofer</th><th>Email</th><th>Tel</th><th>Cap</th><th></th></tr>
+            </thead>
+            <tbody id="driversTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="mobile-only" style="margin-top:12px;">
+        <div class="cards-list" id="driversCards"></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="rowBetween">
+        <div>
+          <div class="cardTitle">Detalle</div>
+          <div class="subtitle" id="detailMode">Seleccioná un chofer…</div>
+        </div>
+        <button class="btnDanger" id="btnDeleteDriver" style="display:none;">Eliminar</button>
+      </div>
+
+      <div id="driverDetail" style="margin-top:12px;" class="muted">
+        Seleccioná un chofer o tocá <strong>+ Nuevo</strong>.
+      </div>
+    </section>
+  </div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script type="module" src="./drivers.js"></script>
 </body>
 </html>
