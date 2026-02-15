@@ -133,7 +133,11 @@ export function driversForPhase(phaseId){
     return true;
   });
 }
-
+export function getActivePhaseId(){
+  const ev = STATE.event.id || getSelectedEventId();
+  const raw = localStorage.getItem(phaseKeyForEvent(ev)) || "";
+  return raw || STATE.event.activePhaseId || "ida";
+}
 /* -------------------------
  * Auth
  * ------------------------- */
