@@ -1,5 +1,5 @@
 // assignments.js (filtra choferes por fase)
-import { $, STATE, ensureAuth, loadEventContext, driversForPhase, getActivePhase } from "./core.js";
+import { $, STATE, ensureAuth, loadEventContext, driversForPhase, getActivePhaseId } from "./core.js";
 
 (async function(){
   await ensureAuth();
