@@ -133,11 +133,15 @@ export function driversForPhase(phaseId){
     return true;
   });
 }
-export function getActivePhaseId(){
-  const ev = STATE.event.id || getSelectedEventId();
-  const raw = localStorage.getItem(phaseKeyForEvent(ev)) || "";
-  return raw || STATE.event.activePhaseId || "ida";
+export function getActivePhaseId() {
+  if (!STATE.event?.phases?.length) return null;
+
+  const active = STATE.ui.activePhase;
+
+  const exists = STATE.event.phases.some(p => p.id === active);
+  return exists ? active : null;
 }
+
 /* -------------------------
  * Auth
  * ------------------------- */
