@@ -16,7 +16,7 @@ import {
 } from "./core.js";
 
 // Firestore directo (para actualizar el doc del evento)
-import { doc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+import { doc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.2/firebase-firestore.js";
 import { db } from "./firebase-init.js";
 
 function slugPhaseId(name){
