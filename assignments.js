@@ -100,10 +100,18 @@ function wireOnce(){
 
       passBtn.disabled = true;
       try{
-        await toggleAssign(driverId, pid, phaseId);
-        await loadEventContext(STATE.event.id);
+        const updatedIds = await toggleAssign(driverId, pid, phaseId);
+
+        // ✅ Update local state even if core.js no carga assignments
+        applyLocalAssignment(driverId, phaseId, updatedIds);
+
+        // Si tu core.js ya carga assignments, esto lo confirma; si no, no molesta.
+        try { await loadEventContext(STATE.event.id); } catch (_) {}
+
         renderDrivers();
         renderPassengers();
+
+        toast("Asignación actualizada");
       }catch(err){
         console.error("ASSIGN ERROR", err);
         toast(err?.message || String(err));
@@ -202,6 +210,29 @@ function renderDrivers(){
     `;
   }).join("");
 
+}
+
+
+function ensureAssignmentsMap(){
+  const a = STATE.event?.assignments;
+  if (a instanceof Map) return a;
+
+  const m = new Map();
+  // compat: si viniera como objeto {driverId: data}
+  if (a && typeof a === "object"){
+    for (const [k,v] of Object.entries(a)) m.set(k, v);
+  }
+  if (!STATE.event) STATE.event = {};
+  STATE.event.assignments = m;
+  return m;
+}
+
+function applyLocalAssignment(driverId, phaseId, passengerIds){
+  const m = ensureAssignmentsMap();
+  const current = m.get(driverId) || {};
+  if (!current.phases || typeof current.phases !== "object") current.phases = {};
+  current.phases[phaseId] = Array.isArray(passengerIds) ? passengerIds : [];
+  m.set(driverId, current);
 }
 
 function getPhaseAssignments(){
@@ -310,4 +341,6 @@ async function toggleAssign(driverId, passengerId, phaseId){
   data.updatedAt = serverTimestamp();
 
   await setDoc(ref, data, { merge: true });
+  return data.phases[phaseId];
 }
+
