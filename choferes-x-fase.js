@@ -3,6 +3,9 @@ import { initCorePage, STATE, $, toast, escapeHtml, loadMasterDrivers, loadEvent
 (async function init(){
   await initCorePage({ page: "driversByPhase" });
 
+  // ✅ Asegurar contenedor UI (algunas versiones de core.js no lo traen)
+  if (!STATE.ui) STATE.ui = { activePhase: null };
+
   await loadMasterDrivers();
 
   const eventId = STATE.event?.id;
@@ -19,6 +22,7 @@ import { initCorePage, STATE, $, toast, escapeHtml, loadMasterDrivers, loadEvent
   renderDrivers();
 
   $("phaseSelect")?.addEventListener("change", () => {
+    if (!STATE.ui) STATE.ui = { activePhase: null };
     STATE.ui.activePhase = $("phaseSelect").value || null;
     renderDrivers();
   });
@@ -53,8 +57,10 @@ function renderPhases(){
   }
 
   sel.innerHTML = phases.map(p => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.name || p.id)}</option>`).join("");
+
   // fase activa: la actual o la primera
-  if (!STATE.ui?.activePhase || !phases.some(p => p.id === STATE.ui.activePhase)){
+  if (!STATE.ui) STATE.ui = { activePhase: null };
+  if (!STATE.ui.activePhase || !phases.some(p => p.id === STATE.ui.activePhase)){
     STATE.ui.activePhase = phases[0].id;
   }
   sel.value = STATE.ui.activePhase;
