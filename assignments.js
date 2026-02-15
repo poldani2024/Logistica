@@ -144,7 +144,6 @@ function renderPhaseBar(){
 }
 
 function renderActiveDriverPill(){
-(){
   const pill = $("activeDriverBadge");
   if (!pill) return;
 
