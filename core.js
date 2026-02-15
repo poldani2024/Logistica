@@ -49,9 +49,6 @@ export const STATE = {
     driver: null // objeto driver master si matchea email
   },
   events: [],
-  ui: {
-  activePhase: null
-   },
   master: {
     drivers: [],
     passengers: []
@@ -70,12 +67,6 @@ driversIds: new Set(),
 
 // Exponer para debug (multipágina)
 window.STATE = STATE;
-// ✅ Compatibilidad con versiones viejas que importan ensureHeader()
-export function ensureHeader() {
-  // En esta versión el header ya está en el HTML, así que no hace nada.
-  return true;
-}
-window.ensureHeader = ensureHeader; // opcional, por si algún código viejo lo llama global
 
 /* -------------------------
  * UI: escape + toast
@@ -252,11 +243,34 @@ export function resolveDriverRoleFromMaster() {
  * ------------------------- */
 
 export async function loadEvents() {
-  // Si dateStart es ISO string, orderBy funciona si todos tienen ese campo.
-  const snap = await getDocs(query(collection(db, "events"), orderBy("dateStart")));
-  const arr = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-  STATE.events = arr;
-  return arr;
+  // ⚠️ IMPORTANTE:
+  // La query con orderBy("dateStart") falla si:
+  // - hay eventos sin el campo dateStart, o
+  // - el campo tiene tipos mezclados (null/string/date), o
+  // - hay reglas/índices que impiden la consulta.
+  //
+  // Para NO romper el listado, hacemos fallback a traer sin orderBy y ordenamos en JS.
+
+  try {
+    const snap = await getDocs(query(collection(db, "events"), orderBy("dateStart")));
+    const arr = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    STATE.events = arr;
+    return arr;
+  } catch (e) {
+    console.warn("loadEvents: fallback sin orderBy(dateStart):", e);
+    const snap = await getDocs(collection(db, "events"));
+    const arr = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    // Orden “lo mejor posible” sin depender de un campo único
+    arr.sort((a, b) => {
+      const da = a.dateStart || a.startDate || a.createdAt?.toMillis?.() || 0;
+      const db = b.dateStart || b.startDate || b.createdAt?.toMillis?.() || 0;
+      return String(da).localeCompare(String(db));
+    });
+
+    STATE.events = arr;
+    return arr;
+  }
 }
 
 export function renderEventSelect() {
