@@ -43,6 +43,20 @@ import { doc, getDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/fi
 });
 
 function wireGlobal(){
+  // Filtros pasajeros: delegación robusta por texto
+  document.addEventListener("click", (ev) => {
+    const btn = ev.target.closest("button");
+    if (!btn) return;
+    const t = (btn.textContent || "").trim().toLowerCase();
+    const key = t.includes("pend") ? "pendientes" : (t.includes("asign") ? "asignados" : (t.includes("todo") ? "todos" : null));
+    if (key){
+      if (!STATE.ui) STATE.ui = { activePhase: null };
+      STATE.ui.passFilter = t;
+      markPassengerFilterButtons();
+      renderPassengers();
+    }
+  });
+
   // botón actualizar (si existe)
   $("btnRefresh")?.addEventListener("click", async ()=>{
     if (!STATE.event?.id) return toast("Seleccioná un evento arriba.");
@@ -58,7 +72,8 @@ function wireGlobal(){
   const passPanel = $("passengersBox") || $("passengersPanel") || document;
   passPanel.querySelectorAll("button").forEach(btn=>{
     const t = (btn.textContent || "").trim().toLowerCase();
-    if (t === "pendientes" || t === "asignados" || t === "todos"){
+    const key = t.includes("pend") ? "pendientes" : (t.includes("asign") ? "asignados" : (t.includes("todo") ? "todos" : null));
+    if (key){
       btn.addEventListener("click", ()=>{
         STATE.ui.passFilter = t; // "pendientes" | "asignados" | "todos"
         // marcar visualmente
@@ -227,8 +242,9 @@ function markPassengerFilterButtons(){
   const scope = $("passengersBox") || $("passengersPanel") || document;
   scope.querySelectorAll("button").forEach(btn=>{
     const t = (btn.textContent || "").trim().toLowerCase();
-    if (t === "pendientes" || t === "asignados" || t === "todos"){
-      btn.classList.toggle("primary", t === filter);
+    const key = t.includes("pend") ? "pendientes" : (t.includes("asign") ? "asignados" : (t.includes("todo") ? "todos" : null));
+    if (key){
+      btn.classList.toggle("primary", key === filter);
     }
   });
 }
@@ -266,9 +282,9 @@ function renderPassengers(){
   }
 
   const filter = (STATE.ui?.passFilter || "pendientes").toLowerCase();
-  if (filter === "pendientes") list = list.filter(p => !assignedAll.has(p.id));
-  if (filter === "asignados") list = list.filter(p => assignedAll.has(p.id));
-  // "todos" no filtra
+  if (filter === "pendientes" || filter === "pending") list = list.filter(p => !assignedAll.has(p.id));
+  if (filter === "asignados" || filter === "assigned") list = list.filter(p => assignedAll.has(p.id));
+  // "todos"/"all" no filtra
 
   if (!list.length){
     host.innerHTML = '<div class="emptyBox">Sin resultados.</div>';
@@ -280,33 +296,41 @@ function renderPassengers(){
     const isAssignedAny = assignedAll.has(pid);
     const isAssignedActive = assignedToActive.has(pid);
     const status = isAssignedActive ? "Asignado a este chofer" : (isAssignedAny ? "Asignado" : "Pendiente");
-    const actionLabel = activeDriverId ? (isAssignedActive ? "Quitar" : "Asignar") : "Ver";
-    const disabled = activeDriverId ? "" : "disabled";
+    const actionLabel = activeDriverId ? (isAssignedActive ? "Quitar" : "Asignar") : "Asignar";
+    // siempre habilitado; si no hay chofer activo mostramos toast al click
+
     return `
       <div class="row" style="justify-content:space-between; gap:10px; padding:12px; border:1px solid rgba(255,255,255,.08); border-radius:16px;">
         <div>
           <div style="font-weight:800">${escapeHtml(passengerLabel(p))}</div>
           <div class="hint">${escapeHtml(status)} — Fase: ${escapeHtml(phaseId)}</div>
         </div>
-        <button class="btn ${isAssignedActive ? "danger" : ""}" data-passenger="${escapeHtml(pid)}" type="button" ${disabled}>${actionLabel}</button>
+        <button class="btn ${isAssignedActive ? "danger" : ""}" data-passenger="${escapeHtml(pid)}" type="button">${actionLabel}</button>
       </div>
     `;
   }).join("");
 
-  // click asignar/quitar
-  host.querySelectorAll("button[data-passenger]").forEach(btn=>{
-    btn.addEventListener("click", async ()=>{
-      const pid = btn.dataset.passenger;
-      if (!pid) return;
-      const driverId = STATE.ui?.activeDriverId;
-      if (!driverId) return toast("Primero seleccioná un chofer (izquierda).");
+  // click asignar/quitar (delegación, así no se pierde por re-render)
+  host.onclick = async (e) => {
+    const btn = e.target.closest('button[data-passenger]');
+    if (!btn) return;
+    const pid = btn.dataset.passenger;
+    if (!pid) return;
 
-      await toggleAssign(driverId, pid, phaseId);
+    const driverId = STATE.ui?.activeDriverId;
+    if (!driverId) return toast("Primero seleccioná un chofer (izquierda).");
+
+    const phaseIdNow = getActivePhaseId();
+    try{
+      await toggleAssign(driverId, pid, phaseIdNow);
       await loadEventContext(STATE.event.id); // refrescar desde Firestore
       renderPassengers();
       renderDrivers();
-    });
-  });
+    }catch(err){
+      console.error("ASSIGN ERROR", err);
+      toast(err?.message || String(err));
+    }
+  };
 }
 
 async function toggleAssign(driverId, passengerId, phaseId){
