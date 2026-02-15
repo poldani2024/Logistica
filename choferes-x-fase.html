@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Choferes x Fase | Gestión de Transporte Soka Gakkai</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <div class="title">Gestión de Transporte Soka Gakkai</div>
+        <div class="sub">Rosario / Gran Rosario</div>
+      </div>
+
+      <div class="topbar-right">
+        <div class="eventbox">
+          <div class="eventbox-label">Evento activo</div>
+          <select id="eventSelect" class="select"></select>
+          <div id="eventHint" class="hint"></div>
+        </div>
+
+        <a class="iconBtn" id="btnHome" href="index.html" title="Inicio">🏠</a>
+
+        <div class="pill" id="authStatus">No ingresado</div>
+        <button class="btn danger" id="btnLogout" type="button">Salir</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="page">
+    <div class="container">
+      <div class="pageHead">
+        <h1 class="pageTitle">Choferes x Fase</h1>
+        <div class="pageSub">Disponibilidad de choferes por fase (Ida, Vuelta, etc.).</div>
+      </div>
+
+      <section class="card">
+        <div class="row" style="justify-content:space-between; gap:12px; flex-wrap:wrap;">
+          <div class="row" style="gap:10px; flex-wrap:wrap;">
+            <div>
+              <div class="label">Fase</div>
+              <select id="phaseSelect" class="select"></select>
+            </div>
+            <div class="pill" id="phaseHint"></div>
+          </div>
+
+          <div class="row" style="gap:10px; flex-wrap:wrap;">
+            <button class="btn" id="btnAllOn" type="button">Marcar todos</button>
+            <button class="btn" id="btnAllOff" type="button">Desmarcar todos</button>
+            <button class="btn primary" id="btnSave" type="button">Guardar</button>
+          </div>
+        </div>
+
+        <div class="divider" style="margin:14px 0;"></div>
+
+        <div id="driversBox" class="stack"></div>
+
+        <div class="hint" style="margin-top:12px">
+          Se guarda en: <code>events/&lt;eventId&gt;/eventDrivers/&lt;driverId&gt;.phases[phaseId]=true|false</code>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script type="module" src="./choferes-x-fase.js"></script>
+</body>
+</html>
