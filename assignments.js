@@ -48,12 +48,14 @@ function wireOnce(){
   
   if (clicksWired) return;
   clicksWired = true;
-console.log("WIRE ONCE EJECUTADO");
+  console.log("WIRE ONCE EJECUTADO");
   $("btnRefresh")?.addEventListener("click", async ()=>{
     if (!STATE.event?.id) return toast("Seleccioná un evento arriba.");
     await loadEventContext(STATE.event.id);
     renderAll();
     toast("Actualizado");
+    console.log("Botón Refesh Ok");
+  
   });
 
   ($("passSearch") || $("passengerSearch"))?.addEventListener("input", ()=>renderPassengers());
@@ -74,7 +76,9 @@ console.log("WIRE ONCE EJECUTADO");
 
     // 2) ✅ Asignar / Quitar pasajero (PRIMERO para que no lo “robe” data-driver)
     const passBtn = el.closest("[data-passenger]");
+    
     if (passBtn) {
+      console.log("Botón Asignar Pasajero Ok");
       const pid = passBtn.dataset.passenger;
       if (!pid) return;
 
@@ -103,6 +107,7 @@ console.log("WIRE ONCE EJECUTADO");
       renderDrivers();
       renderActiveDriverPill();
       renderPassengers();
+      console.log("Botón Selección Chofer Ok");
       return;
     }
 
@@ -111,6 +116,7 @@ console.log("WIRE ONCE EJECUTADO");
     if (phaseBtn) {
       STATE.ui.activePhase = phaseBtn.dataset.phase || null;
       renderAll();
+      console.log("Botón Cambio Fase Ok");
       return;
     }
   }, true); // capture=true por si algún contenedor frena bubbling
