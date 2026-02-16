@@ -68,11 +68,11 @@ function wireOnce(){
       return;
     }
 
-    const btn = ev.target.closest("button");
-    if (!btn) return;
+    const el = ev.target.closest("button,[data-passenger],[data-driver],[data-phase]");
+    if (!el) return;
 
     // 2) Cambio de fase (botones creados por renderPhaseBar)
-    const phaseBtn = btn.closest("button[data-phase]");
+    const phaseBtn = el.closest("[data-phase]");
     if (phaseBtn) {
       STATE.ui.activePhase = phaseBtn.dataset.phase || null;
       // al cambiar fase, reseteo chofer activo para evitar confusiones
@@ -82,7 +82,7 @@ function wireOnce(){
     }
 
     // 3) Selección de chofer (botones creados por renderDrivers)
-    const drvBtn = btn.closest("button[data-driver]");
+    const drvBtn = el.closest("[data-driver]");
     if (drvBtn) {
       STATE.ui.activeDriverId = drvBtn.dataset.driver || null;
       renderDrivers();
@@ -92,7 +92,7 @@ function wireOnce(){
     }
 
     // 4) Asignar / Quitar pasajero (botones creados por renderPassengers)
-    const passBtn = btn.closest("button[data-passenger]");
+    const passBtn = el.closest("[data-passenger]");
     if (passBtn) {
       const pid = passBtn.dataset.passenger;
       if (!pid) return;
