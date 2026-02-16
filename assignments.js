@@ -20,7 +20,7 @@ let clicksWired = false;
   await initCorePage({ page: "assignments" });
 
   if (!STATE.ui) STATE.ui = { activePhase: null };
-  if (STATE.ui.passFilter == null) STATE.ui.passFilter = "pendientes";
+  if (STATE.ui.passFilter == null) STATE.ui.passFilter = "pending";
   if (STATE.ui.activeDriverId == null) STATE.ui.activeDriverId = null;
 
   await loadMasterPassengers();
@@ -57,30 +57,26 @@ function wireOnce(){
 
   ($("passSearch") || $("passengerSearch"))?.addEventListener("input", ()=>renderPassengers());
 
-  // Delegación global: filtros, fases, chofer activo, asignar/quitar
+  // Delegación global: filtros (chips), fases, chofer activo, asignar/quitar
   document.addEventListener("click", async (ev) => {
-    const btn = ev.target.closest("button");
-    if (!btn) return;
-
-    // 1) Filtros pasajeros por texto
-    const t = (btn.textContent || "").trim().toLowerCase();
-    const key =
-      t.includes("pend") ? "pendientes" :
-      t.includes("asign") ? "asignados" :
-      t.includes("todo") ? "todos" :
-      null;
-
-    if (key) {
-      STATE.ui.passFilter = key;
+    // 1) Filtros pasajeros (chips en #passFilter)
+    const chip = ev.target.closest("#passFilter .chip[data-filter]");
+    if (chip){
+      STATE.ui.passFilter = chip.dataset.filter || "pending";
       markPassengerFilterButtons();
       renderPassengers();
       return;
     }
 
+    const btn = ev.target.closest("button");
+    if (!btn) return;
+
     // 2) Cambio de fase (botones creados por renderPhaseBar)
     const phaseBtn = btn.closest("button[data-phase]");
     if (phaseBtn) {
       STATE.ui.activePhase = phaseBtn.dataset.phase || null;
+      // al cambiar fase, reseteo chofer activo para evitar confusiones
+      STATE.ui.activeDriverId = STATE.ui.activeDriverId || null;
       renderAll();
       return;
     }
@@ -118,6 +114,7 @@ function wireOnce(){
       }
     }
   }, true); // capture=true por si algún contenedor frena bubbling
+ // capture=true por si algún contenedor frena bubbling
 }
 
 function renderAll(){
@@ -148,7 +145,7 @@ function renderPhaseBar(){
 }
 
 function renderActiveDriverPill(){
-  const pill = $("activeDriverPill") || $("driverActivePill") || $("driverActive");
+  const pill = $("activeDriverBadge");
   if (!pill) return;
 
   const id = STATE.ui?.activeDriverId;
@@ -237,17 +234,11 @@ function getPhaseAssignments(){
 }
 
 function markPassengerFilterButtons(){
-  const filter = (STATE.ui?.passFilter || "pendientes");
-  const scope = document; // global
-  scope.querySelectorAll("button").forEach(btn=>{
-    const t = (btn.textContent || "").trim().toLowerCase();
-    const key =
-      t.includes("pend") ? "pendientes" :
-      t.includes("asign") ? "asignados" :
-      t.includes("todo") ? "todos" :
-      null;
-    if (!key) return;
-    btn.classList.toggle("primary", key === filter);
+  const filter = (STATE.ui?.passFilter || "pending").toLowerCase();
+  const host = $("passFilter");
+  if (!host) return;
+  host.querySelectorAll(".chip[data-filter]").forEach(ch=>{
+    ch.classList.toggle("active", (ch.dataset.filter || "").toLowerCase() === filter);
   });
 }
 
