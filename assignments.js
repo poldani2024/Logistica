@@ -90,9 +90,11 @@ function wireOnce(){
 
       try{
         await toggleAssign(driverId, pid, phaseId);
+        
         await loadEventContext(STATE.event.id);
         renderDrivers();
         renderPassengers();
+        toast("Asignación guardada");   // 👈 acá
       }catch(err){
         console.error("ASSIGN ERROR", err);
         toast(err?.message || String(err));
