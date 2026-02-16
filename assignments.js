@@ -309,9 +309,9 @@ async function toggleAssign(driverId, passengerId, phaseId){
   if (!eventId) throw new Error("No hay evento seleccionado");
   if (!phaseId) throw new Error("No hay fase activa");
   
-  console.log("Driver ID: " & driverId);
-   console.log("passengerId: " & passengerId);
-   console.log("phaseId:  " & phaseId);
+  console.log("Driver ID: " , driverId);
+   console.log("passengerId: ", passengerId);
+   console.log("phaseId:  " , phaseId);
   
   const ref = doc(db, "events", eventId, "assignments", driverId);
   const snap = await getDoc(ref);
