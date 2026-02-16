@@ -100,18 +100,10 @@ function wireOnce(){
 
       passBtn.disabled = true;
       try{
-        const updatedIds = await toggleAssign(driverId, pid, phaseId);
-
-        // ✅ Update local state even if core.js no carga assignments
-        applyLocalAssignment(driverId, phaseId, updatedIds);
-
-        // Si tu core.js ya carga assignments, esto lo confirma; si no, no molesta.
-        try { await loadEventContext(STATE.event.id); } catch (_) {}
-
+        await toggleAssign(driverId, pid, phaseId);
+        await loadEventContext(STATE.event.id);
         renderDrivers();
         renderPassengers();
-
-        toast("Asignación actualizada");
       }catch(err){
         console.error("ASSIGN ERROR", err);
         toast(err?.message || String(err));
@@ -212,29 +204,6 @@ function renderDrivers(){
 
 }
 
-
-function ensureAssignmentsMap(){
-  const a = STATE.event?.assignments;
-  if (a instanceof Map) return a;
-
-  const m = new Map();
-  // compat: si viniera como objeto {driverId: data}
-  if (a && typeof a === "object"){
-    for (const [k,v] of Object.entries(a)) m.set(k, v);
-  }
-  if (!STATE.event) STATE.event = {};
-  STATE.event.assignments = m;
-  return m;
-}
-
-function applyLocalAssignment(driverId, phaseId, passengerIds){
-  const m = ensureAssignmentsMap();
-  const current = m.get(driverId) || {};
-  if (!current.phases || typeof current.phases !== "object") current.phases = {};
-  current.phases[phaseId] = Array.isArray(passengerIds) ? passengerIds : [];
-  m.set(driverId, current);
-}
-
 function getPhaseAssignments(){
   const phaseId = getActivePhaseId();
   const byDriver = new Map();
@@ -243,13 +212,25 @@ function getPhaseAssignments(){
 
   for (const [driverId, a] of map.entries()){
     let ids = [];
-    if (a?.phases && phaseId){
-      ids = Array.isArray(a.phases[phaseId]) ? a.phases[phaseId] : [];
+    const phaseIdNorm = String(phaseId || "").trim();
+
+    const hasPhases = a?.phases && typeof a.phases === "object";
+    if (hasPhases && phaseIdNorm){
+      // prefer phases[phaseId], but if it's missing/empty and we're in "ida", fallback to legacy passengerIds
+      const arr = Array.isArray(a.phases[phaseIdNorm]) ? a.phases[phaseIdNorm] : null;
+      if (arr && arr.length) {
+        ids = arr;
+      } else if (phaseIdNorm === "ida" && Array.isArray(a?.passengerIds) && a.passengerIds.length) {
+        ids = a.passengerIds;
+      } else {
+        ids = arr || [];
+      }
     } else if (Array.isArray(a?.passengerIds)) {
-      if (!phaseId || phaseId === "ida") ids = a.passengerIds;
+      // formato viejo: lo tratamos como "ida"
+      if (!phaseIdNorm || phaseIdNorm === "ida") ids = a.passengerIds;
     }
 
-    const set = new Set(ids.filter(Boolean));
+    const set = new Set((ids || []).filter(Boolean));
     byDriver.set(driverId, set);
     for (const pid of set) assignedAll.add(pid);
   }
@@ -332,15 +313,20 @@ async function toggleAssign(driverId, passengerId, phaseId){
   let data = snap.exists() ? (snap.data() || {}) : {};
   if (!data.phases || typeof data.phases !== "object") data.phases = {};
 
-  const arr = Array.isArray(data.phases[phaseId]) ? data.phases[phaseId].slice() : [];
+  // Si estamos en "ida" y venimos del formato viejo, arrancamos desde passengerIds
+let base = Array.isArray(data.phases[phaseId]) ? data.phases[phaseId].slice() : null;
+if ((!base || base.length === 0) && phaseId === "ida" && Array.isArray(data.passengerIds) && data.passengerIds.length){
+  base = data.passengerIds.slice();
+}
+const arr = base || [];
+
   const i = arr.indexOf(passengerId);
   if (i >= 0) arr.splice(i, 1);
   else arr.push(passengerId);
 
   data.phases[phaseId] = Array.from(new Set(arr.filter(Boolean)));
+  if (phaseId === "ida") data.passengerIds = data.phases[phaseId];
   data.updatedAt = serverTimestamp();
 
   await setDoc(ref, data, { merge: true });
-  return data.phases[phaseId];
 }
-
