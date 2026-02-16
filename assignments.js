@@ -45,9 +45,10 @@ let clicksWired = false;
 });
 
 function wireOnce(){
+  
   if (clicksWired) return;
   clicksWired = true;
-
+console.log("WIRE ONCE EJECUTADO");
   $("btnRefresh")?.addEventListener("click", async ()=>{
     if (!STATE.event?.id) return toast("Seleccioná un evento arriba.");
     await loadEventContext(STATE.event.id);
