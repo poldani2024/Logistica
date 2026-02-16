@@ -68,30 +68,10 @@ function wireOnce(){
       return;
     }
 
-    const el = ev.target.closest("button,[data-passenger],[data-driver],[data-phase]");
+    const el = ev.target.closest("[data-passenger],[data-driver],[data-phase],button");
     if (!el) return;
 
-    // 2) Cambio de fase (botones creados por renderPhaseBar)
-    const phaseBtn = el.closest("[data-phase]");
-    if (phaseBtn) {
-      STATE.ui.activePhase = phaseBtn.dataset.phase || null;
-      // al cambiar fase, reseteo chofer activo para evitar confusiones
-      STATE.ui.activeDriverId = STATE.ui.activeDriverId || null;
-      renderAll();
-      return;
-    }
-
-    // 3) Selección de chofer (botones creados por renderDrivers)
-    const drvBtn = el.closest("[data-driver]");
-    if (drvBtn) {
-      STATE.ui.activeDriverId = drvBtn.dataset.driver || null;
-      renderDrivers();
-      renderActiveDriverPill();
-      renderPassengers();
-      return;
-    }
-
-    // 4) Asignar / Quitar pasajero (botones creados por renderPassengers)
+    // 2) ✅ Asignar / Quitar pasajero (PRIMERO para que no lo “robe” data-driver)
     const passBtn = el.closest("[data-passenger]");
     if (passBtn) {
       const pid = passBtn.dataset.passenger;
@@ -112,10 +92,29 @@ function wireOnce(){
         console.error("ASSIGN ERROR", err);
         toast(err?.message || String(err));
       }
+      return;
+    }
+
+    // 3) Selección de chofer
+    const drvBtn = el.closest("[data-driver]");
+    if (drvBtn) {
+      STATE.ui.activeDriverId = drvBtn.dataset.driver || null;
+      renderDrivers();
+      renderActiveDriverPill();
+      renderPassengers();
+      return;
+    }
+
+    // 4) Cambio de fase
+    const phaseBtn = el.closest("[data-phase]");
+    if (phaseBtn) {
+      STATE.ui.activePhase = phaseBtn.dataset.phase || null;
+      renderAll();
+      return;
     }
   }, true); // capture=true por si algún contenedor frena bubbling
- // capture=true por si algún contenedor frena bubbling
 }
+
 
 function renderAll(){
   renderPhaseBar();
