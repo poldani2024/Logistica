@@ -210,6 +210,8 @@ function render() {
             phaseId: phaseIdNow,
             driverId: targetDriverId
           });
+          // 🔁 refresh completo (mantiene filtros porque están en STATE.ui)
+          await loadEventContext(STATE.event.id);
           render();
           toast("Tracking actualizado");
         } catch (e) { console.error(e); toast(e.message || String(e)); }
