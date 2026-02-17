@@ -1,4 +1,4 @@
-import { initCorePage, STATE, $, toast, escapeHtml, db } from "./core.js";
+import { initCorePage, STATE, $, toast, escapeHtml} from "./core.js";
 
 import {
   collection, addDoc, query, where, orderBy, getDocs, serverTimestamp
