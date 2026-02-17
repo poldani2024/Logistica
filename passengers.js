@@ -200,6 +200,10 @@ function formHtml(p, isNew){
     <div class="row" style="margin-top:12px; flex-wrap:wrap;">
       <button id="btnSavePassenger" class="btnPrimary primary">Guardar</button>
       <button id="btnGeocodeOne" class="btn">📍 Geolocalizar</button>
+      <div class="row" style="gap:10px; align-items:center; margin-top:10px;">
+        <button id="btnAddPassengerToEvent" class="btnSecondary">Agregar al evento activo</button>
+        <span id="addToEventHint" class="muted"></span>
+      </div>
       ${isNew ? `<button id="btnCancelPassenger" class="btnSecondary">Cancelar</button>` : ``}
     </div>
 
