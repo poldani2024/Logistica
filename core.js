@@ -37,7 +37,7 @@ import {
 
 export const $ = (id) => document.getElementById(id);
 
-export const ADMIN_EMAIL = "pedro.l.oldani@gmail.com";
+export const ADMIN_EMAIL = "pedro.l.oldani@gmail.com1";
 
 function isAdmin(){
   const email = (STATE.auth.user?.email || "").trim().toLowerCase();
