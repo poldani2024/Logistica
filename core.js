@@ -39,6 +39,104 @@ export const $ = (id) => document.getElementById(id);
 
 export const ADMIN_EMAIL = "pedro.l.oldani@gmail.com";
 
+function isAdmin(){
+  const email = (STATE.auth.user?.email || "").trim().toLowerCase();
+  return email === ADMIN_EMAIL.toLowerCase();
+}
+
+/* -------------------------
+ * Users + permisos
+ * ------------------------- */
+
+export async function ensureUserProfile() {
+  const u = STATE.auth?.user;
+  if (!u) return;
+
+  const ref = doc(db, "users", u.uid);
+  const snap = await getDoc(ref);
+
+  if (!snap.exists()) {
+    await setDoc(ref, {
+      firstName: "",
+      lastName: "",
+      phone: "",
+      email: (u.email || "").trim(),
+      active: true,
+      perms: {},
+      updatedAt: serverTimestamp(),
+      updatedBy: (u.email || "").trim()
+    }, { merge: true });
+  } else {
+    const data = snap.data() || {};
+    if (data.active === undefined) {
+      await setDoc(ref, { active: true, updatedAt: serverTimestamp() }, { merge: true });
+    }
+  }
+}
+
+export async function loadUserProfile() {
+  const u = STATE.auth?.user;
+  if (!u) return null;
+
+  const ref = doc(db, "users", u.uid);
+  const snap = await getDoc(ref);
+
+  const profile = snap.exists() ? (snap.data() || {}) : null;
+  STATE.auth.profile = profile;
+
+  const active = (profile && profile.active === false) ? false : true;
+  STATE.auth.isActive = active;
+
+  const base = (profile?.perms && typeof profile.perms === "object") ? profile.perms : {};
+  const adminTotal = isAdmin() || !!base["Admin"];
+
+  if (!active && !isAdmin()) {
+    STATE.auth.perms = {};
+    STATE.auth.isAdmin = false;
+    return profile;
+  }
+
+  if (adminTotal) {
+    STATE.auth.perms = {
+      "Admin": true,
+      "Eventos": true,
+      "Solicitudes": true,
+      "Admin.Solicitudes": true,
+      "Choferes": true,
+      "Pasajeros": true,
+      "ChoferesXFase": true,
+      "Asignaciones": true,
+      "Tracking": true,
+      "Mapa": true,
+      "Permisos": true
+    };
+    STATE.auth.isAdmin = true;
+  } else {
+    STATE.auth.perms = {
+      "Admin": false,
+      "Eventos": !!base["Eventos"],
+      "Solicitudes": !!base["Solicitudes"],
+      "Admin.Solicitudes": !!base["Admin.Solicitudes"],
+      "Choferes": !!base["Choferes"],
+      "Pasajeros": !!base["Pasajeros"],
+      "ChoferesXFase": !!base["ChoferesXFase"],
+      "Asignaciones": !!base["Asignaciones"],
+      "Tracking": !!base["Tracking"],
+      "Mapa": !!base["Mapa"],
+      "Permisos": !!base["Permisos"]
+    };
+  }
+
+  return profile;
+}
+
+export function can(key) {
+  const k = String(key || "").trim();
+  if (!k) return false;
+  return !!STATE.auth?.perms?.[k];
+}
+
+
 /* -------------------------
  * Estado global
  * ------------------------- */
@@ -47,6 +145,9 @@ export const STATE = {
   auth: {
     user: null,
     isAdmin: false,
+    isActive: true,
+    profile: null,
+    perms: {},
     driver: null // objeto driver master si matchea email
   },
   events: [],
@@ -603,12 +704,25 @@ export async function initCorePage({ page }) {
   if (st) {
     const u = STATE.auth.user;
     st.textContent = u
-      ? `Ingresado: ${u.email}${STATE.auth.isAdmin ? " (Admin)" : ""}`
+      ? `Ingresado: ${u.email}${STATE.auth.isAdmin ? " (Admin)" : ""}${STATE.auth.isActive === false ? " (Inactivo)" : ""}`
       : "No ingresado";
   }
 
   if (!STATE.auth.user) {
     toast("Necesitás ingresar con Google para usar la app");
+    return;
+  }
+
+  // Perfil + permisos
+  try {
+    await ensureUserProfile();
+    await loadUserProfile();
+  } catch (e) {
+    console.warn("loadUserProfile warning:", e);
+  }
+
+  if (STATE.auth.isActive === false && !isAdmin()) {
+    document.body.innerHTML = "<p style='padding:20px'>Tu usuario está inactivo. Contactá a un administrador.</p>";
     return;
   }
 
@@ -620,7 +734,7 @@ export async function initCorePage({ page }) {
   if (st) {
     const u = STATE.auth.user;
     st.textContent = u
-      ? `Ingresado: ${u.email}${STATE.auth.isAdmin ? " (Admin)" : (STATE.auth.driver ? " (Chofer)" : "")}`
+      ? `Ingresado: ${u.email}${STATE.auth.isAdmin ? " (Admin)" : (STATE.auth.driver ? " (Chofer)" : "")}${STATE.auth.isActive === false ? " (Inactivo)" : ""}`
       : "No ingresado";
   }
 
