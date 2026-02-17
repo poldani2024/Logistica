@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Usuarios y Permisos</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">Logística Soka</div>
+    <nav class="nav">
+      <a href="./index.html">Home</a>
+      <a class="active" href="./users_admin.html">Permisos</a>
+    </nav>
+  </header>
+
+  <main class="container">
+    <section class="card">
+      <div class="row" style="justify-content:space-between; align-items:center;">
+        <h2 style="margin:0;">Usuarios</h2>
+        <button id="btnRefresh" class="btnSecondary">Actualizar</button>
+      </div>
+      <div id="usersList"></div>
+    </section>
+
+    <section class="card">
+      <h2>Detalle / Permisos</h2>
+      <div id="userDetail" class="muted">Seleccioná un usuario…</div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast"></div>
+  <script type="module" src="./users_admin.js"></script>
+</body>
+</html>
