@@ -27,6 +27,25 @@ async function addPassengerToEvent(eventId, passengerId){
   }, { merge:true });
 }
 
+btnAdd.addEventListener("click", async () => {
+  try{
+    const eventId = STATE.event?.id;
+    console.log("ADD-TO-EVENT click", { eventId, currentPassengerId });
+    toast("Agregando pasajero al evento...");
+
+    await addPassengerToEvent(eventId, currentPassengerId);
+
+    console.log("ADD-TO-EVENT saved ✅");
+    await loadEventContext(eventId);
+    toast("Pasajero agregado al evento");
+  }catch(e){
+    console.error("ADD-TO-EVENT error ❌", e);
+    toast(e.message || String(e));
+  }
+});
+
+
+
 /* ---------------------------
    GEO LOG (UI + persistence)
 ----------------------------*/
