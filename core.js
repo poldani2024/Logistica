@@ -66,6 +66,19 @@ driversIds: new Set(),
   }
 };
 
+export async function addPassengerToEvent(eventId, passengerId, extra = {}) {
+  if (!eventId) throw new Error("No hay eventId");
+  if (!passengerId) throw new Error("No hay passengerId");
+
+  const ref = doc(db, "events", eventId, "eventPassengers", passengerId);
+  await setDoc(ref, {
+    notes: "",
+    geo: null,
+    updatedAt: serverTimestamp(),
+    ...extra
+  }, { merge: true });
+}
+
 // Exponer para debug (multipágina)
 window.STATE = STATE;
 
