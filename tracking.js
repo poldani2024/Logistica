@@ -70,12 +70,17 @@ function render() {
           <div class="row" style="gap:10px; align-items:center;">
             <label class="muted">Chofer:</label>
             <select id="selDriver" class="select">
-              ${dsPhase.map(d=> `<option value="${escapeHtml(d.id)}">${escapeHtml(fullName(d))}</option>`).join("")}
+              ${[`<option value="__ALL__">Todos</option>`].concat(dsPhase.map(d=> `<option value="${escapeHtml(d.id)}">${escapeHtml(fullName(d))}</option>`)).join("")}
             </select>
           </div>
-        ` : `
-          <div class="row"><span class="muted">Chofer:</span>&nbsp;<strong>${escapeHtml(fullName(me))}</strong></div>
         `}
+
+        <div class="row" style="gap:10px; align-items:center;">
+          <label class="muted">Estado:</label>
+          <select id="selStatus" class="select">
+            ${["Todos","Pendiente","En tránsito","En destino","Ausente"].map(s=>`<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join("")}
+          </select>
+        </div>
       </div>
 
       <div style="height:12px"></div>
@@ -87,24 +92,46 @@ function render() {
   if (selPhase) selPhase.value = activePhaseId;
 
   const selDriver = $("selDriver");
+  const selStatus = $("selStatus");
   if (isAdmin && selDriver) selDriver.value = selectedDriverId;
 
-  const renderList = (driverId, phaseIdNow) => {
+  const renderList = (driverId, phaseIdNow, statusFilter) => {
     if (!phaseIdNow) {
       $("trackingList").innerHTML = `<p class="muted">Seleccioná una fase.</p>`;
       return;
     }
 
+    const wanted = (statusFilter || "Todos").toLowerCase();
+
     // Pasajeros del evento (con meta _event)
     const ps = passengersInEvent();
 
-    const ids = new Set(getPassengerIdsFor(driverId, phaseIdNow));
-    const list = ps.filter(p => ids.has(p.id));
+    // armar pares (driver, passenger)
+    let pairs = [];
+    if (driverId === "__ALL__") {
+      dsPhase.forEach(drv => {
+        const ids = new Set(getPassengerIdsFor(drv.id, phaseIdNow));
+        ps.forEach(p => { if (ids.has(p.id)) pairs.push({ drv, p }); });
+      });
+    } else {
+      const ids = new Set(getPassengerIdsFor(driverId, phaseIdNow));
+      pairs = ps.filter(p => ids.has(p.id)).map(p => ({ drv: dsPhase.find(d=>d.id===driverId) || null, p }));
+    }
 
-    $("trackingList").innerHTML = list.length ? `
+    // filtro por estado (por fase)
+    pairs = pairs.filter(({ p }) => {
+      const t = getTrackingForPhase(p, phaseIdNow);
+      if (wanted === "todos") return true;
+      return (t.status || "Pendiente").toLowerCase() === wanted;
+    });
+
+    const showDriverCol = (driverId === "__ALL__");
+
+    $("trackingList").innerHTML = pairs.length ? `
       <table>
         <thead>
           <tr>
+            ${showDriverCol ? "<th>Chofer</th>" : ""}
             <th>Pasajero</th>
             <th>Estado</th>
             <th>Obs</th>
@@ -112,86 +139,49 @@ function render() {
           </tr>
         </thead>
         <tbody>
-          ${list.map(p => {
+          ${pairs.map(({ drv, p }) => {
             const t = getTrackingForPhase(p, phaseIdNow);
             return `
               <tr>
+                ${showDriverCol ? `<td><strong>${escapeHtml(drv ? fullName(drv) : "")}</strong></td>` : ""}
                 <td>
                   <strong>${escapeHtml(fullName(p))}</strong>
                   <div class="muted">${escapeHtml(p.address||"")} ${p.localidad ? "· "+escapeHtml(p.localidad) : ""}</div>
                 </td>
                 <td>
                   <select data-st="1" data-id="${escapeHtml(p.id)}" class="select">
-                    ${["Pendiente","En tránsito","En destino","Ausente"].map(x => `<option ${x===t.status?"selected":""}>${x}</option>`).join("")}
+                    ${["Pendiente","En tránsito","En destino","Ausente"].map(x => `<option ${x===t.status?"selected":""}>${escapeHtml(x)}</option>`).join("")}
                   </select>
                 </td>
-                <td>
-                  <input data-note="1" data-id="${escapeHtml(p.id)}" value="${escapeHtml(t.note)}" placeholder="Observación…" />
-                </td>
-                <td>
-                  <button class="btnPrimary" data-save="1" data-id="${escapeHtml(p.id)}">Guardar</button>
-                </td>
+                <td><input data-note="1" data-id="${escapeHtml(p.id)}" value="${escapeHtml(t.note)}" placeholder="Observación…" class="input"></td>
+                <td><button class="btnPrimary" data-save="1" data-id="${escapeHtml(p.id)}" data-driver="${escapeHtml(drv?.id || "")}">Guardar</button></td>
               </tr>
             `;
           }).join("")}
         </tbody>
       </table>
-    ` : `<p class="muted">Este chofer no tiene pasajeros asignados en esta fase.</p>`;
+    ` : `<p class="muted">No hay pasajeros para mostrar con estos filtros.</p>`;
 
     document.querySelectorAll("button[data-save='1']").forEach(btn => {
       btn.addEventListener("click", async () => {
-        const pid = btn.dataset.id;
-        const stEl = document.querySelector(`select[data-st='1'][data-id='${pid}']`);
-        const noteEl = document.querySelector(`input[data-note='1'][data-id='${pid}']`);
-
         try {
+          const pid = btn.dataset.id;
+          const stEl = document.querySelector(`select[data-st='1'][data-id='${pid}']`);
+          const noteEl = document.querySelector(`input[data-note='1'][data-id='${pid}']`);
+
+          const rowDriverId = btn.dataset.driver || "";
+          const targetDriverId = (isAdmin ? (driverId === "__ALL__" ? rowDriverId : driverId) : me.id);
+
           await updateTrackingAsDriver({
             passengerId: pid,
-            trackingStatus: stEl?.value || "Pendiente",
-            trackingNote: noteEl?.value || "",
+            trackingStatus: stEl.value,
+            trackingNote: noteEl.value,
             phaseId: phaseIdNow,
-            driverId: driverId
+            driverId: targetDriverId
           });
 
-          // refrescar contexto para que se vea el tracking actualizado
-          await loadEventContext(STATE.event.id);
-          render();
           toast("Tracking actualizado");
-        } catch (e) {
-          console.error(e);
-          toast(e?.message || String(e));
-        }
+        } catch (e) { console.error(e); toast(e.message || String(e)); }
       });
     });
   };
-
-  const apply = () => {
-    const pid = $("selPhase")?.value || activePhaseId;
-    STATE.ui.activePhase = pid;
-
-    // si cambia fase, recalcular lista de choferes disponibles (re-render completo)
-    if (pid !== activePhaseId) { render(); return; }
-
-    const did = isAdmin ? ($("selDriver")?.value || selectedDriverId) : selectedDriverId;
-    STATE.ui.activeDriverId = did;
-    renderList(did, pid);
-  };
-
-  selPhase?.addEventListener("change", apply);
-  selDriver?.addEventListener("change", apply);
-
-  renderList(selectedDriverId, activePhaseId);
-}
-
-async function refreshAll() {
-  await loadMasterDrivers();
-  await loadMasterPassengers();
-  await loadEventContext(STATE.event.id);
-  render();
-}
-
-(async function init(){
-  await initCorePage({ page: "tracking" });
-  document.addEventListener("eventChanged", refreshAll);
-  await refreshAll();
-})();

@@ -345,13 +345,20 @@ export async function loadEventContext(eventId) {
     STATE.event.passengersMeta.set(x.id, x.data() || {});
   });
 
-  // 4) assignments (1 doc por driverId)
+  // 4) assignments (1 doc por driverId) — soporta fases + compat vieja
   const aSnap = await getDocs(collection(db, "events", STATE.event.id, "assignments"));
   aSnap.forEach(x => {
-    const data = x.data() || {};
+    const raw = x.data() || {};
+    const phases = (raw.phases && typeof raw.phases === "object") ? raw.phases : {};
+    // compat: si existe passengerIds (modelo viejo) y no hay phases.ida, mapearlo
+    if (!Array.isArray(phases.ida) && Array.isArray(raw.passengerIds)) {
+      phases.ida = raw.passengerIds;
+    }
     STATE.event.assignments.set(x.id, {
-      driverId: x.id,
-      passengerIds: Array.isArray(data.passengerIds) ? data.passengerIds : []
+      ...raw,
+      driverId: raw.driverId || x.id,
+      phases,
+      passengerIds: Array.isArray(raw.passengerIds) ? raw.passengerIds : []
     });
   });
 }
@@ -387,7 +394,7 @@ export function passengersInEvent() {
 }
 
 export function assignmentForDriver(driverId) {
-  return STATE.event.assignments.get(driverId) || { driverId, passengerIds: [] };
+  return STATE.event.assignments.get(driverId) || { driverId, passengerIds: [], phases: {} };
 }
 
 export function assignedDriverIdForPassenger(passengerId) {
