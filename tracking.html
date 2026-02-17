@@ -3,89 +3,45 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Tracking · Logística Jóvenes</title>
+  <title>Tracking · Logística Soka</title>
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
- <header class="topbar">
-  <div class="topbar-inner">
-    <!-- Izquierda: Marca -->
-    <div class="brand">
-      <div class="title">Gestión de Transporte Soka Gakkai</div>
-      <div class="sub">Rosario / Gran Rosario</div>
-    </div>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <div class="title">Gestión de Transporte Soka Gakkai</div>
+        <div class="sub">Rosario / Gran Rosario</div>
+      </div>
 
-    <!-- Centro: Evento activo -->
-    <div class="topbar-center">
-      <div class="field" style="min-width:min(620px, 48vw);">
-        <label>Evento activo</label>
+      <nav class="nav">
+        <a href="./index.html">Home</a>
+        <a href="./events.html">Eventos</a>
+        <a href="./drivers.html">Choferes</a>
+        <a href="./passengers.html">Pasajeros</a>
+        <a href="./driver-phases.html">Choferes x Fase</a>
+        <a href="./assignments.html">Asignaciones</a>
+        <a class="active" href="./tracking.html">Tracking</a>
+      </nav>
 
-        <!-- Si la página tiene selector, dejá este <select>. Si NO, lo podés borrar y dejar solo el span -->
-        <select id="eventSelect"></select>
-
-        <!-- Siempre presente: muestra el texto del evento activo -->
-        <div class="subtitle" id="eventHint">No hay evento seleccionado</div>
+      <div class="actions">
+        <button id="btnSignIn" class="btnSecondary">Ingresar</button>
+        <button id="btnSignOut" class="btnSecondary" style="display:none;">Salir</button>
       </div>
     </div>
-
-    <!-- Derecha: Home + Usuario + Salir -->
-    <div class="row">
-      <a href="index.html" class="iconbtn primary" title="Inicio">🏠</a>
-
-      <div class="pill">
-        <span id="authStatus">No ingresado</span>
-        <button id="btnLogin" type="button" style="display:none">Ingresar</button>
-        <button id="btnLogout" type="button">Salir</button>
-      </div>
-    </div>
-  </div>
-</header>
-
-
-<div class="container">
-  <div class="grid cols-2">
-    <div class="card">
-      <div style="display:flex; justify-content:space-between; gap:10px; align-items:center;">
-        <div>
-          <div style="font-weight:800; font-size:18px;">Choferes</div>
-          <div style="color:var(--muted); font-size:13px;">Master data</div>
-        </div>
-        <button class="btn primary" id="btnAddDriver">+ Agregar</button>
-      </div>
-      <!-- tabla desktop -->
-      <div class="desktop-only" style="margin-top:12px;">
-        <table class="table" id="driversTable"></table>
-      </div>
-      <!-- cards mobile -->
-      <div class="mobile-only" style="margin-top:12px;">
-        <div class="cards-list" id="driversCards"></div>
-      </div>
-    </div>
-
-    <div class="card">
-      <!-- otra columna -->
-    </div>
-  </div>
-</div>
-
-<div class="toast" id="toast"></div>
-
+  </header>
 
   <main class="container">
-    <section class="card">
-      <h2>Tracking (por evento)</h2>
-      <div class="muted" id="eventHint"></div>
-      <div id="trackingBox"></div>
-    </section>
+    <div class="row" style="justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+      <h1 style="margin: 18px 0;">Tracking</h1>
+      <div id="eventHint" class="muted"></div>
+    </div>
+
+    <div id="trackingBox"></div>
   </main>
 
-  <div id="toast" class="toast"></div>
+  <div id="toast" class="toast" style="display:none;"></div>
 
   <script type="module" src="./tracking.js"></script>
-
-<script type="module" src="./firebase-init.js"></script>
-<script type="module" src="./core.js"></script>
-
 </body>
 </html>
-

@@ -345,26 +345,15 @@ export async function loadEventContext(eventId) {
     STATE.event.passengersMeta.set(x.id, x.data() || {});
   });
 
- // 4) assignments (1 doc por driverId)
-const aSnap = await getDocs(collection(db, "events", STATE.event.id, "assignments"));
-aSnap.forEach(x => {
-  const raw = x.data() || {};
-
-  // phases (modelo nuevo)
-  const phases = (raw.phases && typeof raw.phases === "object") ? raw.phases : {};
-
-  // compatibilidad: si hay modelo viejo passengerIds y no hay phases.ida, mapearlo
-  if (!Array.isArray(phases.ida) && Array.isArray(raw.passengerIds)) {
-    phases.ida = raw.passengerIds;
-  }
-
-  STATE.event.assignments.set(x.id, {
-    ...raw,
-    driverId: raw.driverId || x.id,
-    phases,
-    passengerIds: Array.isArray(raw.passengerIds) ? raw.passengerIds : [] // lo mantenés si querés compat
+  // 4) assignments (1 doc por driverId)
+  const aSnap = await getDocs(collection(db, "events", STATE.event.id, "assignments"));
+  aSnap.forEach(x => {
+    const data = x.data() || {};
+    STATE.event.assignments.set(x.id, {
+      driverId: x.id,
+      passengerIds: Array.isArray(data.passengerIds) ? data.passengerIds : []
+    });
   });
-});
 }
 export async function saveDriverPhase(driverId, phaseId, enabled){
   if (!STATE.event?.id) throw new Error("No hay evento seleccionado");
@@ -511,25 +500,48 @@ export async function unassignPassenger({ passengerId, driverId }) {
   });
 }
 
-export async function updateTrackingAsDriver({ passengerId, trackingStatus, trackingNote }) {
+export async function updateTrackingAsDriver({ passengerId, trackingStatus, trackingNote, phaseId, driverId }) {
   if (!STATE.event.id) throw new Error("No hay evento seleccionado");
 
-  const driver = STATE.auth.driver;
-  if (!driver) throw new Error("No sos chofer en el sistema");
+  const isAdmin = !!STATE.auth.isAdmin;
+  const me = STATE.auth.driver;
 
-  const a = assignmentForDriver(driver.id);
-  if (!a.passengerIds.includes(passengerId)) {
-    throw new Error("Ese pasajero no está asignado a vos");
+  // Determinar qué chofer se está operando (admin puede operar sobre cualquiera)
+  const effectiveDriverId = (isAdmin && driverId) ? driverId : (me?.id || null);
+  if (!effectiveDriverId) throw new Error("No sos chofer en el sistema");
+
+  const pid = (phaseId || "ida");
+
+  const a = assignmentForDriver(effectiveDriverId) || {};
+  const phases = (a.phases && typeof a.phases === "object") ? a.phases : {};
+
+  let assignedIds = [];
+  if (Array.isArray(phases[pid])) assignedIds = phases[pid];
+  else if (pid === "ida" && Array.isArray(a.passengerIds)) assignedIds = a.passengerIds; // compat vieja
+
+  if (!assignedIds.includes(passengerId)) {
+    throw new Error("Ese pasajero no está asignado a ese chofer en esta fase");
   }
 
+  const status = trackingStatus || "Pendiente";
+  const note = (trackingNote || "").trim();
+
   const pRef = doc(db, "events", STATE.event.id, "eventPassengers", passengerId);
+
+  // Guardar tracking por fase (sin romper compatibilidad: también actualiza campos legacy)
   await updateDoc(pRef, {
-    trackingStatus: trackingStatus || "Pendiente",
-    trackingNote: (trackingNote || "").trim(),
+    [`trackingByPhase.${pid}.status`]: status,
+    [`trackingByPhase.${pid}.note`]: note,
+    [`trackingByPhase.${pid}.updatedAt`]: serverTimestamp(),
+    [`trackingByPhase.${pid}.updatedBy`]: STATE.auth.user?.email || "",
+
+    trackingStatus: status,
+    trackingNote: note,
     trackingUpdatedAt: serverTimestamp(),
     trackingUpdatedBy: STATE.auth.user?.email || ""
   });
 }
+
 
 /* -------------------------
  * Inicialización por página
