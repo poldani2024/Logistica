@@ -195,6 +195,14 @@ function render() {
           const rowDriverId = btn.dataset.driver || "";
           const targetDriverId = (isAdmin ? (driverId === "__ALL__" ? rowDriverId : driverId) : me.id);
 
+           console.error("pid: ", pid);
+           console.error("stEl: ", stEl);
+           console.error("noteEl: ", noteEl);
+           console.error("rowDriverId: ", rowDriverId);
+           console.error("targetDriverId: ", targetDriverId);
+
+
+          
           await updateTrackingAsDriver({
             passengerId: pid,
             trackingStatus: stEl.value,
@@ -202,7 +210,7 @@ function render() {
             phaseId: phaseIdNow,
             driverId: targetDriverId
           });
-
+          console.error("Grabó");
           toast("Tracking actualizado");
         } catch (e) { console.error(e); toast(e.message || String(e)); }
       });
