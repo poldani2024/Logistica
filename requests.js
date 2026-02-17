@@ -1,14 +1,9 @@
-import {
-  initCorePage, STATE, $, toast, escapeHtml
-} from "./core.js";
+import { initCorePage, STATE, $, toast, escapeHtml, db } from "./core.js";
 
 import {
-  getFirestore, collection, addDoc, query, where, orderBy, getDocs, serverTimestamp
+  collection, addDoc, query, where, orderBy, getDocs, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-// core.js ya inicializa Firebase; si no, ajustamos para exportar db.
-// Para no romperte, tomamos db desde window si ya lo tenés ahí.
-const db = window.db || getFirestore();
 
 let passengerCount = 0;
 
