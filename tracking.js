@@ -210,7 +210,7 @@ function render() {
             phaseId: phaseIdNow,
             driverId: targetDriverId
           });
-          console.error("Grabó");
+          render();
           toast("Tracking actualizado");
         } catch (e) { console.error(e); toast(e.message || String(e)); }
       });
