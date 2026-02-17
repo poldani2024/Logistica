@@ -219,11 +219,6 @@ async function refresh() {
 (async function init() {
   await initCorePage({ page: "requests_admin" });
 
-  if (!STATE.auth?.isAdmin) {
-    document.body.innerHTML = "<p style='padding:20px'>Solo admin.</p>";
-    return;
-  }
-
   $("btnRefresh").onclick = refresh;
   $("selRqStatus").onchange = refresh;
 
