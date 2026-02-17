@@ -73,7 +73,7 @@ function render() {
               ${[`<option value="__ALL__">Todos</option>`].concat(dsPhase.map(d=> `<option value="${escapeHtml(d.id)}">${escapeHtml(fullName(d))}</option>`)).join("")}
             </select>
           </div>
-        `}
+        ` : ``}
 
         <div class="row" style="gap:10px; align-items:center;">
           <label class="muted">Estado:</label>
