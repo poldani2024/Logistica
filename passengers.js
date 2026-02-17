@@ -27,46 +27,6 @@ async function addPassengerToEvent(eventId, passengerId){
   }, { merge:true });
 }
 
-// Agregar pasajero al evento activo (wire robusto)
-const btnAdd = document.getElementById("btnAddPassengerToEvent");
-const hint = document.getElementById("addToEventHint");
-
-if (hint){
-  const activeEventId = STATE.event?.id;
-  hint.textContent = activeEventId
-    ? `Evento activo: ${STATE.event?.name || STATE.event?.title || activeEventId}`
-    : "No hay evento activo. Seleccioná un evento en Home.";
-}
-
-if (btnAdd){
-  // evita que quede "doble cableado" cuando re-renderizás el detalle
-  if (btnAdd.dataset.wired === "1") return;
-  btnAdd.dataset.wired = "1";
-
-  const activeEventId = STATE.event?.id;
-  btnAdd.disabled = !activeEventId || !currentPassengerId;
-
-  btnAdd.addEventListener("click", async () => {
-    try{
-      const eventId = STATE.event?.id;
-      if (!eventId) return toast("Seleccioná un evento primero.");
-      if (!currentPassengerId) return toast("Guardá el pasajero antes de asignarlo al evento.");
-      if (!isAdmin()) return toast("Solo Admin");
-
-      await addPassengerToEvent(eventId, currentPassengerId);
-      await loadEventContext(eventId);
-
-      // refrescar la UI local si querés: renderCards() / renderForm() según tu pantalla
-      toast("Pasajero agregado al evento");
-    }catch(e){
-      console.error(e);
-      toast(e.message || String(e));
-    }
-  });
-}
-
-
-
 
 /* ---------------------------
    GEO LOG (UI + persistence)
@@ -293,6 +253,38 @@ function wireFormButtons({ isNew }){
       $("detailMode").textContent = "Seleccioná un pasajero…";
     });
   }
+
+    // --- Agregar pasajero al evento activo ---
+  const btnAdd = document.getElementById("btnAddPassengerToEvent");
+  const hint = document.getElementById("addToEventHint");
+
+  if (hint){
+    const activeEventId = STATE.event?.id;
+    hint.textContent = activeEventId
+      ? `Evento activo: ${STATE.event?.name || STATE.event?.title || activeEventId}`
+      : "No hay evento activo. Seleccioná un evento en Home.";
+  }
+
+  if (btnAdd){
+    btnAdd.disabled = !STATE.event?.id || !currentPassengerId;
+
+    btnAdd.addEventListener("click", async () => {
+      try{
+        const eventId = STATE.event?.id;
+        if (!eventId) return toast("Seleccioná un evento primero.");
+        if (!currentPassengerId) return toast("Guardá el pasajero antes de asignarlo al evento.");
+        if (!isAdmin()) return toast("Solo Admin");
+
+        await addPassengerToEvent(eventId, currentPassengerId);
+        await loadEventContext(eventId);
+        toast("Pasajero agregado al evento");
+      }catch(e){
+        console.error(e);
+        toast(e.message || String(e));
+      }
+    });
+  }
+
 }
 
 function getPayloadFromForm(){
