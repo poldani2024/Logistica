@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Solicitudes</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">Logística Soka</div>
+    <nav class="nav">
+      <a href="./index.html">Home</a>
+      <a href="./events.html">Eventos</a>
+      <a href="./assignments.html">Asignaciones</a>
+      <a href="./tracking.html">Tracking</a>
+      <a class="active" href="./requests.html">Solicitudes</a>
+    </nav>
+  </header>
+
+  <main class="container">
+    <div id="eventHint" class="muted"></div>
+
+    <section class="card">
+      <h2>Crear solicitud de viaje</h2>
+
+      <div class="grid2">
+        <div class="field">
+          <label>Evento / Motivo</label>
+          <input id="rq_title" class="input" placeholder="Ej: Zadankai / Reunión / Actividad..." />
+        </div>
+        <div class="field">
+          <label>Fecha</label>
+          <input id="rq_date" type="date" class="input" />
+        </div>
+
+        <div class="field">
+          <label>Dirección destino</label>
+          <input id="rq_destAddress" class="input" placeholder="Calle y número" />
+        </div>
+        <div class="field">
+          <label>Ciudad destino</label>
+          <input id="rq_destCity" class="input" placeholder="Rosario / San Lorenzo / ..." />
+        </div>
+
+        <div class="field">
+          <label>Teléfono de contacto</label>
+          <input id="rq_contactPhone" class="input" placeholder="341..." />
+        </div>
+        <div class="field">
+          <label>Descripción</label>
+          <input id="rq_desc" class="input" placeholder="Opcional" />
+        </div>
+      </div>
+
+      <hr />
+
+      <div class="grid2">
+        <div class="card2">
+          <div class="row" style="justify-content:space-between; align-items:center;">
+            <h3 style="margin:0;">Ida</h3>
+            <label class="row" style="gap:8px;">
+              <input id="rq_ida_on" type="checkbox" checked />
+              <span>Incluir</span>
+            </label>
+          </div>
+
+          <div class="grid2">
+            <div class="field">
+              <label>Dirección salida / encuentro</label>
+              <input id="rq_ida_pickupAddress" class="input" placeholder="Calle y número" />
+            </div>
+            <div class="field">
+              <label>Ciudad</label>
+              <input id="rq_ida_pickupCity" class="input" placeholder="Rosario / ..." />
+            </div>
+            <div class="field">
+              <label>Hora</label>
+              <input id="rq_ida_time" type="time" class="input" />
+            </div>
+          </div>
+        </div>
+
+        <div class="card2">
+          <div class="row" style="justify-content:space-between; align-items:center;">
+            <h3 style="margin:0;">Vuelta</h3>
+            <label class="row" style="gap:8px;">
+              <input id="rq_vuelta_on" type="checkbox" />
+              <span>Incluir</span>
+            </label>
+          </div>
+
+          <div class="grid2">
+            <div class="field">
+              <label>Dirección regreso</label>
+              <input id="rq_vuelta_dropoffAddress" class="input" placeholder="Calle y número" />
+            </div>
+            <div class="field">
+              <label>Ciudad</label>
+              <input id="rq_vuelta_dropoffCity" class="input" placeholder="Rosario / ..." />
+            </div>
+            <div class="field">
+              <label>Hora</label>
+              <input id="rq_vuelta_time" type="time" class="input" />
+            </div>
+          </div>
+
+          <label class="row" style="gap:8px;">
+            <input id="rq_vuelta_same" type="checkbox" />
+            <span>Usar misma dirección de ida</span>
+          </label>
+        </div>
+      </div>
+
+      <hr />
+
+      <section>
+        <div class="row" style="justify-content:space-between; align-items:center;">
+          <h3 style="margin:0;">Pasajeros</h3>
+          <button id="btnAddPassenger" class="btnSecondary">+ Agregar pasajero</button>
+        </div>
+        <div id="passengersBox"></div>
+      </section>
+
+      <div class="row" style="justify-content:flex-end; gap:10px; margin-top:12px;">
+        <button id="btnCreateRequest" class="btnPrimary">Enviar solicitud</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Mis solicitudes</h2>
+      <div id="myRequests"></div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast"></div>
+
+  <script type="module" src="./requests.js"></script>
+</body>
+</html>
