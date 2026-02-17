@@ -99,7 +99,7 @@ function renderDrivers(){
           <div style="font-weight:700">${escapeHtml(driverName(d))}</div>
           <div class="hint">${escapeHtml(d.email || "")}</div>
         </div>
-        <input type="checkbox" data-driver="${escapeHtml(d.id)}" ${checked ? "checked" : ""} />
+        <input type="checkbox" class="box" data-driver="${escapeHtml(d.id)}" ${checked ? "checked" : ""} />
       </label>
     `;
   }).join("");
