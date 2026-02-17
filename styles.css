@@ -258,6 +258,13 @@ tbody tr:hover{ background: rgba(255,255,255,.03); }
   h2{ font-size: 24px; }
 }
 
+.chk{
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
 /* Make links look like buttons when used as nav */
 a{ color: var(--accent2); }
 a.navbtn, .menu a{
