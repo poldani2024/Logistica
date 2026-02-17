@@ -507,47 +507,48 @@ export async function unassignPassenger({ passengerId, driverId }) {
   });
 }
 
-export async function updateTrackingAsDriver({ passengerId, trackingStatus, trackingNote, phaseId, driverId }) {
-  if (!STATE.event.id) throw new Error("No hay evento seleccionado");
+export async function updateTrackingAsDriver({
+  passengerId,
+  trackingStatus,
+  trackingNote,
+  phaseId,
+  driverId // opcional: para admin o cuando está en "Todos"
+}) {
+  if (!STATE.event?.id) throw new Error("No hay evento seleccionado");
+  if (!passengerId) throw new Error("Falta passengerId");
+  if (!phaseId) throw new Error("Falta phaseId");
 
-  const isAdmin = !!STATE.auth.isAdmin;
-  const me = STATE.auth.driver;
+  const isAdmin = !!STATE.auth?.isAdmin;
+  const me = STATE.auth?.driver;
 
-  // Determinar qué chofer se está operando (admin puede operar sobre cualquiera)
-  const effectiveDriverId = (isAdmin && driverId) ? driverId : (me?.id || null);
-  if (!effectiveDriverId) throw new Error("No sos chofer en el sistema");
+  // quién es el "chofer objetivo" para validar asignación
+  const targetDriverId = (isAdmin && driverId) ? driverId : me?.id;
+  if (!targetDriverId) throw new Error("No sos chofer en el sistema (y no sos admin)");
 
-  const pid = (phaseId || "ida");
-
-  const a = assignmentForDriver(effectiveDriverId) || {};
+  // validar que el pasajero esté asignado a ese chofer en ESA fase
+  const a = assignmentForDriver(targetDriverId) || {};
   const phases = (a.phases && typeof a.phases === "object") ? a.phases : {};
+  const ids = Array.isArray(phases[phaseId]) ? phases[phaseId]
+            : ((phaseId === "ida" && Array.isArray(a.passengerIds)) ? a.passengerIds : []);
 
-  let assignedIds = [];
-  if (Array.isArray(phases[pid])) assignedIds = phases[pid];
-  else if (pid === "ida" && Array.isArray(a.passengerIds)) assignedIds = a.passengerIds; // compat vieja
-
-  if (!assignedIds.includes(passengerId)) {
+  if (!ids.includes(passengerId)) {
     throw new Error("Ese pasajero no está asignado a ese chofer en esta fase");
   }
+
+  // guardar tracking por fase en eventPassengers/{passengerId}
+  const pRef = doc(db, "events", STATE.event.id, "eventPassengers", passengerId);
 
   const status = trackingStatus || "Pendiente";
   const note = (trackingNote || "").trim();
 
-  const pRef = doc(db, "events", STATE.event.id, "eventPassengers", passengerId);
-
-  // Guardar tracking por fase (sin romper compatibilidad: también actualiza campos legacy)
   await updateDoc(pRef, {
-    [`trackingByPhase.${pid}.status`]: status,
-    [`trackingByPhase.${pid}.note`]: note,
-    [`trackingByPhase.${pid}.updatedAt`]: serverTimestamp(),
-    [`trackingByPhase.${pid}.updatedBy`]: STATE.auth.user?.email || "",
-
-    trackingStatus: status,
-    trackingNote: note,
-    trackingUpdatedAt: serverTimestamp(),
-    trackingUpdatedBy: STATE.auth.user?.email || ""
+    [`trackingByPhase.${phaseId}.status`]: status,
+    [`trackingByPhase.${phaseId}.note`]: note,
+    [`trackingByPhase.${phaseId}.updatedAt`]: serverTimestamp(),
+    [`trackingByPhase.${phaseId}.updatedBy`]: STATE.auth.user?.email || ""
   });
 }
+
 
 
 /* -------------------------
