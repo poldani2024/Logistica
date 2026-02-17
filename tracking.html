@@ -16,30 +16,39 @@
   </style>
 </head>
 <body>
-  <header class="topbar">
-    <div class="topbar-inner">
-      <div class="brand">
-        <div class="title">Gestión de Transporte Soka Gakkai</div>
-        <div class="sub">Rosario / Gran Rosario</div>
-      </div>
+ <header class="topbar">
+  <div class="topbar-inner">
+    <!-- Izquierda: Marca -->
+    <div class="brand">
+      <div class="title">Gestión de Transporte Soka Gakkai</div>
+      <div class="sub">Rosario / Gran Rosario</div>
+    </div>
 
-      <nav class="nav">
-        <a href="./index.html">Home</a>
-        <a href="./events.html">Eventos</a>
-        <a href="./drivers.html">Choferes</a>
-        <a href="./passengers.html">Pasajeros</a>
-        <a href="./driver-phases.html">Choferes x Fase</a>
-        <a href="./assignments.html">Asignaciones</a>
-        <a class="active" href="./tracking.html">Tracking</a>
-      </nav>
+    <!-- Centro: Evento activo -->
+    <div class="topbar-center">
+      <div class="field" style="min-width:min(620px, 48vw);">
+        <label>Evento activo</label>
 
-      <div class="actions">
-        <button id="btnSignIn" class="btnSecondary">Ingresar</button>
-        <button id="btnSignOut" class="btnSecondary" style="display:none;">Salir</button>
+        <!-- Si la página tiene selector, dejá este <select>. Si NO, lo podés borrar y dejar solo el span -->
+        <select id="eventSelect"></select>
+
+        <!-- Siempre presente: muestra el texto del evento activo -->
+        <div class="subtitle" id="eventHint">No hay evento seleccionado</div>
       </div>
     </div>
-  </header>
 
+    <!-- Derecha: Home + Usuario + Salir -->
+    <div class="row">
+      <a href="index.html" class="iconbtn primary" title="Inicio">🏠</a>
+
+      <div class="pill">
+        <span id="authStatus">No ingresado</span>
+        <button id="btnLogin" type="button" style="display:none">Ingresar</button>
+        <button id="btnLogout" type="button">Salir</button>
+      </div>
+    </div>
+  </div>
+</header>
   <main class="container">
     <div class="row" style="justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
       <h1 style="margin: 18px 0;">Tracking</h1>
