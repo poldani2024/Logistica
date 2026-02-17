@@ -37,7 +37,7 @@ import {
 
 export const $ = (id) => document.getElementById(id);
 
-export const ADMIN_EMAIL = "pedro.l.oldani@gmail.com1";
+export const ADMIN_EMAIL = "pedro.l.oldani@gmail.com";
 
 function isAdmin(){
   const email = (STATE.auth.user?.email || "").trim().toLowerCase();
@@ -74,6 +74,50 @@ export async function ensureUserProfile() {
   }
 }
 
+async function applyInviteIfExists() {
+  const u = STATE.auth?.user;
+  if (!u) return null;
+
+  const email = (u.email || "").trim().toLowerCase();
+  if (!email) return null;
+
+  const userRef = doc(db, "users", u.uid);
+  const userSnap = await getDoc(userRef);
+  const userData = userSnap.exists() ? (userSnap.data() || {}) : {};
+
+  // Solo aplicar una vez
+  if (userData.inviteAppliedAt) return null;
+
+  const invRef = doc(db, "invites", email);
+  const invSnap = await getDoc(invRef);
+  if (!invSnap.exists()) return null;
+
+  const inv = invSnap.data() || {};
+  const patch = {
+    email: (u.email || "").trim(),
+    firstName: (inv.firstName || userData.firstName || "").trim(),
+    lastName: (inv.lastName || userData.lastName || "").trim(),
+    phone: (inv.phone || userData.phone || "").trim(),
+    active: (inv.active === false) ? false : true,
+    perms: (inv.perms && typeof inv.perms === "object") ? inv.perms : (userData.perms || {}),
+    inviteAppliedAt: serverTimestamp(),
+    inviteEmail: email,
+    updatedAt: serverTimestamp(),
+    updatedBy: (u.email || "").trim()
+  };
+
+  await setDoc(userRef, patch, { merge: true });
+
+  // Marcar invitación como usada (no se elimina)
+  await setDoc(invRef, {
+    usedAt: serverTimestamp(),
+    usedByUid: u.uid,
+    usedByEmail: (u.email || "").trim()
+  }, { merge: true });
+
+  return patch;
+}
+
 export async function loadUserProfile() {
   const u = STATE.auth?.user;
   if (!u) return null;
@@ -81,7 +125,15 @@ export async function loadUserProfile() {
   const ref = doc(db, "users", u.uid);
   const snap = await getDoc(ref);
 
-  const profile = snap.exists() ? (snap.data() || {}) : null;
+  let profile = snap.exists() ? (snap.data() || {}) : null;
+
+  // Si hay invitación pendiente, aplicarla y re-leer para tener permisos/active actualizados
+  const applied = await applyInviteIfExists();
+  if (applied) {
+    const snap2 = await getDoc(ref);
+    profile = snap2.exists() ? (snap2.data() || {}) : profile;
+  }
+
   STATE.auth.profile = profile;
 
   const active = (profile && profile.active === false) ? false : true;

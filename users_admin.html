@@ -7,24 +7,14 @@
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
- <header class="topbar">
-  <div class="topbar-inner">
-    <div class="brand">
-      <div class="title">Gestión de Transporte Soka Gakkai</div>
-      <div class="sub">Rosario / Gran Rosario</div>
-    </div>
+  <header class="topbar">
+    <div class="brand">Logística Soka</div>
+    <nav class="nav">
+      <a href="./index.html">Home</a>
+      <a class="active" href="./users_admin.html">Permisos</a>
+    </nav>
+  </header>
 
-
-    <div class="row">
-      <a href="index.html" class="iconbtn primary" title="Inicio">🏠</a>
-      <div class="pill">
-        <span id="authStatus">No ingresado</span>
-        <button id="btnLogin" type="button" style="display:none">Ingresar</button>
-        <button id="btnLogout" type="button" class="danger">Salir</button>
-      </div>
-    </div>
-  </div>
-</header>
   <main class="container">
     <section class="card">
       <div class="row" style="justify-content:space-between; align-items:center;">
@@ -35,8 +25,27 @@
     </section>
 
     <section class="card">
-      <h2>Detalle / Permisos</h2>
+      <h2>Detalle de usuario</h2>
       <div id="userDetail" class="muted">Seleccioná un usuario…</div>
+    </section>
+
+    <section class="card">
+      <div class="row" style="justify-content:space-between; align-items:center;">
+        <h2 style="margin:0;">Invitaciones (Alta por mail)</h2>
+      </div>
+      <p class="muted" style="margin-top:6px;">
+        Creá una invitación para predefinir permisos. Se aplica automáticamente cuando la persona entra por primera vez con Google.
+      </p>
+      <div class="grid2">
+        <div>
+          <h3 style="margin-top:0;">Listado</h3>
+          <div id="invitesList"></div>
+        </div>
+        <div>
+          <h3 style="margin-top:0;">Nueva / Edición</h3>
+          <div id="inviteDetail" class="muted">Cargando…</div>
+        </div>
+      </div>
     </section>
   </main>
 
