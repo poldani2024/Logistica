@@ -95,7 +95,7 @@ async function loadDetail(uid){
     </div>
 
     <h3>Permisos</h3>
-    <div class="grid2">
+    <div class="grid2" class="permItem">
       ${PERM_KEYS.map(k => `
         <label class="row" style="gap:10px; align-items:center;">
           <input type="checkbox" data-perm="${escapeHtml(k)}" ${perms[k] ? "checked" : ""}>
