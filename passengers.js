@@ -125,7 +125,6 @@ function renderTable(){
     b.addEventListener("click", () => openDetail(b.dataset.id));
   });
 }
-import { addPassengerToEvent, loadEventContext, STATE, toast } from "./core.js";
 
 const btn = document.getElementById("btnAddPassengerToEvent");
 const hint = document.getElementById("addToEventHint");
