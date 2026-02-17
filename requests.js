@@ -4,6 +4,7 @@ import {
   collection, addDoc, query, where, orderBy, getDocs, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
+import { db } from "./firebase-init.js";
 
 let passengerCount = 0;
 
