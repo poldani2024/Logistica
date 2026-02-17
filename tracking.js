@@ -45,16 +45,26 @@ function render() {
 
   if (!STATE.ui) STATE.ui = {};
   if (!STATE.ui.activePhase) STATE.ui.activePhase = (STATE.event.phases?.[0]?.id || "ida");
+  if (!STATE.ui.trackingStatusFilter) STATE.ui.trackingStatusFilter = "Todos";
 
   const phases = STATE.event.phases || [];
   const activePhaseId = getActivePhaseId() || STATE.ui.activePhase;
 
-  // Choferes disponibles en la fase (si no hay fases, cae a lista vacía)
+  // Choferes disponibles en la fase
   const dsPhase = activePhaseId ? (driversForPhase(activePhaseId) || []) : [];
 
   // Chofer seleccionado
-  let selectedDriverId = isAdmin ? (STATE.ui.activeDriverId || dsPhase[0]?.id || "") : (me?.id || "");
-  if (!isAdmin) STATE.ui.activeDriverId = selectedDriverId;
+  let selectedDriverId = isAdmin ? (STATE.ui.activeDriverId || "__ALL__") : (me?.id || "");
+  if (isAdmin) {
+    // si no existe en la fase y no es ALL, caer a ALL
+    const ok = selectedDriverId === "__ALL__" || dsPhase.some(d => d.id === selectedDriverId);
+    if (!ok) selectedDriverId = "__ALL__";
+    STATE.ui.activeDriverId = selectedDriverId;
+  } else {
+    STATE.ui.activeDriverId = selectedDriverId;
+  }
+
+  const statusOptions = ["Todos","Pendiente","En tránsito","En destino","Ausente"];
 
   $("trackingBox").innerHTML = `
     <div class="card">
@@ -70,15 +80,22 @@ function render() {
           <div class="row" style="gap:10px; align-items:center;">
             <label class="muted">Chofer:</label>
             <select id="selDriver" class="select">
-              ${[`<option value="__ALL__">Todos</option>`].concat(dsPhase.map(d=> `<option value="${escapeHtml(d.id)}">${escapeHtml(fullName(d))}</option>`)).join("")}
+              ${[`<option value="__ALL__">Todos</option>`]
+                .concat(dsPhase.map(d=> `<option value="${escapeHtml(d.id)}">${escapeHtml(fullName(d))}</option>`))
+                .join("")}
             </select>
           </div>
-        ` : ``}
+        ` : `
+          <div class="row" style="gap:10px; align-items:center;">
+            <span class="muted">Chofer:</span>
+            <strong>${escapeHtml(fullName(me))}</strong>
+          </div>
+        `}
 
         <div class="row" style="gap:10px; align-items:center;">
           <label class="muted">Estado:</label>
           <select id="selStatus" class="select">
-            ${["Todos","Pendiente","En tránsito","En destino","Ausente"].map(s=>`<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join("")}
+            ${statusOptions.map(s=>`<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join("")}
           </select>
         </div>
       </div>
@@ -89,24 +106,30 @@ function render() {
   `;
 
   const selPhase = $("selPhase");
-  if (selPhase) selPhase.value = activePhaseId;
-
   const selDriver = $("selDriver");
   const selStatus = $("selStatus");
+
+  if (selPhase) selPhase.value = activePhaseId;
+  if (selStatus) selStatus.value = STATE.ui.trackingStatusFilter || "Todos";
   if (isAdmin && selDriver) selDriver.value = selectedDriverId;
 
-  const renderList = (driverId, phaseIdNow, statusFilter) => {
+  const renderList = () => {
+    const phaseIdNow = ($("selPhase")?.value || activePhaseId);
+    const driverId = isAdmin ? ($("selDriver")?.value || "__ALL__") : me.id;
+    const statusFilter = ($("selStatus")?.value || "Todos");
+
+    STATE.ui.activePhase = phaseIdNow;
+    STATE.ui.activeDriverId = driverId;
+    STATE.ui.trackingStatusFilter = statusFilter;
+
     if (!phaseIdNow) {
       $("trackingList").innerHTML = `<p class="muted">Seleccioná una fase.</p>`;
       return;
     }
 
     const wanted = (statusFilter || "Todos").toLowerCase();
-
-    // Pasajeros del evento (con meta _event)
     const ps = passengersInEvent();
 
-    // armar pares (driver, passenger)
     let pairs = [];
     if (driverId === "__ALL__") {
       dsPhase.forEach(drv => {
@@ -115,10 +138,10 @@ function render() {
       });
     } else {
       const ids = new Set(getPassengerIdsFor(driverId, phaseIdNow));
-      pairs = ps.filter(p => ids.has(p.id)).map(p => ({ drv: dsPhase.find(d=>d.id===driverId) || null, p }));
+      const drv = dsPhase.find(d=>d.id===driverId) || null;
+      pairs = ps.filter(p => ids.has(p.id)).map(p => ({ drv, p }));
     }
 
-    // filtro por estado (por fase)
     pairs = pairs.filter(({ p }) => {
       const t = getTrackingForPhase(p, phaseIdNow);
       if (wanted === "todos") return true;
@@ -185,4 +208,31 @@ function render() {
       });
     });
   };
- };
+
+  // binds
+  selPhase?.addEventListener("change", () => {
+    // cambiar fase implica recalcular dsPhase; re-render completo
+    STATE.ui.activePhase = selPhase.value;
+    render();
+  });
+
+  selDriver?.addEventListener("change", renderList);
+  selStatus?.addEventListener("change", renderList);
+
+  // primera carga
+  renderList();
+}
+
+async function refreshAll(){
+  if (!STATE.event?.id) { render(); return; }
+  await loadMasterDrivers();
+  await loadMasterPassengers();
+  await loadEventContext(STATE.event.id);
+  render();
+}
+
+(async function init(){
+  await initCorePage({ page: "tracking" });
+  document.addEventListener("eventChanged", refreshAll);
+  await refreshAll();
+})();
