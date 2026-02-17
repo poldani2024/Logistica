@@ -345,15 +345,26 @@ export async function loadEventContext(eventId) {
     STATE.event.passengersMeta.set(x.id, x.data() || {});
   });
 
-  // 4) assignments (1 doc por driverId)
-  const aSnap = await getDocs(collection(db, "events", STATE.event.id, "assignments"));
-  aSnap.forEach(x => {
-    const data = x.data() || {};
-    STATE.event.assignments.set(x.id, {
-      driverId: x.id,
-      passengerIds: Array.isArray(data.passengerIds) ? data.passengerIds : []
-    });
+ // 4) assignments (1 doc por driverId)
+const aSnap = await getDocs(collection(db, "events", STATE.event.id, "assignments"));
+aSnap.forEach(x => {
+  const raw = x.data() || {};
+
+  // phases (modelo nuevo)
+  const phases = (raw.phases && typeof raw.phases === "object") ? raw.phases : {};
+
+  // compatibilidad: si hay modelo viejo passengerIds y no hay phases.ida, mapearlo
+  if (!Array.isArray(phases.ida) && Array.isArray(raw.passengerIds)) {
+    phases.ida = raw.passengerIds;
+  }
+
+  STATE.event.assignments.set(x.id, {
+    ...raw,
+    driverId: raw.driverId || x.id,
+    phases,
+    passengerIds: Array.isArray(raw.passengerIds) ? raw.passengerIds : [] // lo mantenés si querés compat
   });
+});
 }
 export async function saveDriverPhase(driverId, phaseId, enabled){
   if (!STATE.event?.id) throw new Error("No hay evento seleccionado");
