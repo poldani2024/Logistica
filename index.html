@@ -10,26 +10,19 @@
 
 <header class="topbar">
   <div class="topbar-inner">
-    <!-- Izquierda: Marca -->
     <div class="brand">
       <div class="title">Gestión de Transporte Soka Gakkai</div>
       <div class="sub">Rosario / Gran Rosario</div>
     </div>
 
-    <!-- Centro: Evento activo -->
     <div class="topbar-center">
       <div class="field" style="min-width:min(620px, 48vw);">
         <label>Evento activo</label>
-
-        <!-- Si la página tiene selector, dejá este <select>. Si NO, lo podés borrar y dejar solo el span -->
         <select id="eventSelect"></select>
-
-        <!-- Siempre presente: muestra el texto del evento activo -->
         <div class="subtitle" id="eventHint">No hay evento seleccionado</div>
       </div>
     </div>
 
-    <!-- Derecha: Home + Usuario + Salir -->
     <div class="row">
       <a href="index.html" class="iconbtn primary" title="Inicio">🏠</a>
 
@@ -42,26 +35,32 @@
   </div>
 </header>
 
-
 <main class="container">
+
+  <div id="homeStatus"></div>
+
   <h2>Inicio</h2>
   <p>Seleccioná una sección:</p>
 
   <div class="menu">
-    <a href="events.html">Eventos</a>
-    <a href="requests.html">Solicitudes</a>
-     <a href="requests_admin.html">Adm. Solicitudes</a>
-    <a href="drivers.html">Choferes</a>
-    <a href="passengers.html">Pasajeros</a>
-    <a href="choferes-x-fase.html">Choferes x Fase</a>
-    <a href="assignments.html">Asignaciones</a>
-    <a href="tracking.html">Tracking</a>
-    <a href="map.html">Mapa</a>
+    <a href="events.html" data-perm="Eventos">Eventos</a>
+    <a href="requests.html" data-perm="Solicitudes">Solicitudes</a>
+    <a href="requests_admin.html" data-perm="Admin.Solicitudes">Adm. Solicitudes</a>
+    <a href="drivers.html" data-perm="Choferes">Choferes</a>
+    <a href="passengers.html" data-perm="Pasajeros">Pasajeros</a>
+    <a href="choferes-x-fase.html" data-perm="ChoferesXFase">Choferes x Fase</a>
+    <a href="assignments.html" data-perm="Asignaciones">Asignaciones</a>
+    <a href="tracking.html" data-perm="Tracking">Tracking</a>
+    <a href="map.html" data-perm="Mapa">Mapa</a>
+    <a href="users_admin.html" data-perm="Permisos">Permisos</a>
   </div>
+
 </main>
 
 <script type="module">
-  import { initCorePage, STATE, $ } from "./core.js";
+  import { initCorePage, STATE, $, can } from "./core.js";
+  import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.2/firebase-auth.js";
+  import { auth } from "./firebase-init.js";
 
   await initCorePage({ page: "home" });
 
@@ -71,8 +70,11 @@
 
   function refreshAuthUI() {
     const u = STATE.auth.user;
+
     if (u) {
-      status.textContent = u.email;
+      status.textContent = u.email +
+        (STATE.auth.isAdmin ? " (Admin)" : "") +
+        (STATE.auth.isActive === false ? " (Inactivo)" : "");
       loginBtn.style.display = "none";
       logoutBtn.style.display = "inline-block";
     } else {
@@ -82,12 +84,18 @@
     }
   }
 
-    import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.2/firebase-auth.js";
-  import { auth } from "./firebase-init.js";
-  
-  onAuthStateChanged(auth, () => {
-  refreshAuthUI();
+  function applyPermissions(){
+    document.querySelectorAll("[data-perm]").forEach(el => {
+      const key = el.dataset.perm;
+      el.style.display = can(key) ? "" : "none";
+    });
+  }
+
+  onAuthStateChanged(auth, async () => {
+    refreshAuthUI();
+    applyPermissions();
   });
+
 </script>
 
 </body>
