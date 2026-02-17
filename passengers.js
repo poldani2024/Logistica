@@ -1,6 +1,7 @@
 import {
   initCorePage, STATE, $, toast, escapeHtml,
-  loadMasterPassengers
+  loadMasterPassengers,
+  loadEventContext
 } from "./core.js";
 
 import { db } from "./firebase-init.js";
@@ -14,6 +15,17 @@ import {
   serverTimestamp,
   getDocs
 } from "https://www.gstatic.com/firebasejs/10.7.2/firebase-firestore.js";
+
+// Vincula un pasajero existente al evento activo (events/{eventId}/eventPassengers/{passengerId})
+async function addPassengerToEvent(eventId, passengerId){
+  if (!eventId) throw new Error("No hay evento activo");
+  if (!passengerId) throw new Error("No hay pasajero");
+  await setDoc(doc(db, "events", eventId, "eventPassengers", passengerId), {
+    notes: "",
+    geo: null,
+    updatedAt: serverTimestamp()
+  }, { merge:true });
+}
 
 /* ---------------------------
    GEO LOG (UI + persistence)
@@ -126,33 +138,6 @@ function renderTable(){
   });
 }
 
-const btn = document.getElementById("btnAddPassengerToEvent");
-const hint = document.getElementById("addToEventHint");
-
-const activeEventId = STATE.event?.id;
-hint.textContent = activeEventId
-  ? `Evento activo: ${STATE.event?.title || activeEventId}`
-  : "No hay evento activo. Seleccioná un evento en Home.";
-
-btn.disabled = !activeEventId || !passenger?.id; // si es nuevo y todavía no guardaste, deshabilitá
-
-btn.addEventListener("click", async () => {
-  try {
-    const eventId = STATE.event?.id;
-    if (!eventId) return toast("Seleccioná un evento primero.");
-    if (!passenger?.id) return toast("Guardá el pasajero antes de asignarlo al evento.");
-
-    await addPassengerToEvent(eventId, passenger.id);
-
-    // refrescar contexto del evento para que Asignaciones lo vea sin recargar página
-    await loadEventContext(eventId);
-
-    toast("Pasajero agregado al evento");
-  } catch (e) {
-    console.error(e);
-    toast(e.message || String(e));
-  }
-});
 
 function renderCards(){
   const wrap = $("passengersCards");
