@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Gestión de Transporte Soka Gakkai</title>
   <link rel="stylesheet" href="styles.css"/>
+  <style>
+  #homeMenu { visibility: hidden; }
+  </style>
 </head>
 <body>
 
@@ -42,7 +45,7 @@
   <h2>Inicio</h2>
   <p>Seleccioná una sección:</p>
 
-  <div class="menu">
+  <div class="menu" id="homeMenu">
     <a href="events.html" data-perm="Eventos">Eventos</a>
     <a href="requests.html" data-perm="Solicitudes">Solicitudes</a>
     <a href="requests_admin.html" data-perm="Admin.Solicitudes">Adm. Solicitudes</a>
@@ -89,6 +92,7 @@
       const key = el.dataset.perm;
       el.style.display = can(key) ? "" : "none";
     });
+    document.getElementById("homeMenu").style.visibility = "visible";
   }
 
   onAuthStateChanged(auth, async () => {
