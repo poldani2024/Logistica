@@ -98,7 +98,7 @@ async function loadDetail(uid){
     <div class="grid2" class="permsGrid">
       ${PERM_KEYS.map(k => `
         <label class="row" style="gap:10px; align-items:center;">
-          <input type="checkbox" data-perm="${escapeHtml(k)}" ${perms[k] ? "checked" : ""}>
+          <input type="checkbox" data-inv-perm="${escapeHtml(k)}" ${perms[k] ? "checked" : ""}>
           <span>${escapeHtml(k)}</span>
         </label>
       `).join("")}
@@ -171,11 +171,14 @@ function renderInvitesList(list){
 
 function permsFromForm(){
   const newPerms = {};
-  document.querySelectorAll("[data-inv-perm]").forEach(ch=>{
-    newPerms[ch.dataset.invPerm] = !!ch.checked;
+  document.querySelectorAll('input[type="checkbox"][data-inv-perm]').forEach(ch=>{
+    const key = (ch.dataset.invPerm || "").trim();
+    if (!key) return;
+    newPerms[key] = !!ch.checked;
   });
   return newPerms;
 }
+
 
 function renderInviteForm(inv = null){
   const d = inv || { email:"", firstName:"", lastName:"", phone:"", active:true, perms:{} };
