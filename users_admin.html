@@ -7,13 +7,24 @@
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand">Logística Soka</div>
-    <nav class="nav">
-      <a href="./index.html">Home</a>
-      <a class="active" href="./users_admin.html">Permisos</a>
-    </nav>
-  </header>
+ <header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <div class="title">Gestión de Transporte Soka Gakkai</div>
+      <div class="sub">Rosario / Gran Rosario</div>
+    </div>
+
+
+    <div class="row">
+      <a href="index.html" class="iconbtn primary" title="Inicio">🏠</a>
+      <div class="pill">
+        <span id="authStatus">No ingresado</span>
+        <button id="btnLogin" type="button" style="display:none">Ingresar</button>
+        <button id="btnLogout" type="button" class="danger">Salir</button>
+      </div>
+    </div>
+  </div>
+</header>
 
   <main class="container">
     <section class="card">
