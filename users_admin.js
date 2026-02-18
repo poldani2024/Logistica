@@ -19,6 +19,42 @@ const PERM_KEYS = [
   "Mapa"
 ];
 
+// === Invitaciones por link manual (sin Cloud Functions) ===
+function makeToken(len = 32){
+  // token amigable (sin caracteres confusos)
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+  const rnd = crypto.getRandomValues(new Uint8Array(len));
+  let t = "";
+  for (let i = 0; i < len; i++) t += chars[rnd[i] % chars.length];
+  return t;
+}
+
+function inviteBaseUrl(){
+  // URL base del directorio actual (GitHub Pages friendly)
+  const url = new URL(window.location.href);
+  url.hash = "";
+  url.search = "";
+  url.pathname = url.pathname.replace(/\/[^\/]*$/, "/");
+  return url.toString().replace(/\/$/, "");
+}
+
+function buildInviteLink(email, token){
+  const base = inviteBaseUrl();
+  return `${base}/accept_invite.html?email=${encodeURIComponent(email)}&token=${encodeURIComponent(token)}`;
+}
+
+async function copyToClipboard(text){
+  try{
+    await navigator.clipboard.writeText(text);
+    toast("Link copiado ✅");
+  }catch(e){
+    console.error(e);
+    toast("No pude copiar el link (probá copiarlo manualmente).");
+  }
+}
+
+
+
 async function loadUsers(){
   const snap = await getDocs(query(collection(db, "users"), orderBy("email")));
   return snap.docs.map(d => ({ uid: d.id, ...d.data() }));
@@ -98,10 +134,19 @@ async function loadDetail(uid){
     <div class="grid2" class="permsGrid">
       ${PERM_KEYS.map(k => `
         <label class="row" style="gap:10px; align-items:center;">
-          <input type="checkbox" data-inv-perm="${escapeHtml(k)}" ${perms[k] ? "checked" : ""}>
+          <input type="checkbox" data-perm="${escapeHtml(k)}" ${perms[k] ? "checked" : ""}>
           <span>${escapeHtml(k)}</span>
         </label>
       `).join("")}
+    </div>
+
+    <div class="field" style="margin-top:10px;">
+      <label>Link de invitación</label>
+      <div class="row" style="gap:10px; align-items:center;">
+        <input id="inv_link" class="input" value="${escapeHtml(d.token ? buildInviteLink((d.email || d.id || '').toLowerCase(), d.token) : '')}" readonly placeholder="Se genera al crear la invitación">
+        <button id="btnCopyInviteLink" class="btnSecondary" ${d.token ? "" : "disabled"}>Copiar</button>
+      </div>
+      <p class="muted" style="margin-top:6px;">Copiá este link y mandalo por WhatsApp o email. (No se envía automáticamente)</p>
     </div>
 
     <div class="row" style="justify-content:flex-end; gap:10px; margin-top:12px;">
@@ -179,7 +224,6 @@ function permsFromForm(){
   return newPerms;
 }
 
-
 function renderInviteForm(inv = null){
   const d = inv || { email:"", firstName:"", lastName:"", phone:"", active:true, perms:{} };
   const perms = (d.perms && typeof d.perms === "object") ? d.perms : {};
@@ -189,7 +233,9 @@ function renderInviteForm(inv = null){
       <div class="field">
         <label>Email</label>
         <input id="inv_email" class="input" value="${escapeHtml((d.email || d.id || "").toLowerCase())}" ${inv ? "disabled" : ""}>
-      </div>
+      
+        <input id="inv_token" type="hidden" value="${escapeHtml(d.token || "")}">
+</div>
       <div class="field">
         <label>Teléfono</label>
         <input id="inv_phone" class="input" value="${escapeHtml(d.phone || "")}">
@@ -218,7 +264,7 @@ function renderInviteForm(inv = null){
     <div class="grid2">
       ${PERM_KEYS.map(k => `
         <label class="row" style="gap:10px; align-items:center;">
-          <input type="checkbox" data-inv-perm data-inv-perm="${escapeHtml(k)}" ${perms[k] ? "checked" : ""}>
+          <input type="checkbox" data-inv-perm="${escapeHtml(k)}" ${perms[k] ? "checked" : ""}>
           <span>${escapeHtml(k)}</span>
         </label>
       `).join("")}
@@ -239,6 +285,7 @@ function renderInviteForm(inv = null){
 }
 
 let _currentInviteId = null;
+let _currentInviteObj = null;
 
 async function loadInviteDetail(invId){
   const snap = await getDoc(doc(db, "invites", invId));
@@ -248,6 +295,7 @@ async function loadInviteDetail(invId){
   }
   const inv = { id: snap.id, ...snap.data() };
   _currentInviteId = inv.id;
+  _currentInviteObj = inv;
   renderInviteForm(inv);
 }
 
@@ -259,6 +307,10 @@ async function saveInvite(){
 
     const ref = doc(db, "invites", _currentInviteId || email);
 
+    // Token: se genera solo al crear (para link manual)
+    let token = ($("inv_token")?.value || "").trim();
+    if (!_currentInviteId) token = makeToken(32);
+
     const payload = {
       email,
       firstName: $("inv_firstName").value.trim(),
@@ -266,6 +318,7 @@ async function saveInvite(){
       phone: $("inv_phone").value.trim(),
       active: !!$("inv_active").checked,
       perms: permsFromForm(),
+      token: token || null,
       updatedAt: serverTimestamp(),
       updatedBy: STATE.auth.user?.email || ""
     };
@@ -279,7 +332,17 @@ async function saveInvite(){
     await setDoc(ref, payload, { merge:true });
 
     _currentInviteId = email;
+    _currentInviteObj = { ...(_currentInviteObj || {}), ...payload, id: email };
     toast("Invitación guardada");
+
+    // Mostrar link en pantalla (y dejarlo listo para copiar)
+    const link = token ? buildInviteLink(email, token) : "";
+    if ($("inv_link")) {
+      $("inv_link").value = link;
+      const b = $("btnCopyInviteLink");
+      if (b) b.disabled = !link;
+    }
+
     await refresh(); // refresca listas
     await loadInviteDetail(email);
   }catch(e){
