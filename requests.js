@@ -8,6 +8,49 @@ import { db } from "./firebase-init.js";
 
 let passengerCount = 0;
 
+function formatDateDDMMYYYY(raw){
+  if (!raw) return "";
+  const s = String(raw).trim();
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) return s;
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return s;
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  return `${dd}/${mm}/${yyyy}`;
+}
+
+function toISODate(raw){
+  const s = String(raw || "").trim();
+  if (!s) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!m) throw new Error("La fecha debe estar en formato DD/MM/YYYY.");
+  const [, dd, mm, yyyy] = m;
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function toPickerValue(raw){
+  try { return toISODate(raw); } catch { return ""; }
+}
+
+function wireDatePicker(textId, btnId, pickerId){
+  const txt = $(textId);
+  const btn = $(btnId);
+  const picker = $(pickerId);
+  if (!txt || !btn || !picker) return;
+
+  btn.addEventListener("click", () => {
+    picker.value = toPickerValue(txt.value);
+    if (typeof picker.showPicker === "function") picker.showPicker();
+    else picker.click();
+  });
+
+  picker.addEventListener("change", () => {
+    txt.value = formatDateDDMMYYYY(picker.value);
+  });
+}
+
 function passengerRow(idx, data = {}) {
   const d = {
     fullName: data.fullName || "",
@@ -148,6 +191,7 @@ function validateRequest(payload) {
   const e = payload.event;
   if (!e.title) throw new Error("Completá 'Evento / Motivo'.");
   if (!e.date) throw new Error("Completá la fecha.");
+  toISODate(e.date);
   if (!e.destinationAddress) throw new Error("Completá la dirección de destino.");
   if (!e.destinationCity) throw new Error("Completá la ciudad de destino.");
   if (!payload.contactPhone) throw new Error("Completá el teléfono de contacto.");
@@ -201,7 +245,7 @@ async function createRequest() {
     event: {
       title: $("rq_title").value.trim(),
       description: $("rq_desc").value.trim(),
-      date: $("rq_date").value,
+      date: formatDateDDMMYYYY($("rq_date").value),
       destinationAddress: $("rq_destAddress").value.trim(),
       destinationCity: $("rq_destCity").value.trim()
     },
@@ -261,7 +305,7 @@ function renderMyRequests(list) {
           if (r.phases?.vuelta?.enabled) phases.push("Vuelta");
           return `
             <tr>
-              <td>${escapeHtml(r.event?.date || "")}</td>
+              <td>${escapeHtml(formatDateDDMMYYYY(r.event?.date || ""))}</td>
               <td><strong>${escapeHtml(r.event?.title || "")}</strong></td>
               <td>${escapeHtml(phases.join(" + "))}</td>
               <td>${escapeHtml(r.status || "")}</td>
@@ -290,6 +334,7 @@ async function refresh() {
   });
 
   $("rq_vuelta_same")?.addEventListener("change", applyVueltaSameAddress);
+  wireDatePicker("rq_date", "btnPickRqDate", "rq_date_picker");
 
   $("btnCreateRequest").addEventListener("click", async () => {
     try {
