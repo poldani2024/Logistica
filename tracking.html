@@ -13,6 +13,12 @@
       border: 1px solid rgba(0,0,0,.2);
     }
     select.select option { color:#111; }
+
+    @media (max-width: 700px){
+      #trackingBox .card{ padding:12px; }
+      #trackingBox .row{ flex-wrap:wrap; align-items:flex-start; }
+      #trackingBox .btn, #trackingBox button{ width:100%; }
+    }
   </style>
 </head>
 <body>
@@ -26,7 +32,7 @@
 
     <!-- Centro: Evento activo -->
     <div class="topbar-center">
-      <div class="field" style="min-width:min(620px, 48vw);">
+      <div class="field topbar-event-field">
         <label>Evento activo</label>
 
         <!-- Si la página tiene selector, dejá este <select>. Si NO, lo podés borrar y dejar solo el span -->
@@ -52,7 +58,7 @@
   <main class="container">
     <div class="row" style="justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
       <h1 style="margin: 18px 0;">Tracking</h1>
-      <div id="eventHint" class="muted"></div>
+      <div id="trackingPageHint" class="muted"></div>
     </div>
 
     <div id="trackingBox"></div>
