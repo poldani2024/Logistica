@@ -44,13 +44,73 @@
         <div class="cardHead">
           <div>
             <div class="cardTitle">Lista de eventos</div>
-            <div class="cardSub">Seleccioná un evento para editar y gestionar sus fases.</div>
+            <div class="cardSub">Vista tabulada para seleccionar y editar eventos en forma clara.</div>
           </div>
           <div class="cardActions">
-            <button class="btn" id="btnNewEvent" type="button">+ Evento</button>
+            <button class="btn" id="btnNewEvent" type="button">+ Nuevo evento</button>
           </div>
         </div>
-        <div id="eventsListBox" class="stack"></div>
+        <div id="eventsListBox" class="tableWrap"></div>
+      </section>
+
+      <section class="card" style="margin-bottom:14px">
+        <div class="cardHead">
+          <div>
+            <div class="cardTitle">Formulario de evento</div>
+            <div class="cardSub">Alta y edición estándar con formulario.</div>
+          </div>
+          <div class="cardActions">
+            <button class="btn" id="btnCancelEventEdit" type="button">Cancelar</button>
+            <button class="btn primary" id="btnSaveEvent" type="button">Guardar evento</button>
+          </div>
+        </div>
+
+        <div class="grid2" style="margin-top:10px;">
+          <div class="field">
+            <label for="evId">ID del evento</label>
+            <input id="evId" class="input" placeholder="ej: coro-kaneko-2026-02" />
+          </div>
+
+          <div class="field">
+            <label for="evName">Nombre</label>
+            <input id="evName" class="input" placeholder="Nombre del evento" />
+          </div>
+
+          <div class="field">
+            <label for="evStatus">Estado</label>
+            <select id="evStatus" class="input">
+              <option value="Nuevo">Nuevo</option>
+              <option value="Planificando">Planificando</option>
+              <option value="Activo">Activo</option>
+              <option value="Finalizado">Finalizado</option>
+              <option value="Cancelado">Cancelado</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="evDateStart">Fecha inicio</label>
+            <input id="evDateStart" type="date" class="input" />
+          </div>
+
+          <div class="field">
+            <label for="evDateEnd">Fecha fin</label>
+            <input id="evDateEnd" type="date" class="input" />
+          </div>
+
+          <div class="field">
+            <label for="evAddress">Dirección</label>
+            <input id="evAddress" class="input" placeholder="Dirección" />
+          </div>
+
+          <div class="field">
+            <label for="evLocalidad">Localidad</label>
+            <input id="evLocalidad" class="input" placeholder="Localidad" />
+          </div>
+        </div>
+
+        <div class="hint" id="eventFormHint" style="margin-top:10px">
+          Completá el formulario y guardá los cambios.
+        </div>
         <div class="hint" style="margin-top:10px">
           Tip: el selector de arriba define el <b>evento activo</b> para toda la app.
         </div>

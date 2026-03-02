@@ -37,8 +37,11 @@ import { doc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebas
   }
 
   renderPhases();
+  resetEventForm();
 
   $("btnNewEvent")?.addEventListener("click", onNewEvent);
+  $("btnSaveEvent")?.addEventListener("click", onSaveEventForm);
+  $("btnCancelEventEdit")?.addEventListener("click", resetEventForm);
   $("btnAddPhase")?.addEventListener("click", onAddPhase);
   $("btnSeedDefault")?.addEventListener("click", onSeedDefault);
   $("btnSavePhases")?.addEventListener("click", onSavePhases);
@@ -65,6 +68,62 @@ function formatDate(iso){
   }catch{ return String(iso); }
 }
 
+function toDateInputValue(iso){
+  if (!iso) return "";
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "";
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  } catch {
+    return "";
+  }
+}
+
+function getEventById(id){
+  return (STATE.events || []).find(x => x.id === id) || null;
+}
+
+function fillEventForm(ev){
+  const isEdit = !!ev?.id;
+  $("evId").value = ev?.id || "";
+  $("evName").value = ev?.name || ev?.title || "";
+  $("evStatus").value = ev?.status || "Nuevo";
+  $("evDateStart").value = toDateInputValue(ev?.dateStart || ev?.startDate || "");
+  $("evDateEnd").value = toDateInputValue(ev?.dateEnd || ev?.endDate || "");
+  $("evAddress").value = ev?.address || "";
+  $("evLocalidad").value = ev?.localidad || "";
+  $("evId").readOnly = isEdit;
+  $("eventFormHint").textContent = isEdit
+    ? `Editando evento: ${ev.id}`
+    : "Creando nuevo evento.";
+}
+
+function resetEventForm(){
+  fillEventForm(null);
+}
+
+function readEventForm(){
+  const id = String($("evId")?.value || "").trim();
+  const name = String($("evName")?.value || "").trim();
+  const status = String($("evStatus")?.value || "").trim() || "Nuevo";
+  const dateStart = String($("evDateStart")?.value || "").trim();
+  const dateEnd = String($("evDateEnd")?.value || "").trim();
+  const address = String($("evAddress")?.value || "").trim();
+  const localidad = String($("evLocalidad")?.value || "").trim();
+
+  if (!id) throw new Error("El ID del evento es obligatorio.");
+  if (id.includes(" ")) throw new Error("El ID del evento no debe contener espacios.");
+  if (!name) throw new Error("El nombre del evento es obligatorio.");
+  if (dateStart && dateEnd && new Date(dateStart) > new Date(dateEnd)) {
+    throw new Error("La fecha de inicio no puede ser mayor a la fecha de fin.");
+  }
+
+  return { id, name, status, dateStart, dateEnd, address, localidad };
+}
+
 function renderEventsList(){
   const host = $("eventsListBox");
   if (!host) return;
@@ -80,23 +139,41 @@ function renderEventsList(){
     const label = escapeHtml(ev.name || ev.title || id);
     const d1 = formatDate(ev.dateStart || ev.startDate);
     const d2 = formatDate(ev.dateEnd || ev.endDate);
+    const status = escapeHtml(ev.status || "Nuevo");
     const active = (id === getSelectedEventId());
     return `
-      <div class="row" style="justify-content:space-between; align-items:flex-start; gap:10px;">
-        <div style="min-width:220px;">
-          <div style="font-weight:700;">${label}</div>
-          <div class="hint">${escapeHtml(id)}${(d1||d2) ? ` — ${escapeHtml(d1)}${d2 ? ` → ${escapeHtml(d2)}` : ""}` : ""}</div>
-        </div>
-        <div class="row" style="gap:8px; flex-wrap:wrap; justify-content:flex-end;">
-          <button class="btn ${active ? "primary" : ""}" data-action="select" data-id="${escapeHtml(id)}" type="button">${active ? "Activo" : "Seleccionar"}</button>
-          <button class="btn" data-action="edit" data-id="${escapeHtml(id)}" type="button">Editar</button>
-        </div>
-      </div>
-      <div class="divider"></div>
+      <tr data-id="${escapeHtml(id)}" style="cursor:pointer;">
+        <td><strong>${label}</strong><div class="muted">${escapeHtml(id)}</div></td>
+        <td>${escapeHtml(d1 || "-")}</td>
+        <td>${escapeHtml(d2 || "-")}</td>
+        <td>${status}</td>
+        <td>${escapeHtml(ev.address || "-")}</td>
+        <td>${escapeHtml(ev.localidad || "-")}</td>
+        <td>
+          <div class="row" style="gap:8px; flex-wrap:wrap; justify-content:flex-end;">
+            <button class="btn ${active ? "primary" : ""}" data-action="select" data-id="${escapeHtml(id)}" type="button">${active ? "Activo" : "Seleccionar"}</button>
+          </div>
+        </td>
+      </tr>
     `;
   }).join("");
 
-  host.innerHTML = `<div class="stack">${rows}</div>`;
+  host.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>Evento</th>
+          <th>Inicio</th>
+          <th>Fin</th>
+          <th>Estado</th>
+          <th>Dirección</th>
+          <th>Localidad</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
 
   host.querySelectorAll("button[data-action]").forEach(btn=>{
     btn.addEventListener("click", async ()=>{
@@ -105,72 +182,63 @@ function renderEventsList(){
       if (!id) return;
 
       if (action === "select"){
-        setSelectedEventId(id);
-        renderEventSelect();
-        document.dispatchEvent(new CustomEvent("eventChanged", { detail: { eventId: id }}));
+        await selectEventAndRefresh(id);
         return;
       }
+    });
+  });
 
-      if (action === "edit"){
-        await editEvent(id);
-      }
+  host.querySelectorAll("tbody tr[data-id]").forEach(row => {
+    row.addEventListener("click", async (ev) => {
+      if (ev.target.closest("button")) return;
+      const id = row.dataset.id;
+      if (!id) return;
+      await selectEventAndRefresh(id);
+      editEvent(id);
     });
   });
 }
 
-async function onNewEvent(){
-  if (!STATE.auth?.isAdmin) return toast("Solo Admin puede crear eventos.");
-
-  const id = prompt("ID del evento (sin espacios, ej: coro-kaneco-2026-02):");
+async function selectEventAndRefresh(id){
   if (!id) return;
-
-  const name = prompt("Nombre del evento:", "");
-  if (name === null) return;
-
-  const dateStart = prompt("Fecha inicio (YYYY-MM-DD) — opcional:", "");
-  if (dateStart === null) return;
-
-  const dateEnd = prompt("Fecha fin (YYYY-MM-DD) — opcional:", "");
-  if (dateEnd === null) return;
-
-  const address = prompt("Dirección (opcional):", "");
-  if (address === null) return;
-
-  const localidad = prompt("Localidad (opcional):", "");
-  if (localidad === null) return;
-
-  await saveEvent({ id, name, dateStart, dateEnd, address, localidad });
-  await loadEvents();
+  setSelectedEventId(id);
   renderEventSelect();
-  renderEventsList();
-  toast("Evento creado");
+  document.dispatchEvent(new CustomEvent("eventChanged", { detail: { eventId: id }}));
 }
 
-async function editEvent(id){
+function onNewEvent(){
+  if (!STATE.auth?.isAdmin) return toast("Solo Admin puede crear eventos.");
+  resetEventForm();
+  $("evId")?.focus();
+}
+
+function editEvent(id){
   if (!STATE.auth?.isAdmin) return toast("Solo Admin puede editar eventos.");
 
-  const ev = (STATE.events || []).find(x => x.id === id) || { id };
+  const ev = getEventById(id);
+  fillEventForm(ev || { id });
+  $("evName")?.focus();
+}
 
-  const name = prompt("Nombre del evento:", ev.name || ev.title || "");
-  if (name === null) return;
+async function onSaveEventForm(){
+  if (!STATE.auth?.isAdmin) return toast("Solo Admin puede guardar eventos.");
 
-  const dateStart = prompt("Fecha inicio (YYYY-MM-DD) — opcional:", (ev.dateStart || ev.startDate || "").slice(0,10));
-  if (dateStart === null) return;
+  try {
+    const payload = readEventForm();
+    await saveEvent(payload);
+    await loadEvents();
+    renderEventSelect();
+    renderEventsList();
 
-  const dateEnd = prompt("Fecha fin (YYYY-MM-DD) — opcional:", (ev.dateEnd || ev.endDate || "").slice(0,10));
-  if (dateEnd === null) return;
+    setSelectedEventId(payload.id);
+    await loadEventContext(payload.id);
+    renderPhases();
+    fillEventForm(getEventById(payload.id) || { id: payload.id, ...payload });
 
-  const address = prompt("Dirección (opcional):", ev.address || "");
-  if (address === null) return;
-
-  const localidad = prompt("Localidad (opcional):", ev.localidad || "");
-  if (localidad === null) return;
-
-  await saveEvent({ id, name, dateStart, dateEnd, address, localidad });
-  await loadEvents();
-  renderEventSelect();
-  renderEventsList();
-  toast("Evento guardado");
+    toast("Evento guardado");
+  } catch (e) {
+    toast(e?.message || String(e));
+  }
 }
 
 function slugPhaseId(name){
