@@ -427,8 +427,8 @@ export function renderEventSelect() {
   const current = getSelectedEventId();
 
   const opts = (STATE.events || []).map(ev => {
-    const name = ev.name ? ` — ${ev.name}` : "";
-    return `<option value="${escapeHtml(ev.id)}">${escapeHtml(ev.id + name)}</option>`;
+    const label = (ev.name || ev.title || "Evento sin nombre").trim();
+    return `<option value="${escapeHtml(ev.id)}">${escapeHtml(label)}</option>`;
   });
 
   sel.innerHTML = opts.join("") || `<option value="">(sin eventos)</option>`;

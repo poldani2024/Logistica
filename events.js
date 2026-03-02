@@ -100,6 +100,22 @@ function toISODate(raw){
   return `${yyyy}-${mm}-${dd}`;
 }
 
+function slugify(s){
+  return String(s || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+}
+
+function buildEventId({ name, dateStart }){
+  const base = slugify(name) || "evento";
+  const d = toPickerValue(dateStart) || new Date().toISOString().slice(0,10);
+  return `${base}-${d}`;
+}
+
 function toPickerValue(raw){
   try { return toISODate(raw); } catch { return ""; }
 }
@@ -134,9 +150,8 @@ function fillEventForm(ev){
   $("evDateEnd").value = formatDateDDMMYYYY(ev?.dateEnd || ev?.endDate || "");
   $("evAddress").value = ev?.address || "";
   $("evLocalidad").value = ev?.localidad || "";
-  $("evId").readOnly = isEdit;
   $("eventFormHint").textContent = isEdit
-    ? `Editando evento: ${ev.id}`
+    ? `Editando evento: ${ev?.name || "(sin nombre)"}`
     : "Creando nuevo evento.";
 }
 
@@ -153,8 +168,6 @@ function readEventForm(){
   const address = String($("evAddress")?.value || "").trim();
   const localidad = String($("evLocalidad")?.value || "").trim();
 
-  if (!id) throw new Error("El ID del evento es obligatorio.");
-  if (id.includes(" ")) throw new Error("El ID del evento no debe contener espacios.");
   if (!name) throw new Error("El nombre del evento es obligatorio.");
   const dateStart = dateStartRaw ? toISODate(dateStartRaw) : "";
   const dateEnd = dateEndRaw ? toISODate(dateEndRaw) : "";
@@ -163,7 +176,9 @@ function readEventForm(){
     throw new Error("La fecha de inicio no puede ser mayor a la fecha de fin.");
   }
 
-  return { id, name, status, dateStart, dateEnd, address, localidad };
+  const finalId = id || buildEventId({ name, dateStart });
+
+  return { id: finalId, name, status, dateStart, dateEnd, address, localidad };
 }
 
 function renderEventsList(){
@@ -185,7 +200,7 @@ function renderEventsList(){
     const active = (id === getSelectedEventId());
     return `
       <tr data-id="${escapeHtml(id)}" style="cursor:pointer;">
-        <td><strong>${label}</strong><div class="muted">${escapeHtml(id)}</div></td>
+        <td><strong>${label}</strong></td>
         <td>${escapeHtml(d1 || "-")}</td>
         <td>${escapeHtml(d2 || "-")}</td>
         <td>${status}</td>

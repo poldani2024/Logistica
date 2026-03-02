@@ -29,7 +29,7 @@ function applyPermissions(){
   if (el){
     const eventId = STATE.event?.id || "";
     const ev = (STATE.events || []).find(e => e.id === eventId);
-    const title = ev?.name || (eventId ? eventId : "Sin evento");
+    const title = ev?.name || (eventId ? "Evento sin nombre" : "Sin evento");
     el.innerHTML = `
       <div class="row">
         <span class="pill">Evento activo: <b>${title}</b></span>

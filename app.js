@@ -206,7 +206,7 @@ function renderEventSelect() {
 
   sel.innerHTML = (STATE.events || [])
     .map((e) => {
-      const label = e.name || e.id;
+      const label = e.name || e.title || "Evento sin nombre";
       const ds = e.dateStart ? new Date(e.dateStart).toLocaleDateString("es-AR") : "";
       const de = e.dateEnd ? new Date(e.dateEnd).toLocaleDateString("es-AR") : "";
       const range = (ds || de) ? ` (${ds}${de ? " → " + de : ""})` : "";
