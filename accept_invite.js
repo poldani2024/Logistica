@@ -1,8 +1,6 @@
-import { auth, db } from "./firebase.js"; 
-// Si tu proyecto inicializa Firebase en otro archivo, cambiá el import acá.
-
-import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider } from "firebase/auth";
-import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { auth, db } from "./firebase-init.js";
+import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider } from "https://www.gstatic.com/firebasejs/10.7.2/firebase-auth.js";
+import { doc, getDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.2/firebase-firestore.js";
 
 const $ = (id)=> document.getElementById(id);
 

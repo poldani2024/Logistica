@@ -7,6 +7,27 @@
   display:flex;
   justify-content:center;
 }
+
+.topbar-event-field{
+  min-width:min(620px, 48vw);
+}
+
+@media (max-width: 900px){
+  .topbar-inner{
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+  .topbar-center{
+    order: 3;
+    width: 100%;
+    justify-content: stretch;
+  }
+  .topbar-event-field{
+    min-width: 100%;
+    width: 100%;
+  }
+}
+
 :root{
   --bg0:#050B16;
   --bg1:#071226;
