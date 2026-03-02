@@ -160,7 +160,8 @@ export async function loadUserProfile() {
       "Asignaciones": true,
       "Tracking": true,
       "Mapa": true,
-      "Permisos": true
+      "Permisos": true,
+      "AceptInv": true
     };
     STATE.auth.isAdmin = true;
   } else {
@@ -175,7 +176,8 @@ export async function loadUserProfile() {
       "Asignaciones": !!base["Asignaciones"],
       "Tracking": !!base["Tracking"],
       "Mapa": !!base["Mapa"],
-      "Permisos": !!base["Permisos"]
+      "Permisos": !!base["Permisos"],
+      "AceptInv": !!base["AceptInv"]
     };
   }
 
