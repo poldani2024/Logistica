@@ -572,7 +572,7 @@ export function assignedDriverIdForPassenger(passengerId) {
  * Mutaciones: eventos / links / asignaciones / tracking
  * ------------------------- */
 
-export async function saveEvent({ id, name, dateStart, dateEnd, address, localidad }) {
+export async function saveEvent({ id, name, status, dateStart, dateEnd, address, localidad }) {
   if (!STATE.auth.isAdmin) throw new Error("Solo Admin puede guardar eventos");
 
   const eventId = (id || "").trim();
@@ -580,6 +580,7 @@ export async function saveEvent({ id, name, dateStart, dateEnd, address, localid
 
   const payload = {
     name: (name || "").trim(),
+    status: (status || "Nuevo").trim() || "Nuevo",
     dateStart: dateStart ? new Date(dateStart).toISOString() : null,
     dateEnd: dateEnd ? new Date(dateEnd).toISOString() : null,
     address: (address || "").trim(),
