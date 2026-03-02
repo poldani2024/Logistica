@@ -68,8 +68,18 @@ function formatDate(iso){
 function formatDateDDMMYYYY(raw){
   if (!raw) return "";
   try {
-    if (/^\d{2}\/\d{2}\/\d{4}$/.test(String(raw))) return String(raw);
-    const d = new Date(raw);
+    const s = String(raw).trim();
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) return s;
+
+    // Evitar corrimiento por zona horaria cuando llega YYYY-MM-DD
+    // (new Date('YYYY-MM-DD') se interpreta como UTC en varios engines)
+    const isoDateOnly = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (isoDateOnly) {
+      const [, yyyy, mm, dd] = isoDateOnly;
+      return `${dd}/${mm}/${yyyy}`;
+    }
+
+    const d = new Date(s);
     if (Number.isNaN(d.getTime())) return String(raw);
     const y = d.getFullYear();
     const m = String(d.getMonth() + 1).padStart(2, "0");
