@@ -275,6 +275,7 @@ function renderPhases(){
     const name = escapeHtml(p.name || p.id);
     const address = escapeHtml(p.address || "");
     const localidad = escapeHtml(p.localidad || "");
+    const date = escapeHtml(p.date || "");
     const time = escapeHtml(p.time || "");
     return `
       <div class="row" style="justify-content:space-between; align-items:flex-start; gap:10px; padding:10px 12px; border:1px solid rgba(255,255,255,.08); border-radius:14px;">
@@ -285,6 +286,7 @@ function renderPhases(){
           <div class="row" style="gap:8px; flex-wrap:wrap; margin-top:8px;">
             <input class="input" style="min-width:220px" data-field="address" data-idx="${idx}" placeholder="Domicilio" value="${address}">
             <input class="input" style="min-width:160px" data-field="localidad" data-idx="${idx}" placeholder="Localidad" value="${localidad}">
+            <input class="input" style="min-width:170px" data-field="date" data-idx="${idx}" type="date" value="${date}">
             <input class="input" style="min-width:140px" data-field="time" data-idx="${idx}" placeholder="Horario (HH:MM)" value="${time}">
           </div>
         </div>
@@ -319,6 +321,7 @@ function renderPhases(){
         const ev = (STATE.events || []).find(x => x.id === STATE.event.id) || {};
         STATE.event.phases[idx].address = ev.address || "";
         STATE.event.phases[idx].localidad = ev.localidad || "";
+        STATE.event.phases[idx].date = toDateInputValue(ev.dateStart || ev.startDate || "");
         renderPhases();
         return;
       }
@@ -353,7 +356,7 @@ function onAddPhase(){
 
   ensurePhases();
   const id = slugPhaseId(name) || `fase-${STATE.event.phases.length+1}`;
-  STATE.event.phases.push({ id, name, address: "", localidad: "", time: "" });
+  STATE.event.phases.push({ id, name, address: "", localidad: "", date: "", time: "" });
   renderPhases();
 }
 
@@ -364,8 +367,8 @@ function onSeedDefault(){
   if (STATE.event.phases.length) return toast("Ya hay fases. Borrá primero si querés resetear.");
 
   STATE.event.phases = [
-    { id: "ida", name: "Ida", address: "", localidad: "", time: "" },
-    { id: "vuelta", name: "Vuelta", address: "", localidad: "", time: "" },
+    { id: "ida", name: "Ida", address: "", localidad: "", date: "", time: "" },
+    { id: "vuelta", name: "Vuelta", address: "", localidad: "", date: "", time: "" },
   ];
   renderPhases();
 }
@@ -382,6 +385,7 @@ async function onSavePhases(){
       name: String(p.name || p.id || "").trim(),
       address: String(p.address || "").trim(),
       localidad: String(p.localidad || "").trim(),
+      date: String(p.date || "").trim(),
       time: String(p.time || "").trim(),
     }))
     .filter(p => p.id);
