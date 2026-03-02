@@ -89,12 +89,20 @@
 
           <div class="field">
             <label for="evDateStart">Fecha inicio</label>
-            <input id="evDateStart" type="date" class="input" />
+            <div class="row" style="gap:8px;">
+              <input id="evDateStart" type="text" class="input" placeholder="DD/MM/YYYY" inputmode="numeric" />
+              <button id="btnPickEvDateStart" type="button" class="btn" title="Seleccionar fecha">📅</button>
+              <input id="evDateStartPicker" type="date" style="position:absolute;opacity:0;pointer-events:none;width:1px;height:1px;" tabindex="-1" />
+            </div>
           </div>
 
           <div class="field">
             <label for="evDateEnd">Fecha fin</label>
-            <input id="evDateEnd" type="date" class="input" />
+            <div class="row" style="gap:8px;">
+              <input id="evDateEnd" type="text" class="input" placeholder="DD/MM/YYYY" inputmode="numeric" />
+              <button id="btnPickEvDateEnd" type="button" class="btn" title="Seleccionar fecha">📅</button>
+              <input id="evDateEndPicker" type="date" style="position:absolute;opacity:0;pointer-events:none;width:1px;height:1px;" tabindex="-1" />
+            </div>
           </div>
 
           <div class="field">

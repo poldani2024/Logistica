@@ -45,6 +45,8 @@ import { doc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebas
   $("btnAddPhase")?.addEventListener("click", onAddPhase);
   $("btnSeedDefault")?.addEventListener("click", onSeedDefault);
   $("btnSavePhases")?.addEventListener("click", onSavePhases);
+  wireDatePicker("evDateStart", "btnPickEvDateStart", "evDateStartPicker");
+  wireDatePicker("evDateEnd", "btnPickEvDateEnd", "evDateEndPicker");
 
   // cuando cambia evento desde header
   document.addEventListener("eventChanged", async (ev)=>{
@@ -60,12 +62,98 @@ import { doc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebas
 });
 
 function formatDate(iso){
-  if (!iso) return "";
-  try{
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return String(iso);
-    return d.toLocaleDateString("es-AR");
-  }catch{ return String(iso); }
+  return formatDateDDMMYYYY(iso);
+}
+
+function formatDateDDMMYYYY(raw){
+  if (!raw) return "";
+  try {
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(String(raw))) return String(raw);
+    const d = new Date(raw);
+    if (Number.isNaN(d.getTime())) return String(raw);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${day}/${m}/${y}`;
+  } catch {
+    return String(raw);
+  }
+}
+
+function toISODate(raw){
+  const s = String(raw || "").trim();
+  if (!s) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!m) throw new Error("Usá formato de fecha DD/MM/YYYY.");
+  const [, dd, mm, yyyy] = m;
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function toPickerValue(raw){
+  try { return toISODate(raw); } catch { return ""; }
+}
+
+function wireDatePicker(textId, btnId, pickerId){
+  const txt = $(textId);
+  const btn = $(btnId);
+  const picker = $(pickerId);
+  if (!txt || !btn || !picker) return;
+
+  btn.addEventListener("click", () => {
+    picker.value = toPickerValue(txt.value);
+    if (typeof picker.showPicker === "function") picker.showPicker();
+    else picker.click();
+  });
+
+  picker.addEventListener("change", () => {
+    txt.value = formatDateDDMMYYYY(picker.value);
+  });
+}
+
+function getEventById(id){
+  return (STATE.events || []).find(x => x.id === id) || null;
+}
+
+function fillEventForm(ev){
+  const isEdit = !!ev?.id;
+  $("evId").value = ev?.id || "";
+  $("evName").value = ev?.name || ev?.title || "";
+  $("evStatus").value = ev?.status || "Nuevo";
+  $("evDateStart").value = formatDateDDMMYYYY(ev?.dateStart || ev?.startDate || "");
+  $("evDateEnd").value = formatDateDDMMYYYY(ev?.dateEnd || ev?.endDate || "");
+  $("evAddress").value = ev?.address || "";
+  $("evLocalidad").value = ev?.localidad || "";
+  $("evId").readOnly = isEdit;
+  $("eventFormHint").textContent = isEdit
+    ? `Editando evento: ${ev.id}`
+    : "Creando nuevo evento.";
+}
+
+function resetEventForm(){
+  fillEventForm(null);
+}
+
+function readEventForm(){
+  const id = String($("evId")?.value || "").trim();
+  const name = String($("evName")?.value || "").trim();
+  const status = String($("evStatus")?.value || "").trim() || "Nuevo";
+  const dateStartRaw = String($("evDateStart")?.value || "").trim();
+  const dateEndRaw = String($("evDateEnd")?.value || "").trim();
+  const address = String($("evAddress")?.value || "").trim();
+  const localidad = String($("evLocalidad")?.value || "").trim();
+
+  if (!id) throw new Error("El ID del evento es obligatorio.");
+  if (id.includes(" ")) throw new Error("El ID del evento no debe contener espacios.");
+  if (!name) throw new Error("El nombre del evento es obligatorio.");
+  const dateStart = dateStartRaw ? toISODate(dateStartRaw) : "";
+  const dateEnd = dateEndRaw ? toISODate(dateEndRaw) : "";
+
+  if (dateStart && dateEnd && new Date(dateStart) > new Date(dateEnd)) {
+    throw new Error("La fecha de inicio no puede ser mayor a la fecha de fin.");
+  }
+
+  return { id, name, status, dateStart, dateEnd, address, localidad };
 }
 
 function toDateInputValue(iso){
@@ -275,7 +363,8 @@ function renderPhases(){
     const name = escapeHtml(p.name || p.id);
     const address = escapeHtml(p.address || "");
     const localidad = escapeHtml(p.localidad || "");
-    const date = escapeHtml(p.date || "");
+    const date = escapeHtml(formatDateDDMMYYYY(p.date || ""));
+    const pickerDate = escapeHtml(toPickerValue(p.date || ""));
     const time = escapeHtml(p.time || "");
     return `
       <div class="row" style="justify-content:space-between; align-items:flex-start; gap:10px; padding:10px 12px; border:1px solid rgba(255,255,255,.08); border-radius:14px;">
@@ -286,7 +375,9 @@ function renderPhases(){
           <div class="row" style="gap:8px; flex-wrap:wrap; margin-top:8px;">
             <input class="input" style="min-width:220px" data-field="address" data-idx="${idx}" placeholder="Domicilio" value="${address}">
             <input class="input" style="min-width:160px" data-field="localidad" data-idx="${idx}" placeholder="Localidad" value="${localidad}">
-            <input class="input" style="min-width:170px" data-field="date" data-idx="${idx}" type="date" value="${date}">
+            <input class="input" style="min-width:150px" data-field="date" data-idx="${idx}" type="text" placeholder="DD/MM/YYYY" value="${date}">
+            <button class="btn" data-action="pick-date" data-idx="${idx}" type="button" title="Seleccionar fecha">📅</button>
+            <input type="date" data-picker-date="${idx}" value="${pickerDate}" style="position:absolute;opacity:0;pointer-events:none;width:1px;height:1px;" tabindex="-1">
             <input class="input" style="min-width:140px" data-field="time" data-idx="${idx}" placeholder="Horario (HH:MM)" value="${time}">
           </div>
         </div>
@@ -321,8 +412,16 @@ function renderPhases(){
         const ev = (STATE.events || []).find(x => x.id === STATE.event.id) || {};
         STATE.event.phases[idx].address = ev.address || "";
         STATE.event.phases[idx].localidad = ev.localidad || "";
-        STATE.event.phases[idx].date = toDateInputValue(ev.dateStart || ev.startDate || "");
+        STATE.event.phases[idx].date = formatDateDDMMYYYY(ev.dateStart || ev.startDate || "");
         renderPhases();
+        return;
+      }
+      if (action === "pick-date"){
+        const picker = host.querySelector(`input[data-picker-date='${idx}']`);
+        if (!picker) return;
+        picker.value = toPickerValue(STATE.event.phases[idx].date || "");
+        if (typeof picker.showPicker === "function") picker.showPicker();
+        else picker.click();
         return;
       }
       if (action === "up" && idx > 0){
@@ -343,6 +442,16 @@ function renderPhases(){
         STATE.event.phases.splice(idx,1);
         renderPhases();
       }
+    });
+  });
+
+  host.querySelectorAll("input[data-picker-date]").forEach(picker => {
+    picker.addEventListener("change", () => {
+      const idx = Number(picker.dataset.pickerDate);
+      ensurePhases();
+      if (!STATE.event.phases[idx]) return;
+      STATE.event.phases[idx].date = formatDateDDMMYYYY(picker.value);
+      renderPhases();
     });
   });
 }
@@ -385,7 +494,7 @@ async function onSavePhases(){
       name: String(p.name || p.id || "").trim(),
       address: String(p.address || "").trim(),
       localidad: String(p.localidad || "").trim(),
-      date: String(p.date || "").trim(),
+      date: formatDateDDMMYYYY(String(p.date || "").trim()),
       time: String(p.time || "").trim(),
     }))
     .filter(p => p.id);
