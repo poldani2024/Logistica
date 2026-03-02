@@ -111,7 +111,7 @@ function wireDatePicker(textId, btnId, pickerId){
   });
 }
 
-function getEventById(id){
+function findEventById(id){
   return (STATE.events || []).find(x => x.id === id) || null;
 }
 
@@ -149,62 +149,6 @@ function readEventForm(){
   const dateStart = dateStartRaw ? toISODate(dateStartRaw) : "";
   const dateEnd = dateEndRaw ? toISODate(dateEndRaw) : "";
 
-  if (dateStart && dateEnd && new Date(dateStart) > new Date(dateEnd)) {
-    throw new Error("La fecha de inicio no puede ser mayor a la fecha de fin.");
-  }
-
-  return { id, name, status, dateStart, dateEnd, address, localidad };
-}
-
-function toDateInputValue(iso){
-  if (!iso) return "";
-  try {
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return "";
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    return `${y}-${m}-${day}`;
-  } catch {
-    return "";
-  }
-}
-
-function getEventById(id){
-  return (STATE.events || []).find(x => x.id === id) || null;
-}
-
-function fillEventForm(ev){
-  const isEdit = !!ev?.id;
-  $("evId").value = ev?.id || "";
-  $("evName").value = ev?.name || ev?.title || "";
-  $("evStatus").value = ev?.status || "Nuevo";
-  $("evDateStart").value = toDateInputValue(ev?.dateStart || ev?.startDate || "");
-  $("evDateEnd").value = toDateInputValue(ev?.dateEnd || ev?.endDate || "");
-  $("evAddress").value = ev?.address || "";
-  $("evLocalidad").value = ev?.localidad || "";
-  $("evId").readOnly = isEdit;
-  $("eventFormHint").textContent = isEdit
-    ? `Editando evento: ${ev.id}`
-    : "Creando nuevo evento.";
-}
-
-function resetEventForm(){
-  fillEventForm(null);
-}
-
-function readEventForm(){
-  const id = String($("evId")?.value || "").trim();
-  const name = String($("evName")?.value || "").trim();
-  const status = String($("evStatus")?.value || "").trim() || "Nuevo";
-  const dateStart = String($("evDateStart")?.value || "").trim();
-  const dateEnd = String($("evDateEnd")?.value || "").trim();
-  const address = String($("evAddress")?.value || "").trim();
-  const localidad = String($("evLocalidad")?.value || "").trim();
-
-  if (!id) throw new Error("El ID del evento es obligatorio.");
-  if (id.includes(" ")) throw new Error("El ID del evento no debe contener espacios.");
-  if (!name) throw new Error("El nombre del evento es obligatorio.");
   if (dateStart && dateEnd && new Date(dateStart) > new Date(dateEnd)) {
     throw new Error("La fecha de inicio no puede ser mayor a la fecha de fin.");
   }
@@ -303,7 +247,7 @@ function onNewEvent(){
 function editEvent(id){
   if (!STATE.auth?.isAdmin) return toast("Solo Admin puede editar eventos.");
 
-  const ev = getEventById(id);
+  const ev = findEventById(id);
   fillEventForm(ev || { id });
   $("evName")?.focus();
 }
@@ -321,7 +265,7 @@ async function onSaveEventForm(){
     setSelectedEventId(payload.id);
     await loadEventContext(payload.id);
     renderPhases();
-    fillEventForm(getEventById(payload.id) || { id: payload.id, ...payload });
+    fillEventForm(findEventById(payload.id) || { id: payload.id, ...payload });
 
     toast("Evento guardado");
   } catch (e) {
