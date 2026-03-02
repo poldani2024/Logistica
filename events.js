@@ -182,22 +182,28 @@ function renderEventsList(){
       if (!id) return;
 
       if (action === "select"){
-        setSelectedEventId(id);
-        renderEventSelect();
-        document.dispatchEvent(new CustomEvent("eventChanged", { detail: { eventId: id }}));
+        await selectEventAndRefresh(id);
         return;
       }
     });
   });
 
   host.querySelectorAll("tbody tr[data-id]").forEach(row => {
-    row.addEventListener("click", (ev) => {
+    row.addEventListener("click", async (ev) => {
       if (ev.target.closest("button")) return;
       const id = row.dataset.id;
       if (!id) return;
+      await selectEventAndRefresh(id);
       editEvent(id);
     });
   });
+}
+
+async function selectEventAndRefresh(id){
+  if (!id) return;
+  setSelectedEventId(id);
+  renderEventSelect();
+  document.dispatchEvent(new CustomEvent("eventChanged", { detail: { eventId: id }}));
 }
 
 function onNewEvent(){
