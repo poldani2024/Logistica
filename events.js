@@ -90,6 +90,7 @@ function fillEventForm(ev){
   const isEdit = !!ev?.id;
   $("evId").value = ev?.id || "";
   $("evName").value = ev?.name || ev?.title || "";
+  $("evStatus").value = ev?.status || "Nuevo";
   $("evDateStart").value = toDateInputValue(ev?.dateStart || ev?.startDate || "");
   $("evDateEnd").value = toDateInputValue(ev?.dateEnd || ev?.endDate || "");
   $("evAddress").value = ev?.address || "";
@@ -107,6 +108,7 @@ function resetEventForm(){
 function readEventForm(){
   const id = String($("evId")?.value || "").trim();
   const name = String($("evName")?.value || "").trim();
+  const status = String($("evStatus")?.value || "").trim() || "Nuevo";
   const dateStart = String($("evDateStart")?.value || "").trim();
   const dateEnd = String($("evDateEnd")?.value || "").trim();
   const address = String($("evAddress")?.value || "").trim();
@@ -119,7 +121,7 @@ function readEventForm(){
     throw new Error("La fecha de inicio no puede ser mayor a la fecha de fin.");
   }
 
-  return { id, name, dateStart, dateEnd, address, localidad };
+  return { id, name, status, dateStart, dateEnd, address, localidad };
 }
 
 function renderEventsList(){
@@ -137,18 +139,19 @@ function renderEventsList(){
     const label = escapeHtml(ev.name || ev.title || id);
     const d1 = formatDate(ev.dateStart || ev.startDate);
     const d2 = formatDate(ev.dateEnd || ev.endDate);
+    const status = escapeHtml(ev.status || "Nuevo");
     const active = (id === getSelectedEventId());
     return `
-      <tr>
+      <tr data-id="${escapeHtml(id)}" style="cursor:pointer;">
         <td><strong>${label}</strong><div class="muted">${escapeHtml(id)}</div></td>
         <td>${escapeHtml(d1 || "-")}</td>
         <td>${escapeHtml(d2 || "-")}</td>
+        <td>${status}</td>
         <td>${escapeHtml(ev.address || "-")}</td>
         <td>${escapeHtml(ev.localidad || "-")}</td>
         <td>
           <div class="row" style="gap:8px; flex-wrap:wrap; justify-content:flex-end;">
             <button class="btn ${active ? "primary" : ""}" data-action="select" data-id="${escapeHtml(id)}" type="button">${active ? "Activo" : "Seleccionar"}</button>
-            <button class="btn" data-action="edit" data-id="${escapeHtml(id)}" type="button">Editar</button>
           </div>
         </td>
       </tr>
@@ -162,6 +165,7 @@ function renderEventsList(){
           <th>Evento</th>
           <th>Inicio</th>
           <th>Fin</th>
+          <th>Estado</th>
           <th>Dirección</th>
           <th>Localidad</th>
           <th></th>
@@ -183,10 +187,15 @@ function renderEventsList(){
         document.dispatchEvent(new CustomEvent("eventChanged", { detail: { eventId: id }}));
         return;
       }
+    });
+  });
 
-      if (action === "edit"){
-        editEvent(id);
-      }
+  host.querySelectorAll("tbody tr[data-id]").forEach(row => {
+    row.addEventListener("click", (ev) => {
+      if (ev.target.closest("button")) return;
+      const id = row.dataset.id;
+      if (!id) return;
+      editEvent(id);
     });
   });
 }
