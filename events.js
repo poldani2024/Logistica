@@ -37,11 +37,16 @@ import { doc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebas
   }
 
   renderPhases();
+  resetEventForm();
 
   $("btnNewEvent")?.addEventListener("click", onNewEvent);
+  $("btnSaveEvent")?.addEventListener("click", onSaveEventForm);
+  $("btnCancelEventEdit")?.addEventListener("click", resetEventForm);
   $("btnAddPhase")?.addEventListener("click", onAddPhase);
   $("btnSeedDefault")?.addEventListener("click", onSeedDefault);
   $("btnSavePhases")?.addEventListener("click", onSavePhases);
+  wireDatePicker("evDateStart", "btnPickEvDateStart", "evDateStartPicker");
+  wireDatePicker("evDateEnd", "btnPickEvDateEnd", "evDateEndPicker");
 
   // cuando cambia evento desde header
   document.addEventListener("eventChanged", async (ev)=>{
@@ -57,12 +62,98 @@ import { doc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebas
 });
 
 function formatDate(iso){
-  if (!iso) return "";
-  try{
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return String(iso);
-    return d.toLocaleDateString("es-AR");
-  }catch{ return String(iso); }
+  return formatDateDDMMYYYY(iso);
+}
+
+function formatDateDDMMYYYY(raw){
+  if (!raw) return "";
+  try {
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(String(raw))) return String(raw);
+    const d = new Date(raw);
+    if (Number.isNaN(d.getTime())) return String(raw);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${day}/${m}/${y}`;
+  } catch {
+    return String(raw);
+  }
+}
+
+function toISODate(raw){
+  const s = String(raw || "").trim();
+  if (!s) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!m) throw new Error("Usá formato de fecha DD/MM/YYYY.");
+  const [, dd, mm, yyyy] = m;
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function toPickerValue(raw){
+  try { return toISODate(raw); } catch { return ""; }
+}
+
+function wireDatePicker(textId, btnId, pickerId){
+  const txt = $(textId);
+  const btn = $(btnId);
+  const picker = $(pickerId);
+  if (!txt || !btn || !picker) return;
+
+  btn.addEventListener("click", () => {
+    picker.value = toPickerValue(txt.value);
+    if (typeof picker.showPicker === "function") picker.showPicker();
+    else picker.click();
+  });
+
+  picker.addEventListener("change", () => {
+    txt.value = formatDateDDMMYYYY(picker.value);
+  });
+}
+
+function getEventById(id){
+  return (STATE.events || []).find(x => x.id === id) || null;
+}
+
+function fillEventForm(ev){
+  const isEdit = !!ev?.id;
+  $("evId").value = ev?.id || "";
+  $("evName").value = ev?.name || ev?.title || "";
+  $("evStatus").value = ev?.status || "Nuevo";
+  $("evDateStart").value = formatDateDDMMYYYY(ev?.dateStart || ev?.startDate || "");
+  $("evDateEnd").value = formatDateDDMMYYYY(ev?.dateEnd || ev?.endDate || "");
+  $("evAddress").value = ev?.address || "";
+  $("evLocalidad").value = ev?.localidad || "";
+  $("evId").readOnly = isEdit;
+  $("eventFormHint").textContent = isEdit
+    ? `Editando evento: ${ev.id}`
+    : "Creando nuevo evento.";
+}
+
+function resetEventForm(){
+  fillEventForm(null);
+}
+
+function readEventForm(){
+  const id = String($("evId")?.value || "").trim();
+  const name = String($("evName")?.value || "").trim();
+  const status = String($("evStatus")?.value || "").trim() || "Nuevo";
+  const dateStartRaw = String($("evDateStart")?.value || "").trim();
+  const dateEndRaw = String($("evDateEnd")?.value || "").trim();
+  const address = String($("evAddress")?.value || "").trim();
+  const localidad = String($("evLocalidad")?.value || "").trim();
+
+  if (!id) throw new Error("El ID del evento es obligatorio.");
+  if (id.includes(" ")) throw new Error("El ID del evento no debe contener espacios.");
+  if (!name) throw new Error("El nombre del evento es obligatorio.");
+  const dateStart = dateStartRaw ? toISODate(dateStartRaw) : "";
+  const dateEnd = dateEndRaw ? toISODate(dateEndRaw) : "";
+
+  if (dateStart && dateEnd && new Date(dateStart) > new Date(dateEnd)) {
+    throw new Error("La fecha de inicio no puede ser mayor a la fecha de fin.");
+  }
+
+  return { id, name, status, dateStart, dateEnd, address, localidad };
 }
 
 function renderEventsList(){
@@ -80,23 +171,41 @@ function renderEventsList(){
     const label = escapeHtml(ev.name || ev.title || id);
     const d1 = formatDate(ev.dateStart || ev.startDate);
     const d2 = formatDate(ev.dateEnd || ev.endDate);
+    const status = escapeHtml(ev.status || "Nuevo");
     const active = (id === getSelectedEventId());
     return `
-      <div class="row" style="justify-content:space-between; align-items:flex-start; gap:10px;">
-        <div style="min-width:220px;">
-          <div style="font-weight:700;">${label}</div>
-          <div class="hint">${escapeHtml(id)}${(d1||d2) ? ` — ${escapeHtml(d1)}${d2 ? ` → ${escapeHtml(d2)}` : ""}` : ""}</div>
-        </div>
-        <div class="row" style="gap:8px; flex-wrap:wrap; justify-content:flex-end;">
-          <button class="btn ${active ? "primary" : ""}" data-action="select" data-id="${escapeHtml(id)}" type="button">${active ? "Activo" : "Seleccionar"}</button>
-          <button class="btn" data-action="edit" data-id="${escapeHtml(id)}" type="button">Editar</button>
-        </div>
-      </div>
-      <div class="divider"></div>
+      <tr data-id="${escapeHtml(id)}" style="cursor:pointer;">
+        <td><strong>${label}</strong><div class="muted">${escapeHtml(id)}</div></td>
+        <td>${escapeHtml(d1 || "-")}</td>
+        <td>${escapeHtml(d2 || "-")}</td>
+        <td>${status}</td>
+        <td>${escapeHtml(ev.address || "-")}</td>
+        <td>${escapeHtml(ev.localidad || "-")}</td>
+        <td>
+          <div class="row" style="gap:8px; flex-wrap:wrap; justify-content:flex-end;">
+            <button class="btn ${active ? "primary" : ""}" data-action="select" data-id="${escapeHtml(id)}" type="button">${active ? "Activo" : "Seleccionar"}</button>
+          </div>
+        </td>
+      </tr>
     `;
   }).join("");
 
-  host.innerHTML = `<div class="stack">${rows}</div>`;
+  host.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>Evento</th>
+          <th>Inicio</th>
+          <th>Fin</th>
+          <th>Estado</th>
+          <th>Dirección</th>
+          <th>Localidad</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
 
   host.querySelectorAll("button[data-action]").forEach(btn=>{
     btn.addEventListener("click", async ()=>{
@@ -105,72 +214,63 @@ function renderEventsList(){
       if (!id) return;
 
       if (action === "select"){
-        setSelectedEventId(id);
-        renderEventSelect();
-        document.dispatchEvent(new CustomEvent("eventChanged", { detail: { eventId: id }}));
+        await selectEventAndRefresh(id);
         return;
       }
+    });
+  });
 
-      if (action === "edit"){
-        await editEvent(id);
-      }
+  host.querySelectorAll("tbody tr[data-id]").forEach(row => {
+    row.addEventListener("click", async (ev) => {
+      if (ev.target.closest("button")) return;
+      const id = row.dataset.id;
+      if (!id) return;
+      await selectEventAndRefresh(id);
+      editEvent(id);
     });
   });
 }
 
-async function onNewEvent(){
-  if (!STATE.auth?.isAdmin) return toast("Solo Admin puede crear eventos.");
-
-  const id = prompt("ID del evento (sin espacios, ej: coro-kaneco-2026-02):");
+async function selectEventAndRefresh(id){
   if (!id) return;
-
-  const name = prompt("Nombre del evento:", "");
-  if (name === null) return;
-
-  const dateStart = prompt("Fecha inicio (YYYY-MM-DD) — opcional:", "");
-  if (dateStart === null) return;
-
-  const dateEnd = prompt("Fecha fin (YYYY-MM-DD) — opcional:", "");
-  if (dateEnd === null) return;
-
-  const address = prompt("Dirección (opcional):", "");
-  if (address === null) return;
-
-  const localidad = prompt("Localidad (opcional):", "");
-  if (localidad === null) return;
-
-  await saveEvent({ id, name, dateStart, dateEnd, address, localidad });
-  await loadEvents();
+  setSelectedEventId(id);
   renderEventSelect();
-  renderEventsList();
-  toast("Evento creado");
+  document.dispatchEvent(new CustomEvent("eventChanged", { detail: { eventId: id }}));
 }
 
-async function editEvent(id){
+function onNewEvent(){
+  if (!STATE.auth?.isAdmin) return toast("Solo Admin puede crear eventos.");
+  resetEventForm();
+  $("evId")?.focus();
+}
+
+function editEvent(id){
   if (!STATE.auth?.isAdmin) return toast("Solo Admin puede editar eventos.");
 
-  const ev = (STATE.events || []).find(x => x.id === id) || { id };
+  const ev = getEventById(id);
+  fillEventForm(ev || { id });
+  $("evName")?.focus();
+}
 
-  const name = prompt("Nombre del evento:", ev.name || ev.title || "");
-  if (name === null) return;
+async function onSaveEventForm(){
+  if (!STATE.auth?.isAdmin) return toast("Solo Admin puede guardar eventos.");
 
-  const dateStart = prompt("Fecha inicio (YYYY-MM-DD) — opcional:", (ev.dateStart || ev.startDate || "").slice(0,10));
-  if (dateStart === null) return;
+  try {
+    const payload = readEventForm();
+    await saveEvent(payload);
+    await loadEvents();
+    renderEventSelect();
+    renderEventsList();
 
-  const dateEnd = prompt("Fecha fin (YYYY-MM-DD) — opcional:", (ev.dateEnd || ev.endDate || "").slice(0,10));
-  if (dateEnd === null) return;
+    setSelectedEventId(payload.id);
+    await loadEventContext(payload.id);
+    renderPhases();
+    fillEventForm(getEventById(payload.id) || { id: payload.id, ...payload });
 
-  const address = prompt("Dirección (opcional):", ev.address || "");
-  if (address === null) return;
-
-  const localidad = prompt("Localidad (opcional):", ev.localidad || "");
-  if (localidad === null) return;
-
-  await saveEvent({ id, name, dateStart, dateEnd, address, localidad });
-  await loadEvents();
-  renderEventSelect();
-  renderEventsList();
-  toast("Evento guardado");
+    toast("Evento guardado");
+  } catch (e) {
+    toast(e?.message || String(e));
+  }
 }
 
 function slugPhaseId(name){
@@ -207,6 +307,8 @@ function renderPhases(){
     const name = escapeHtml(p.name || p.id);
     const address = escapeHtml(p.address || "");
     const localidad = escapeHtml(p.localidad || "");
+    const date = escapeHtml(formatDateDDMMYYYY(p.date || ""));
+    const pickerDate = escapeHtml(toPickerValue(p.date || ""));
     const time = escapeHtml(p.time || "");
     return `
       <div class="row" style="justify-content:space-between; align-items:flex-start; gap:10px; padding:10px 12px; border:1px solid rgba(255,255,255,.08); border-radius:14px;">
@@ -217,6 +319,9 @@ function renderPhases(){
           <div class="row" style="gap:8px; flex-wrap:wrap; margin-top:8px;">
             <input class="input" style="min-width:220px" data-field="address" data-idx="${idx}" placeholder="Domicilio" value="${address}">
             <input class="input" style="min-width:160px" data-field="localidad" data-idx="${idx}" placeholder="Localidad" value="${localidad}">
+            <input class="input" style="min-width:150px" data-field="date" data-idx="${idx}" type="text" placeholder="DD/MM/YYYY" value="${date}">
+            <button class="btn" data-action="pick-date" data-idx="${idx}" type="button" title="Seleccionar fecha">📅</button>
+            <input type="date" data-picker-date="${idx}" value="${pickerDate}" style="position:absolute;opacity:0;pointer-events:none;width:1px;height:1px;" tabindex="-1">
             <input class="input" style="min-width:140px" data-field="time" data-idx="${idx}" placeholder="Horario (HH:MM)" value="${time}">
           </div>
         </div>
@@ -251,7 +356,16 @@ function renderPhases(){
         const ev = (STATE.events || []).find(x => x.id === STATE.event.id) || {};
         STATE.event.phases[idx].address = ev.address || "";
         STATE.event.phases[idx].localidad = ev.localidad || "";
+        STATE.event.phases[idx].date = formatDateDDMMYYYY(ev.dateStart || ev.startDate || "");
         renderPhases();
+        return;
+      }
+      if (action === "pick-date"){
+        const picker = host.querySelector(`input[data-picker-date='${idx}']`);
+        if (!picker) return;
+        picker.value = toPickerValue(STATE.event.phases[idx].date || "");
+        if (typeof picker.showPicker === "function") picker.showPicker();
+        else picker.click();
         return;
       }
       if (action === "up" && idx > 0){
@@ -274,6 +388,16 @@ function renderPhases(){
       }
     });
   });
+
+  host.querySelectorAll("input[data-picker-date]").forEach(picker => {
+    picker.addEventListener("change", () => {
+      const idx = Number(picker.dataset.pickerDate);
+      ensurePhases();
+      if (!STATE.event.phases[idx]) return;
+      STATE.event.phases[idx].date = formatDateDDMMYYYY(picker.value);
+      renderPhases();
+    });
+  });
 }
 
 function onAddPhase(){
@@ -285,7 +409,7 @@ function onAddPhase(){
 
   ensurePhases();
   const id = slugPhaseId(name) || `fase-${STATE.event.phases.length+1}`;
-  STATE.event.phases.push({ id, name, address: "", localidad: "", time: "" });
+  STATE.event.phases.push({ id, name, address: "", localidad: "", date: "", time: "" });
   renderPhases();
 }
 
@@ -296,8 +420,8 @@ function onSeedDefault(){
   if (STATE.event.phases.length) return toast("Ya hay fases. Borrá primero si querés resetear.");
 
   STATE.event.phases = [
-    { id: "ida", name: "Ida", address: "", localidad: "", time: "" },
-    { id: "vuelta", name: "Vuelta", address: "", localidad: "", time: "" },
+    { id: "ida", name: "Ida", address: "", localidad: "", date: "", time: "" },
+    { id: "vuelta", name: "Vuelta", address: "", localidad: "", date: "", time: "" },
   ];
   renderPhases();
 }
@@ -314,6 +438,7 @@ async function onSavePhases(){
       name: String(p.name || p.id || "").trim(),
       address: String(p.address || "").trim(),
       localidad: String(p.localidad || "").trim(),
+      date: formatDateDDMMYYYY(String(p.date || "").trim()),
       time: String(p.time || "").trim(),
     }))
     .filter(p => p.id);
