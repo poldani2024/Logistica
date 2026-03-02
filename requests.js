@@ -12,6 +12,13 @@ function formatDateDDMMYYYY(raw){
   if (!raw) return "";
   const s = String(raw).trim();
   if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) return s;
+
+  const isoDateOnly = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoDateOnly) {
+    const [, yyyy, mm, dd] = isoDateOnly;
+    return `${dd}/${mm}/${yyyy}`;
+  }
+
   const d = new Date(s);
   if (Number.isNaN(d.getTime())) return s;
   const dd = String(d.getDate()).padStart(2, "0");
@@ -205,11 +212,15 @@ function validateRequest(payload) {
     const ida = payload.phases.ida;
     if (!ida.pickupAddress) throw new Error("Completá la dirección de salida (Ida).");
     if (!ida.pickupCity) throw new Error("Completá la ciudad de salida (Ida).");
+    if (!ida.date) throw new Error("Completá la fecha (Ida).");
+    toISODate(ida.date);
     if (!ida.time) throw new Error("Completá la hora (Ida).");
   }
 
   if (vueltaOn) {
     const v = payload.phases.vuelta;
+    if (!v.date) throw new Error("Completá la fecha (Vuelta).");
+    toISODate(v.date);
     if (!v.time) throw new Error("Completá la hora (Vuelta).");
     if (!v.dropoffAddress) throw new Error("Completá la dirección de regreso (Vuelta).");
     if (!v.dropoffCity) throw new Error("Completá la ciudad de regreso (Vuelta).");
@@ -255,12 +266,14 @@ async function createRequest() {
         enabled: $("rq_ida_on").checked,
         pickupAddress: $("rq_ida_pickupAddress").value.trim(),
         pickupCity: $("rq_ida_pickupCity").value.trim(),
+        date: formatDateDDMMYYYY($("rq_ida_date").value),
         time: $("rq_ida_time").value
       },
       vuelta: {
         enabled: $("rq_vuelta_on").checked,
         dropoffAddress: $("rq_vuelta_dropoffAddress").value.trim(),
         dropoffCity: $("rq_vuelta_dropoffCity").value.trim(),
+        date: formatDateDDMMYYYY($("rq_vuelta_date").value),
         time: $("rq_vuelta_time").value
       }
     },
@@ -335,6 +348,8 @@ async function refresh() {
 
   $("rq_vuelta_same")?.addEventListener("change", applyVueltaSameAddress);
   wireDatePicker("rq_date", "btnPickRqDate", "rq_date_picker");
+  wireDatePicker("rq_ida_date", "btnPickRqIdaDate", "rq_ida_date_picker");
+  wireDatePicker("rq_vuelta_date", "btnPickRqVueltaDate", "rq_vuelta_date_picker");
 
   $("btnCreateRequest").addEventListener("click", async () => {
     try {
