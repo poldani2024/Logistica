@@ -38,7 +38,11 @@
         </div>
         <div class="field">
           <label>Fecha</label>
-          <input id="rq_date" type="date" class="input" />
+          <div class="row" style="gap:8px;">
+            <input id="rq_date" type="text" class="input" placeholder="DD/MM/YYYY" inputmode="numeric" />
+            <button id="btnPickRqDate" type="button" class="btn" title="Seleccionar fecha">📅</button>
+            <input id="rq_date_picker" type="date" style="position:absolute;opacity:0;pointer-events:none;width:1px;height:1px;" tabindex="-1" />
+          </div>
         </div>
 
         <div class="field">

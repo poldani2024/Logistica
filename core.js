@@ -427,8 +427,8 @@ export function renderEventSelect() {
   const current = getSelectedEventId();
 
   const opts = (STATE.events || []).map(ev => {
-    const name = ev.name ? ` — ${ev.name}` : "";
-    return `<option value="${escapeHtml(ev.id)}">${escapeHtml(ev.id + name)}</option>`;
+    const label = (ev.name || ev.title || "Evento sin nombre").trim();
+    return `<option value="${escapeHtml(ev.id)}">${escapeHtml(label)}</option>`;
   });
 
   sel.innerHTML = opts.join("") || `<option value="">(sin eventos)</option>`;
@@ -572,7 +572,7 @@ export function assignedDriverIdForPassenger(passengerId) {
  * Mutaciones: eventos / links / asignaciones / tracking
  * ------------------------- */
 
-export async function saveEvent({ id, name, dateStart, dateEnd, address, localidad }) {
+export async function saveEvent({ id, name, status, dateStart, dateEnd, address, localidad }) {
   if (!STATE.auth.isAdmin) throw new Error("Solo Admin puede guardar eventos");
 
   const eventId = (id || "").trim();
@@ -580,6 +580,7 @@ export async function saveEvent({ id, name, dateStart, dateEnd, address, localid
 
   const payload = {
     name: (name || "").trim(),
+    status: (status || "Nuevo").trim() || "Nuevo",
     dateStart: dateStart ? new Date(dateStart).toISOString() : null,
     dateEnd: dateEnd ? new Date(dateEnd).toISOString() : null,
     address: (address || "").trim(),
