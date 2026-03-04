@@ -160,7 +160,8 @@ export async function loadUserProfile() {
       "Asignaciones": true,
       "Tracking": true,
       "Mapa": true,
-      "Permisos": true
+      "Permisos": true,
+      "AceptInv": true
     };
     STATE.auth.isAdmin = true;
   } else {
@@ -175,7 +176,8 @@ export async function loadUserProfile() {
       "Asignaciones": !!base["Asignaciones"],
       "Tracking": !!base["Tracking"],
       "Mapa": !!base["Mapa"],
-      "Permisos": !!base["Permisos"]
+      "Permisos": !!base["Permisos"],
+      "AceptInv": !!base["AceptInv"]
     };
   }
 
@@ -420,45 +422,239 @@ export async function loadEvents() {
   return arr;
 }
 
+function normalizeText(s) {
+  return String(s || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function phoneticKey(s) {
+  return normalizeText(s)
+    .replace(/[bv]/g, "b")
+    .replace(/[zsc]/g, "s")
+    .replace(/[kgq]/g, "k")
+    .replace(/h/g, "")
+    .replace(/y/g, "i")
+    .replace(/ll/g, "y")
+    .replace(/\s+/g, "");
+}
+
+function parseEventDateValue(raw) {
+  const v = String(raw || "").trim();
+  if (!v) return Number.NEGATIVE_INFINITY;
+  const iso = v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (iso) return Date.UTC(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
+  const dmY = v.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (dmY) return Date.UTC(Number(dmY[3]), Number(dmY[2]) - 1, Number(dmY[1]));
+  const t = Date.parse(v);
+  return Number.isFinite(t) ? t : Number.NEGATIVE_INFINITY;
+}
+
+function eventSortDate(ev) {
+  return parseEventDateValue(ev?.dateStart || ev?.startDate || ev?.dateEnd || ev?.endDate || "");
+}
+
 export function renderEventSelect() {
   const sel = $("eventSelect");
   if (!sel) return;
 
-  const current = getSelectedEventId();
+  const allEvents = STATE.events || [];
+  const eventLabel = (ev) => (ev?.name || ev?.title || "Evento sin nombre").trim();
 
-  const opts = (STATE.events || []).map(ev => {
-    const name = ev.name ? ` — ${ev.name}` : "";
-    return `<option value="${escapeHtml(ev.id)}">${escapeHtml(ev.id + name)}</option>`;
-  });
+  const sortedByRecent = [...allEvents].sort((a, b) => eventSortDate(b) - eventSortDate(a));
+  const activeEvents = sortedByRecent.filter(ev => String(ev?.status || "").trim().toLowerCase() === "activo");
 
+  const opts = sortedByRecent.map(ev => `<option value="${escapeHtml(ev.id)}">${escapeHtml(eventLabel(ev))}</option>`);
   sel.innerHTML = opts.join("") || `<option value="">(sin eventos)</option>`;
 
-  // Persistir si no hay guardado pero hay valor
-  if (!current && sel.value) {
-    setSelectedEventId(sel.value);
+  const current = getSelectedEventId();
+  const currentEv = sortedByRecent.find(ev => ev.id === current);
+  const fallbackEv = activeEvents[0] || sortedByRecent[0] || null;
+  const selectedEv = currentEv || fallbackEv;
+
+  if (selectedEv?.id) {
+    setSelectedEventId(selectedEv.id);
+    sel.value = selectedEv.id;
   }
 
-  // Importante: evitar duplicar listeners si renderizás muchas veces
-  if (!sel.dataset.bound) {
-    sel.addEventListener("change", () => {
-      setSelectedEventId(sel.value);
-      document.dispatchEvent(
-        new CustomEvent("eventChanged", { detail: { eventId: getSelectedEventId() } })
-      );
-      const hint = $("eventHint");
-      if (hint) {
-        hint.textContent = getSelectedEventId()
-          ? `Evento activo: ${getSelectedEventId()}`
-          : "No hay evento seleccionado";
-      }
-    });
-    sel.dataset.bound = "1";
+  sel.style.display = "none";
+
+  const field = sel.parentElement;
+  if (!field) return;
+
+  let activeWrap = field.querySelector("#eventActiveWrap");
+  if (!activeWrap) {
+    activeWrap = document.createElement("div");
+    activeWrap.id = "eventActiveWrap";
+    activeWrap.className = "row";
+    activeWrap.style.gap = "8px";
+
+    const activeInput = document.createElement("input");
+    activeInput.id = "eventActiveDisplay";
+    activeInput.className = "input";
+    activeInput.readOnly = true;
+    activeInput.setAttribute("aria-label", "Evento activo");
+    activeInput.style.flex = "1";
+
+    const btn = document.createElement("button");
+    btn.id = "btnOpenEventPicker";
+    btn.className = "btn";
+    btn.type = "button";
+    btn.textContent = "Cambiar";
+
+    activeWrap.append(activeInput, btn);
+    field.insertBefore(activeWrap, sel);
   }
+
+  const activeInput = field.querySelector("#eventActiveDisplay");
+  if (activeInput) activeInput.value = selectedEv ? eventLabel(selectedEv) : "Sin evento";
 
   const hint = $("eventHint");
   if (hint) {
-    hint.textContent = current ? `Evento activo: ${current}` : "No hay evento seleccionado";
+    hint.textContent = selectedEv
+      ? `Evento activo: ${eventLabel(selectedEv)}`
+      : "No hay evento seleccionado";
   }
+
+  let modal = document.getElementById("eventPickerModal");
+  if (!modal) {
+    modal = document.createElement("div");
+    modal.id = "eventPickerModal";
+    modal.className = "eventPickerModal";
+    modal.innerHTML = `
+      <div class="eventPickerCard">
+        <div class="rowBetween" style="margin-bottom:10px;">
+          <div>
+            <div class="cardTitle" style="margin:0">Seleccionar evento</div>
+            <div class="subtitle">Ordenado por fecha (más actual primero)</div>
+          </div>
+          <button class="btn" id="btnCloseEventPicker" type="button">Cerrar</button>
+        </div>
+
+        <div class="field" style="margin-bottom:10px;">
+          <label>Buscar (fonética)</label>
+          <input id="eventPickerSearch" class="input" type="search" placeholder="Ej: ombu, embu, hombu..." />
+        </div>
+
+        <div class="tableWrap" style="max-height:52vh; overflow:auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>Evento</th>
+                <th>Inicio</th>
+                <th>Fin</th>
+                <th>Estado</th>
+                <th>Localidad</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="eventPickerBody"></tbody>
+          </table>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+  }
+
+  const renderPickerList = (query = "") => {
+    const body = document.getElementById("eventPickerBody");
+    if (!body) return;
+
+    const qNorm = normalizeText(query);
+    const qPh = phoneticKey(query);
+
+    const filtered = !qNorm
+      ? sortedByRecent
+      : sortedByRecent.filter(ev => {
+          const blob = [
+            eventLabel(ev),
+            ev?.localidad || "",
+            ev?.address || "",
+            ev?.dateStart || ev?.startDate || "",
+            ev?.status || "",
+          ].join(" ");
+          const norm = normalizeText(blob);
+          const pho = phoneticKey(blob);
+          return norm.includes(qNorm) || pho.includes(qPh);
+        });
+
+    if (!filtered.length) {
+      body.innerHTML = '<tr><td colspan="6" class="muted">No se encontraron eventos.</td></tr>';
+      return;
+    }
+
+    body.innerHTML = filtered.map(ev => {
+      const id = ev.id;
+      const isActive = id === getSelectedEventId();
+      const start = escapeHtml(String(ev?.dateStart || ev?.startDate || "-"));
+      const end = escapeHtml(String(ev?.dateEnd || ev?.endDate || "-"));
+      return `
+        <tr style="${isActive ? "background: rgba(255,255,255,.09);" : ""}">
+          <td><strong>${escapeHtml(eventLabel(ev))}</strong></td>
+          <td>${start}</td>
+          <td>${end}</td>
+          <td>${escapeHtml(ev?.status || "-")}</td>
+          <td>${escapeHtml(ev?.localidad || "-")}</td>
+          <td>
+            <button class="btn primary" data-pick-event="${escapeHtml(id)}" type="button">Seleccionar</button>
+          </td>
+        </tr>
+      `;
+    }).join("");
+
+    body.querySelectorAll("button[data-pick-event]").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const id = btn.dataset.pickEvent;
+        if (!id) return;
+        setSelectedEventId(id);
+        sel.value = id;
+
+        try {
+          await loadEventContext(id);
+        } catch (e) {
+          console.error("loadEventContext error", e);
+        }
+
+        const ev = allEvents.find(x => x.id === id);
+        if (activeInput) activeInput.value = ev ? eventLabel(ev) : "Sin evento";
+        if (hint) hint.textContent = ev ? `Evento activo: ${eventLabel(ev)}` : "No hay evento seleccionado";
+
+        modal?.classList.remove("show");
+        document.dispatchEvent(new CustomEvent("eventChanged", { detail: { eventId: id } }));
+      });
+    });
+  };
+
+  const openPicker = () => {
+    modal?.classList.add("show");
+    const search = document.getElementById("eventPickerSearch");
+    if (search) {
+      search.value = "";
+      renderPickerList("");
+      setTimeout(() => search.focus(), 0);
+    } else {
+      renderPickerList("");
+    }
+  };
+
+  if (!activeWrap.dataset.bound) {
+    activeWrap.querySelector("#btnOpenEventPicker")?.addEventListener("click", openPicker);
+    modal?.querySelector("#btnCloseEventPicker")?.addEventListener("click", () => modal?.classList.remove("show"));
+    modal?.addEventListener("click", (ev) => {
+      if (ev.target === modal) modal.classList.remove("show");
+    });
+
+    const search = modal?.querySelector("#eventPickerSearch");
+    search?.addEventListener("input", () => renderPickerList(search.value));
+
+    activeWrap.dataset.bound = "1";
+  }
+
+  renderPickerList(modal?.querySelector("#eventPickerSearch")?.value || "");
 }
 
 /* -------------------------
@@ -572,7 +768,7 @@ export function assignedDriverIdForPassenger(passengerId) {
  * Mutaciones: eventos / links / asignaciones / tracking
  * ------------------------- */
 
-export async function saveEvent({ id, name, dateStart, dateEnd, address, localidad }) {
+export async function saveEvent({ id, name, status, dateStart, dateEnd, address, localidad }) {
   if (!STATE.auth.isAdmin) throw new Error("Solo Admin puede guardar eventos");
 
   const eventId = (id || "").trim();
@@ -580,6 +776,7 @@ export async function saveEvent({ id, name, dateStart, dateEnd, address, localid
 
   const payload = {
     name: (name || "").trim(),
+    status: (status || "Nuevo").trim() || "Nuevo",
     dateStart: dateStart ? new Date(dateStart).toISOString() : null,
     dateEnd: dateEnd ? new Date(dateEnd).toISOString() : null,
     address: (address || "").trim(),
