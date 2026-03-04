@@ -16,7 +16,8 @@ const PERM_KEYS = [
   "ChoferesXFase",
   "Asignaciones",
   "Tracking",
-  "Mapa"
+  "Mapa",
+  "AceptInv"
 ];
 
 // === Invitaciones por link manual (sin Cloud Functions) ===
