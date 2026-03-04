@@ -7,6 +7,27 @@
   display:flex;
   justify-content:center;
 }
+
+.topbar-event-field{
+  min-width:min(620px, 48vw);
+}
+
+@media (max-width: 900px){
+  .topbar-inner{
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+  .topbar-center{
+    order: 3;
+    width: 100%;
+    justify-content: stretch;
+  }
+  .topbar-event-field{
+    min-width: 100%;
+    width: 100%;
+  }
+}
+
 :root{
   --bg0:#050B16;
   --bg1:#071226;
@@ -308,4 +329,35 @@ a.navbtn:hover, .menu a:hover{
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 14px;
   margin-top: 16px;
+}
+
+
+.eventPickerModal{
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0,0,0,.55);
+  z-index: 1200;
+}
+.eventPickerModal.show{ display:flex; }
+.eventPickerCard{
+  width: min(920px, 98vw);
+  max-height: 88vh;
+  overflow: auto;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(13,32,65,.98), rgba(9,22,46,.98));
+  box-shadow: var(--shadow);
+  padding: 16px;
+}
+@media (max-width: 700px){
+  .eventPickerCard{
+    width: 100%;
+    max-height: 92vh;
+    border-radius: 16px;
+    padding: 12px;
+  }
 }
