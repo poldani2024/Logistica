@@ -193,24 +193,22 @@ function renderEventsList(){
 
   const rows = events.map(ev=>{
     const id = ev.id;
-    const label = escapeHtml(ev.name || ev.title || id);
+    const label = escapeHtml(ev.name || ev.title || "Evento sin nombre");
     const d1 = formatDate(ev.dateStart || ev.startDate);
     const d2 = formatDate(ev.dateEnd || ev.endDate);
     const status = escapeHtml(ev.status || "Nuevo");
     const active = (id === getSelectedEventId());
+    const rowStyle = active
+      ? 'cursor:pointer; background: rgba(255,255,255,.10);'
+      : 'cursor:pointer;';
     return `
-      <tr data-id="${escapeHtml(id)}" style="cursor:pointer;">
+      <tr data-id="${escapeHtml(id)}" style="${rowStyle}">
         <td><strong>${label}</strong></td>
         <td>${escapeHtml(d1 || "-")}</td>
         <td>${escapeHtml(d2 || "-")}</td>
         <td>${status}</td>
         <td>${escapeHtml(ev.address || "-")}</td>
         <td>${escapeHtml(ev.localidad || "-")}</td>
-        <td>
-          <div class="row" style="gap:8px; flex-wrap:wrap; justify-content:flex-end;">
-            <button class="btn ${active ? "primary" : ""}" data-action="select" data-id="${escapeHtml(id)}" type="button">${active ? "Activo" : "Seleccionar"}</button>
-          </div>
-        </td>
       </tr>
     `;
   }).join("");
@@ -225,25 +223,11 @@ function renderEventsList(){
           <th>Estado</th>
           <th>Dirección</th>
           <th>Localidad</th>
-          <th></th>
         </tr>
       </thead>
       <tbody>${rows}</tbody>
     </table>
   `;
-
-  host.querySelectorAll("button[data-action]").forEach(btn=>{
-    btn.addEventListener("click", async ()=>{
-      const action = btn.dataset.action;
-      const id = btn.dataset.id;
-      if (!id) return;
-
-      if (action === "select"){
-        await selectEventAndRefresh(id);
-        return;
-      }
-    });
-  });
 
   host.querySelectorAll("tbody tr[data-id]").forEach(row => {
     row.addEventListener("click", async (ev) => {
@@ -251,7 +235,6 @@ function renderEventsList(){
       const id = row.dataset.id;
       if (!id) return;
       await selectEventAndRefresh(id);
-      editEvent(id);
     });
   });
 }

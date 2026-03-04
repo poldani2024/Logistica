@@ -427,39 +427,117 @@ export function renderEventSelect() {
   if (!sel) return;
 
   const current = getSelectedEventId();
+  const allEvents = STATE.events || [];
+  const activeEvents = allEvents.filter(ev => String(ev?.status || "").trim().toLowerCase() === "activo");
 
-  const opts = (STATE.events || []).map(ev => {
-    const label = (ev.name || ev.title || "Evento sin nombre").trim();
-    return `<option value="${escapeHtml(ev.id)}">${escapeHtml(label)}</option>`;
-  });
+  const prioritized = [
+    ...activeEvents,
+    ...allEvents.filter(ev => !activeEvents.some(a => a.id === ev.id)),
+  ];
 
-  sel.innerHTML = opts.join("") || `<option value="">(sin eventos)</option>`;
+  const eventLabel = (ev) => (ev?.name || ev?.title || "Evento sin nombre").trim();
 
-  // Persistir si no hay guardado pero hay valor
-  if (!current && sel.value) {
-    setSelectedEventId(sel.value);
+  // Campo de búsqueda (typeahead) para no depender de una lista larga
+  let search = document.getElementById("eventSearchInput");
+  if (!search) {
+    search = document.createElement("input");
+    search.type = "search";
+    search.id = "eventSearchInput";
+    search.className = "input";
+    search.placeholder = "Buscar evento por nombre, localidad o fecha...";
+    search.autocomplete = "off";
+    sel.parentNode?.insertBefore(search, sel);
   }
 
-  // Importante: evitar duplicar listeners si renderizás muchas veces
+  const ensureCurrentVisible = (arr) => {
+    if (!current) return arr;
+    if (arr.some(ev => ev.id === current)) return arr;
+    const currentEv = allEvents.find(ev => ev.id === current);
+    return currentEv ? [currentEv, ...arr] : arr;
+  };
+
+  const renderOptions = (query = "") => {
+    const q = String(query || "").trim().toLowerCase();
+
+    let visibleEvents = prioritized;
+    if (q) {
+      visibleEvents = prioritized.filter(ev => {
+        const blob = [
+          eventLabel(ev),
+          ev?.localidad || "",
+          ev?.address || "",
+          ev?.dateStart || ev?.startDate || "",
+          ev?.dateEnd || ev?.endDate || "",
+          ev?.status || "",
+        ].join(" ").toLowerCase();
+        return blob.includes(q);
+      });
+    }
+
+    visibleEvents = ensureCurrentVisible(visibleEvents);
+
+    const opts = visibleEvents.map(ev => {
+      const status = String(ev?.status || "").trim();
+      const label = eventLabel(ev);
+      const statusSuffix = status ? ` · ${status}` : "";
+      return `<option value="${escapeHtml(ev.id)}">${escapeHtml(label + statusSuffix)}</option>`;
+    });
+
+    sel.innerHTML = opts.join("") || `<option value="">(sin eventos)</option>`;
+
+    const stillVisible = !!visibleEvents.find(ev => ev.id === getSelectedEventId());
+    if (stillVisible) {
+      sel.value = getSelectedEventId();
+    } else if (visibleEvents[0]?.id) {
+      sel.value = visibleEvents[0].id;
+      setSelectedEventId(visibleEvents[0].id);
+    }
+
+    const selectedEv = allEvents.find(ev => ev.id === sel.value);
+    if (!q || document.activeElement !== search) {
+      search.value = selectedEv ? eventLabel(selectedEv) : "";
+    }
+
+    const hint = $("eventHint");
+    if (hint) {
+      hint.textContent = selectedEv
+        ? `Evento activo: ${eventLabel(selectedEv)}`
+        : "No hay evento seleccionado";
+    }
+  };
+
+  renderOptions(search.value);
+
   if (!sel.dataset.bound) {
     sel.addEventListener("change", () => {
       setSelectedEventId(sel.value);
+      const selectedEv = allEvents.find(ev => ev.id === sel.value);
+      if (selectedEv) search.value = eventLabel(selectedEv);
       document.dispatchEvent(
         new CustomEvent("eventChanged", { detail: { eventId: getSelectedEventId() } })
       );
+
       const hint = $("eventHint");
       if (hint) {
-        hint.textContent = getSelectedEventId()
-          ? `Evento activo: ${getSelectedEventId()}`
+        hint.textContent = selectedEv
+          ? `Evento activo: ${eventLabel(selectedEv)}`
           : "No hay evento seleccionado";
       }
     });
     sel.dataset.bound = "1";
   }
 
-  const hint = $("eventHint");
-  if (hint) {
-    hint.textContent = current ? `Evento activo: ${current}` : "No hay evento seleccionado";
+  if (!search.dataset.bound) {
+    search.addEventListener("input", () => {
+      renderOptions(search.value);
+    });
+    search.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter" && sel.value) {
+        setSelectedEventId(sel.value);
+        document.dispatchEvent(new CustomEvent("eventChanged", { detail: { eventId: sel.value } }));
+      }
+    });
+    search.dataset.bound = "1";
   }
 }
 
