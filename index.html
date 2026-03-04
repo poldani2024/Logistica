@@ -19,7 +19,7 @@
     </div>
 
     <div class="topbar-center">
-      <div class="field" style="min-width:min(620px, 48vw);">
+      <div class="field topbar-event-field">
         <label>Evento activo</label>
         <select id="eventSelect"></select>
         <div class="subtitle" id="eventHint">No hay evento seleccionado</div>
@@ -40,8 +40,6 @@
 
 <main class="container">
 
-  <div id="homeStatus"></div>
-
   <h2>Inicio</h2>
   <p>Seleccioná una sección:</p>
 
@@ -56,52 +54,16 @@
     <a href="tracking.html" data-perm="Tracking">Tracking</a>
     <a href="map.html" data-perm="Mapa">Mapa</a>
     <a href="users_admin.html" data-perm="Permisos">Permisos</a>
-    <a href=" accept_invite.html" data-perm="AceptInv">Aceptar Invitación</a>
+    <a href="accept_invite.html" data-perm="AceptInv">Aceptar Invitación</a>
   </div>
+
+  <h3 style="margin-top:20px;">Dashboard del evento</h3>
+  <div id="homeStatus"></div>
 
 </main>
 
-<script type="module">
-  import { initCorePage, STATE, $, can } from "./core.js";
-  import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.2/firebase-auth.js";
-  import { auth } from "./firebase-init.js";
+<script type="module" src="./index.js"></script>
 
-  await initCorePage({ page: "home" });
-
-  const loginBtn = $("btnLogin");
-  const logoutBtn = $("btnLogout");
-  const status = $("authStatus");
-
-  function refreshAuthUI() {
-    const u = STATE.auth.user;
-
-    if (u) {
-      status.textContent = u.email +
-        (STATE.auth.isAdmin ? " (Admin)" : "") +
-        (STATE.auth.isActive === false ? " (Inactivo)" : "");
-      loginBtn.style.display = "none";
-      logoutBtn.style.display = "inline-block";
-    } else {
-      status.textContent = "No ingresado";
-      loginBtn.style.display = "inline-block";
-      logoutBtn.style.display = "none";
-    }
-  }
-
-  function applyPermissions(){
-    document.querySelectorAll("[data-perm]").forEach(el => {
-      const key = el.dataset.perm;
-      el.style.display = can(key) ? "" : "none";
-    });
-    document.getElementById("homeMenu").style.visibility = "visible";
-  }
-
-  onAuthStateChanged(auth, async () => {
-    refreshAuthUI();
-    applyPermissions();
-  });
-
-</script>
 
 </body>
 </html>

@@ -38,7 +38,11 @@
         </div>
         <div class="field">
           <label>Fecha</label>
-          <input id="rq_date" type="date" class="input" />
+          <div class="row" style="gap:8px;">
+            <input id="rq_date" type="text" class="input" placeholder="DD/MM/YYYY" inputmode="numeric" />
+            <button id="btnPickRqDate" type="button" class="btn" title="Seleccionar fecha">📅</button>
+            <input id="rq_date_picker" type="date" style="position:absolute;opacity:0;pointer-events:none;width:1px;height:1px;" tabindex="-1" />
+          </div>
         </div>
 
         <div class="field">
@@ -82,6 +86,14 @@
               <input id="rq_ida_pickupCity" class="input" placeholder="Rosario / ..." />
             </div>
             <div class="field">
+              <label>Fecha</label>
+              <div class="row" style="gap:8px;">
+                <input id="rq_ida_date" type="text" class="input" placeholder="DD/MM/YYYY" inputmode="numeric" />
+                <button id="btnPickRqIdaDate" type="button" class="btn" title="Seleccionar fecha Ida">📅</button>
+                <input id="rq_ida_date_picker" type="date" style="position:absolute;opacity:0;pointer-events:none;width:1px;height:1px;" tabindex="-1" />
+              </div>
+            </div>
+            <div class="field">
               <label>Hora</label>
               <input id="rq_ida_time" type="time" class="input" />
             </div>
@@ -105,6 +117,14 @@
             <div class="field">
               <label>Ciudad</label>
               <input id="rq_vuelta_dropoffCity" class="input" placeholder="Rosario / ..." />
+            </div>
+            <div class="field">
+              <label>Fecha</label>
+              <div class="row" style="gap:8px;">
+                <input id="rq_vuelta_date" type="text" class="input" placeholder="DD/MM/YYYY" inputmode="numeric" />
+                <button id="btnPickRqVueltaDate" type="button" class="btn" title="Seleccionar fecha Vuelta">📅</button>
+                <input id="rq_vuelta_date_picker" type="date" style="position:absolute;opacity:0;pointer-events:none;width:1px;height:1px;" tabindex="-1" />
+              </div>
             </div>
             <div class="field">
               <label>Hora</label>
