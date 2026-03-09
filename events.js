@@ -34,10 +34,12 @@ import { doc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebas
   if (eid) {
     setSelectedEventId(eid);
     await loadEventContext(eid);
+    fillEventForm(findEventById(eid) || STATE.event || { id: eid });
+  } else {
+    resetEventForm();
   }
 
   renderPhases();
-  resetEventForm();
 
   $("btnNewEvent")?.addEventListener("click", onNewEvent);
   $("btnSaveEvent")?.addEventListener("click", onSaveEventForm);
@@ -53,6 +55,7 @@ import { doc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebas
     const id = ev?.detail?.eventId;
     if (!id) return;
     await loadEventContext(id);
+    fillEventForm(findEventById(id) || STATE.event || { id });
     renderEventsList();
     renderPhases();
   });
@@ -313,7 +316,8 @@ function renderPhases(){
 
   host.innerHTML = phases.map((p, idx)=>{
     const name = escapeHtml(p.name || p.id);
-    const address = escapeHtml(p.address || "");
+    const originAddress = escapeHtml(p.originAddress || "");
+    const destinationAddress = escapeHtml(p.destinationAddress || p.address || "");
     const localidad = escapeHtml(p.localidad || "");
     const date = escapeHtml(formatDateDDMMYYYY(p.date || ""));
     const pickerDate = escapeHtml(toPickerValue(p.date || ""));
@@ -325,7 +329,8 @@ function renderPhases(){
           <div class="hint">${escapeHtml(p.id)}</div>
 
           <div class="row" style="gap:8px; flex-wrap:wrap; margin-top:8px;">
-            <input class="input" style="min-width:220px" data-field="address" data-idx="${idx}" placeholder="Domicilio" value="${address}">
+            <input class="input" style="min-width:220px" data-field="originAddress" data-idx="${idx}" placeholder="Domicilio origen" value="${originAddress}">
+            <input class="input" style="min-width:220px" data-field="destinationAddress" data-idx="${idx}" placeholder="Domicilio destino" value="${destinationAddress}">
             <input class="input" style="min-width:160px" data-field="localidad" data-idx="${idx}" placeholder="Localidad" value="${localidad}">
             <input class="input" style="min-width:150px" data-field="date" data-idx="${idx}" type="text" placeholder="DD/MM/YYYY" value="${date}">
             <button class="btn" data-action="pick-date" data-idx="${idx}" type="button" title="Seleccionar fecha">📅</button>
@@ -362,7 +367,8 @@ function renderPhases(){
 
       if (action === "copy"){
         const ev = (STATE.events || []).find(x => x.id === STATE.event.id) || {};
-        STATE.event.phases[idx].address = ev.address || "";
+        STATE.event.phases[idx].originAddress = "";
+        STATE.event.phases[idx].destinationAddress = ev.address || "";
         STATE.event.phases[idx].localidad = ev.localidad || "";
         STATE.event.phases[idx].date = formatDateDDMMYYYY(ev.dateStart || ev.startDate || "");
         renderPhases();
@@ -417,7 +423,15 @@ function onAddPhase(){
 
   ensurePhases();
   const id = slugPhaseId(name) || `fase-${STATE.event.phases.length+1}`;
-  STATE.event.phases.push({ id, name, address: "", localidad: "", date: "", time: "" });
+  STATE.event.phases.push({
+    id,
+    name,
+    originAddress: "",
+    destinationAddress: "",
+    localidad: "",
+    date: "",
+    time: ""
+  });
   renderPhases();
 }
 
@@ -428,8 +442,8 @@ function onSeedDefault(){
   if (STATE.event.phases.length) return toast("Ya hay fases. Borrá primero si querés resetear.");
 
   STATE.event.phases = [
-    { id: "ida", name: "Ida", address: "", localidad: "", date: "", time: "" },
-    { id: "vuelta", name: "Vuelta", address: "", localidad: "", date: "", time: "" },
+    { id: "ida", name: "Ida", originAddress: "", destinationAddress: "", localidad: "", date: "", time: "" },
+    { id: "vuelta", name: "Vuelta", originAddress: "", destinationAddress: "", localidad: "", date: "", time: "" },
   ];
   renderPhases();
 }
@@ -439,25 +453,47 @@ async function onSavePhases(){
   if (!eventId) return toast("Seleccioná un evento.");
   ensurePhases();
 
-  // Limpieza mínima
-  const phases = STATE.event.phases
-    .map(p => ({
-      id: String(p.id || "").trim(),
-      name: String(p.name || p.id || "").trim(),
-      address: String(p.address || "").trim(),
-      localidad: String(p.localidad || "").trim(),
-      date: formatDateDDMMYYYY(String(p.date || "").trim()),
-      time: String(p.time || "").trim(),
-    }))
+  try {
+    // Limpieza mínima
+    const phases = STATE.event.phases
+    .map((p, idx) => {
+      const dateRaw = String(p.date || "").trim();
+      let date = "";
+      if (dateRaw) {
+        try {
+          date = toISODate(dateRaw);
+        } catch {
+          throw new Error(`Fecha inválida en fase #${idx + 1}. Usá DD/MM/YYYY.`);
+        }
+      }
+
+      const originAddress = String(p.originAddress || "").trim();
+      const destinationAddress = String(p.destinationAddress || p.address || "").trim();
+
+      return {
+        id: String(p.id || "").trim(),
+        name: String(p.name || p.id || "").trim(),
+        originAddress,
+        destinationAddress,
+        // compat con pantallas viejas que lean `address`
+        address: destinationAddress,
+        localidad: String(p.localidad || "").trim(),
+        date,
+        time: String(p.time || "").trim(),
+      };
+    })
     .filter(p => p.id);
 
-  await updateDoc(doc(db, "events", eventId), {
-    phases,
-    updatedAt: serverTimestamp(),
-  });
+    await updateDoc(doc(db, "events", eventId), {
+      phases,
+      updatedAt: serverTimestamp(),
+    });
 
-  // refrescar contexto desde Firestore para confirmar persistencia
-  await loadEventContext(eventId);
-  renderPhases();
-  toast("Fases guardadas");
+    // refrescar contexto desde Firestore para confirmar persistencia
+    await loadEventContext(eventId);
+    renderPhases();
+    toast("Fases guardadas");
+  } catch (e) {
+    toast(e?.message || String(e));
+  }
 }
