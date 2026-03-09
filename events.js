@@ -34,10 +34,12 @@ import { doc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebas
   if (eid) {
     setSelectedEventId(eid);
     await loadEventContext(eid);
+    fillEventForm(findEventById(eid) || STATE.event || { id: eid });
+  } else {
+    resetEventForm();
   }
 
   renderPhases();
-  resetEventForm();
 
   $("btnNewEvent")?.addEventListener("click", onNewEvent);
   $("btnSaveEvent")?.addEventListener("click", onSaveEventForm);
@@ -53,6 +55,7 @@ import { doc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebas
     const id = ev?.detail?.eventId;
     if (!id) return;
     await loadEventContext(id);
+    fillEventForm(findEventById(id) || STATE.event || { id });
     renderEventsList();
     renderPhases();
   });
