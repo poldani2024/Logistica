@@ -678,8 +678,10 @@ export async function loadEventContext(eventId) {
       .map(p => ({
         id: String(p.id || "").trim(),
         name: String(p.name || p.id || "").trim(),
-        address: p.address || "",
+        originAddress: p.originAddress || "",
+        destinationAddress: p.destinationAddress || p.address || "",
         localidad: p.localidad || "",
+        date: p.date || "",
         time: p.time || ""
       }))
       .filter(p => p.id);
