@@ -607,11 +607,17 @@ export function renderEventSelect() {
     }).join("");
 
     body.querySelectorAll("button[data-pick-event]").forEach(btn => {
-      btn.addEventListener("click", () => {
+      btn.addEventListener("click", async () => {
         const id = btn.dataset.pickEvent;
         if (!id) return;
         setSelectedEventId(id);
         sel.value = id;
+
+        try {
+          await loadEventContext(id);
+        } catch (e) {
+          console.error("loadEventContext error", e);
+        }
 
         const ev = allEvents.find(x => x.id === id);
         if (activeInput) activeInput.value = ev ? eventLabel(ev) : "Sin evento";
