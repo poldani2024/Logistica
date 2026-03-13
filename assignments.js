@@ -172,6 +172,12 @@ function passengerLabel(p){
   return `${p.lastName || ""} ${p.firstName || ""}`.trim() || p.name || p.email || p.id;
 }
 
+function passengerLocationLabel(p){
+  const domicilio = (p?.address || "").trim() || "—";
+  const localidad = (p?.localidad || "").trim() || "—";
+  return `Domicilio: ${domicilio} · Localidad: ${localidad}`;
+}
+
 function renderDrivers(){
   const host = $("driversList");
   if (!host) return;
@@ -298,6 +304,7 @@ function renderPassengers(){
       <div class="row" style="justify-content:space-between; gap:10px; padding:12px; border:1px solid rgba(255,255,255,.08); border-radius:16px;">
         <div>
           <div style="font-weight:800">${escapeHtml(passengerLabel(p))}</div>
+          <div class="hint">${escapeHtml(passengerLocationLabel(p))}</div>
           <div class="hint">${escapeHtml(status)} — Fase: ${escapeHtml(phaseId)}</div>
         </div>
         <button class="btn ${isAssignedActive ? "danger" : ""}" data-passenger="${escapeHtml(pid)}" type="button">${actionLabel}</button>

@@ -13,18 +13,30 @@ import {
   setDoc,
   deleteDoc,
   serverTimestamp,
-  getDocs
+  getDocs,
+  getDoc
 } from "https://www.gstatic.com/firebasejs/10.7.2/firebase-firestore.js";
 
-// Vincula un pasajero existente al evento activo (events/{eventId}/eventPassengers/{passengerId})
-async function addPassengerToEvent(eventId, passengerId){
-  if (!eventId) throw new Error("No hay evento activo");
+// Vincula un pasajero existente al evento indicado (events/{eventId}/eventPassengers/{passengerId})
+async function addPassengerToEvent(eventId, passengerId, extra = {}){
+  if (!eventId) throw new Error("No hay evento seleccionado");
   if (!passengerId) throw new Error("No hay pasajero");
   await setDoc(doc(db, "events", eventId, "eventPassengers", passengerId), {
     notes: "",
     geo: null,
-    updatedAt: serverTimestamp()
+    updatedAt: serverTimestamp(),
+    ...extra
   }, { merge:true });
+}
+
+async function removePassengerFromEvent(eventId, passengerId){
+  if (!eventId) throw new Error("No hay evento seleccionado");
+  if (!passengerId) throw new Error("No hay pasajero");
+  await deleteDoc(doc(db, "events", eventId, "eventPassengers", passengerId));
+}
+
+function eventLabel(ev){
+  return (ev?.name || ev?.title || ev?.id || "Evento").trim();
 }
 
 
@@ -178,7 +190,7 @@ function openDetailNew(){
     lat:"", lng:""
   }, true);
 
-  wireFormButtons({ isNew:true });
+  wireFormButtons({ isNew:true, passenger:null });
 }
 
 function openDetail(id){
@@ -190,9 +202,21 @@ function openDetail(id){
   $("btnDeletePassenger").style.display = isAdmin() ? "inline-block" : "none";
 
   $("passengerDetail").innerHTML = formHtml(p, false);
-  wireFormButtons({ isNew:false });
+  wireFormButtons({ isNew:false, passenger:p });
 
   $("btnDeletePassenger").onclick = deleteCurrent;
+}
+
+function eventOptionsHtml(){
+  const events = STATE.events || [];
+  if (!events.length) return '<option value="">(sin eventos)</option>';
+
+  const activeId = String(STATE.event?.id || "").trim();
+  return events.map(ev => {
+    const id = String(ev?.id || "").trim();
+    const selected = activeId && id === activeId ? ' selected' : '';
+    return `<option value="${escapeHtml(id)}"${selected}>${escapeHtml(eventLabel(ev))}</option>`;
+  }).join("");
 }
 
 function formHtml(p, isNew){
@@ -214,18 +238,94 @@ function formHtml(p, isNew){
     <div class="row" style="margin-top:12px; flex-wrap:wrap;">
       <button id="btnSavePassenger" class="btnPrimary primary">Guardar</button>
       <button id="btnGeocodeOne" class="btn">📍 Geolocalizar</button>
-      <div class="row" style="gap:10px; align-items:center; margin-top:10px;">
-        <button id="btnAddPassengerToEvent" class="btnSecondary">Agregar al evento activo</button>
-        <span id="addToEventHint" class="muted"></span>
-      </div>
       ${isNew ? `<button id="btnCancelPassenger" class="btnSecondary">Cancelar</button>` : ``}
     </div>
+
+    <section class="card" style="margin-top:14px; padding:12px; border:1px solid rgba(255,255,255,.10);">
+      <div style="font-weight:700; margin-bottom:8px;">Evento para este pasajero</div>
+      <div class="grid2">
+        <div class="field" style="grid-column:1/-1;">
+          <label>Evento</label>
+          <select id="p_eventSelect">${eventOptionsHtml()}</select>
+        </div>
+        <div class="field"><label>Domicilio (evento)</label><input id="p_evAddress" placeholder="Calle y número"></div>
+        <div class="field"><label>Localidad (evento)</label><input id="p_evLocalidad" placeholder="Rosario / Funes / ..."></div>
+        <div class="field"><label>Horario (evento)</label><input id="p_evTime" placeholder="Ej: 18:30"></div>
+      </div>
+
+      <div class="row" style="gap:10px; align-items:center; margin-top:10px; flex-wrap:wrap;">
+        <button id="btnAddPassengerToEvent" class="btnSecondary" type="button">Agregar al evento</button>
+        <button id="btnRemovePassengerFromEvent" class="btnDanger" type="button">Quitar del evento</button>
+        <button id="btnSavePassengerEventMeta" class="btn" type="button">Guardar datos del evento</button>
+        <span id="addToEventHint" class="muted"></span>
+      </div>
+    </section>
 
     <p class="muted" style="margin-top:10px;">Master Data: la asignación de chofer es por evento (Asignaciones).</p>
   `;
 }
 
-function wireFormButtons({ isNew }){
+function getPassengerEventInputs(){
+  return {
+    address: ($("p_evAddress")?.value || "").trim(),
+    localidad: ($("p_evLocalidad")?.value || "").trim(),
+    time: ($("p_evTime")?.value || "").trim()
+  };
+}
+
+async function loadPassengerEventMeta(eventId, passengerId){
+  if (!eventId || !passengerId) return null;
+  const snap = await getDoc(doc(db, "events", eventId, "eventPassengers", passengerId));
+  if (!snap.exists()) return null;
+  return snap.data() || {};
+}
+
+async function refreshPassengerEventPanel(passenger){
+  const sel = $("p_eventSelect");
+  const hint = $("addToEventHint");
+  const btnAdd = $("btnAddPassengerToEvent");
+  const btnRemove = $("btnRemovePassengerFromEvent");
+  const btnSaveMeta = $("btnSavePassengerEventMeta");
+  const inputAddress = $("p_evAddress");
+  const inputLocalidad = $("p_evLocalidad");
+  const inputTime = $("p_evTime");
+
+  if (!sel || !hint || !btnAdd || !btnRemove || !btnSaveMeta || !inputAddress || !inputLocalidad || !inputTime) return;
+
+  const eventId = String(sel.value || "").trim();
+  const canManage = !!eventId && !!currentPassengerId;
+  if (!canManage){
+    hint.textContent = !currentPassengerId
+      ? "Guardá el pasajero para poder vincularlo a un evento."
+      : "Seleccioná un evento.";
+    btnAdd.disabled = true;
+    btnRemove.disabled = true;
+    btnSaveMeta.disabled = true;
+    inputAddress.value = "";
+    inputLocalidad.value = "";
+    inputTime.value = "";
+    return;
+  }
+
+  const meta = await loadPassengerEventMeta(eventId, currentPassengerId);
+  const linked = !!meta;
+
+  inputAddress.value = linked ? String(meta.address || "") : String(passenger?.address || "");
+  inputLocalidad.value = linked ? String(meta.localidad || "") : String(passenger?.localidad || "");
+  inputTime.value = linked ? String(meta.time || "") : "";
+
+  const ev = (STATE.events || []).find(x => x.id === eventId);
+  const evName = eventLabel(ev || { id: eventId });
+  hint.textContent = linked
+    ? `Vinculado a: ${evName}`
+    : `No vinculado a: ${evName}`;
+
+  btnAdd.disabled = linked;
+  btnRemove.disabled = !linked;
+  btnSaveMeta.disabled = !linked;
+}
+
+function wireFormButtons({ isNew, passenger }){
   $("btnSavePassenger")?.addEventListener("click", savePassenger);
   $("btnGeocodeOne")?.addEventListener("click", async () => {
     try{
@@ -254,38 +354,81 @@ function wireFormButtons({ isNew }){
     });
   }
 
-    // --- Agregar pasajero al evento activo ---
-  const btnAdd = document.getElementById("btnAddPassengerToEvent");
-  const hint = document.getElementById("addToEventHint");
-
-  if (hint){
-    const activeEventId = STATE.event?.id;
-    hint.textContent = activeEventId
-      ? `Evento activo: ${STATE.event?.name || STATE.event?.title || activeEventId}`
-      : "No hay evento activo. Seleccioná un evento en Home.";
-  }
-
-  if (btnAdd){
-    btnAdd.disabled = !STATE.event?.id || !currentPassengerId;
-
-    btnAdd.addEventListener("click", async () => {
-      try{
-        const eventId = STATE.event?.id;
-        if (!eventId) return toast("Seleccioná un evento primero.");
-        if (!currentPassengerId) return toast("Guardá el pasajero antes de asignarlo al evento.");
-        if (!isAdmin()) return toast("Solo Admin");
-
-        await addPassengerToEvent(eventId, currentPassengerId);
-        await loadEventContext(eventId);
-        toast("Pasajero agregado al evento");
-      }catch(e){
-        console.error(e);
-        toast(e.message || String(e));
-      }
+  const eventSelect = $("p_eventSelect");
+  eventSelect?.addEventListener("change", () => {
+    refreshPassengerEventPanel(passenger).catch((e)=>{
+      console.error(e);
+      toast(e.message || String(e));
     });
-  }
+  });
 
+  $("btnAddPassengerToEvent")?.addEventListener("click", async () => {
+    try{
+      if (!isAdmin()) return toast("Solo Admin");
+      const eventId = String($("p_eventSelect")?.value || "").trim();
+      if (!eventId) return toast("Seleccioná un evento.");
+      if (!currentPassengerId) return toast("Guardá el pasajero antes de asignarlo al evento.");
+
+      await addPassengerToEvent(eventId, currentPassengerId, getPassengerEventInputs());
+      if (eventId === STATE.event?.id) await loadEventContext(eventId);
+      await refreshPassengerEventPanel(passenger);
+      toast("Pasajero agregado al evento");
+    }catch(e){
+      console.error(e);
+      toast(e.message || String(e));
+    }
+  });
+
+  $("btnRemovePassengerFromEvent")?.addEventListener("click", async () => {
+    try{
+      if (!isAdmin()) return toast("Solo Admin");
+      const eventId = String($("p_eventSelect")?.value || "").trim();
+      if (!eventId) return toast("Seleccioná un evento.");
+      if (!currentPassengerId) return toast("Guardá el pasajero antes de quitarlo del evento.");
+
+      const ok = confirm("¿Quitar pasajero del evento seleccionado?");
+      if (!ok) return;
+
+      await removePassengerFromEvent(eventId, currentPassengerId);
+      if (eventId === STATE.event?.id) await loadEventContext(eventId);
+      await refreshPassengerEventPanel(passenger);
+      toast("Pasajero quitado del evento");
+    }catch(e){
+      console.error(e);
+      toast(e.message || String(e));
+    }
+  });
+
+  $("btnSavePassengerEventMeta")?.addEventListener("click", async () => {
+    try{
+      if (!isAdmin()) return toast("Solo Admin");
+      const eventId = String($("p_eventSelect")?.value || "").trim();
+      if (!eventId) return toast("Seleccioná un evento.");
+      if (!currentPassengerId) return toast("Guardá el pasajero antes de actualizar el evento.");
+
+      const currentMeta = await loadPassengerEventMeta(eventId, currentPassengerId);
+      if (!currentMeta) return toast("Primero agregá al pasajero al evento.");
+
+      await setDoc(doc(db, "events", eventId, "eventPassengers", currentPassengerId), {
+        ...getPassengerEventInputs(),
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+
+      if (eventId === STATE.event?.id) await loadEventContext(eventId);
+      await refreshPassengerEventPanel(passenger);
+      toast("Datos del evento guardados");
+    }catch(e){
+      console.error(e);
+      toast(e.message || String(e));
+    }
+  });
+
+  refreshPassengerEventPanel(passenger).catch((e)=>{
+    console.error(e);
+    toast(e.message || String(e));
+  });
 }
+
 
 function getPayloadFromForm(){
   const latRaw = ($("p_lat")?.value || "").trim();
@@ -645,6 +788,17 @@ async function geocodeMissingPassengers(){
 
     await loadMasterPassengers();
     renderAll();
+
+    document.addEventListener("eventChanged", async (ev) => {
+      const eventId = ev?.detail?.eventId;
+      if (!eventId) return;
+      try{
+        await loadEventContext(eventId);
+      }catch(err){
+        console.error(err);
+      }
+      if (currentPassengerId) openDetail(currentPassengerId);
+    });
   }catch(e){
     console.error("INIT ERROR:", e);
     toast(e.message || String(e));
