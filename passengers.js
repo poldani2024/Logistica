@@ -24,6 +24,8 @@ async function addPassengerToEvent(eventId, passengerId, extra = {}){
   await setDoc(doc(db, "events", eventId, "eventPassengers", passengerId), {
     notes: "",
     geo: null,
+    allPhases: true,
+    transportByPhase: {},
     updatedAt: serverTimestamp(),
     ...extra
   }, { merge:true });
@@ -112,6 +114,8 @@ function wireGeoLogButtons(){
 function fullName(p){ return `${p.lastName||""} ${p.firstName||""}`.trim() || "(sin nombre)"; }
 
 let currentPassengerId = null;
+let currentPassengerScope = "all"; // all | event
+const EVENT_PHASES_CACHE = new Map();
 
 function isAdmin(){ return !!STATE.auth.isAdmin; }
 
@@ -121,15 +125,40 @@ function hasGeo(p){
   return Number.isFinite(lat) && Number.isFinite(lng);
 }
 
+function renderPassengerScopeButtons(){
+  const btnAll = $("btnFilterAllPassengers");
+  const btnEvent = $("btnFilterEventPassengers");
+  const hint = $("passengerScopeHint");
+  if (!btnAll || !btnEvent) return;
+
+  const isEvent = currentPassengerScope === "event";
+  btnAll.classList.toggle("primary", !isEvent);
+  btnEvent.classList.toggle("primary", isEvent);
+
+  if (hint){
+    if (!isEvent) {
+      hint.textContent = "Mostrando todos los pasajeros";
+    } else if (!STATE.event?.id) {
+      hint.textContent = "No hay evento activo";
+    } else {
+      hint.textContent = "Mostrando pasajeros del evento activo";
+    }
+  }
+}
+
 function getFiltered(){
   const q = (($("passSearch")?.value || "").trim()).toLowerCase();
+  const inEvent = STATE.event?.passengersIds || new Set();
+
   const list = (STATE.master.passengers || []).filter(p => {
+    if (currentPassengerScope === "event" && !inEvent.has(p.id)) return false;
     const hay = `${p.firstName||""} ${p.lastName||""} ${p.phone||""} ${p.address||""} ${p.localidad||""}`.toLowerCase();
     return !q || hay.includes(q);
   });
   list.sort((a,b)=> `${a.lastName||""} ${a.firstName||""}`.localeCompare(`${b.lastName||""} ${b.firstName||""}`));
   return list;
 }
+
 
 function renderTable(){
   const tbody = $("passengersTableBody");
@@ -178,7 +207,7 @@ function renderCards(){
   });
 }
 
-function renderAll(){ renderTable(); renderCards(); }
+function renderAll(){ renderPassengerScopeButtons(); renderTable(); renderCards(); }
 
 function openDetailNew(){
   currentPassengerId = null;
@@ -219,6 +248,45 @@ function eventOptionsHtml(){
   }).join("");
 }
 
+async function getEventPhases(eventId){
+  const id = String(eventId || "").trim();
+  if (!id) return [];
+
+  if (id === STATE.event?.id && Array.isArray(STATE.event?.phases) && STATE.event.phases.length){
+    return STATE.event.phases;
+  }
+  if (EVENT_PHASES_CACHE.has(id)) return EVENT_PHASES_CACHE.get(id) || [];
+
+  const snap = await getDoc(doc(db, "events", id));
+  const raw = snap.exists() ? (snap.data() || {}) : {};
+  const phases = (Array.isArray(raw.phases) ? raw.phases : [])
+    .map(ph => ({
+      id: String(ph?.id || "").trim(),
+      name: String(ph?.name || ph?.id || "").trim()
+    }))
+    .filter(ph => ph.id);
+
+  EVENT_PHASES_CACHE.set(id, phases);
+  return phases;
+}
+
+function renderPhaseTransportControls(phases, meta){
+  const host = $("p_phaseTransport");
+  if (!host) return;
+
+  if (!Array.isArray(phases) || !phases.length){
+    host.innerHTML = '<div class="muted">Este evento no tiene fases definidas.</div>';
+    return;
+  }
+
+  const map = (meta?.transportByPhase && typeof meta.transportByPhase === "object") ? meta.transportByPhase : {};
+
+  host.innerHTML = phases.map(ph => {
+    const checked = map[ph.id] !== false;
+    return `<label class="row" style="gap:8px;"><input type="checkbox" data-phase-transport="${escapeHtml(ph.id)}" ${checked ? "checked" : ""}/> ${escapeHtml(ph.name || ph.id)}</label>`;
+  }).join("");
+}
+
 function formHtml(p, isNew){
   return `
     <div class="grid2">
@@ -253,6 +321,14 @@ function formHtml(p, isNew){
         <div class="field"><label>Horario (evento)</label><input id="p_evTime" placeholder="Ej: 18:30"></div>
       </div>
 
+      <div class="field" style="margin-top:10px;">
+        <label class="row" style="gap:8px;"><input id="p_allPhases" type="checkbox" checked> Participa en todas las fases</label>
+        <div id="p_phaseTransportWrap" style="margin-top:8px; display:none;">
+          <div class="subtitle" style="margin-bottom:6px;">Fases que requieren transporte</div>
+          <div id="p_phaseTransport" class="grid2"></div>
+        </div>
+      </div>
+
       <div class="row" style="gap:10px; align-items:center; margin-top:10px; flex-wrap:wrap;">
         <button id="btnAddPassengerToEvent" class="btnSecondary" type="button">Agregar al evento</button>
         <button id="btnRemovePassengerFromEvent" class="btnDanger" type="button">Quitar del evento</button>
@@ -273,6 +349,19 @@ function getPassengerEventInputs(){
   };
 }
 
+function getPassengerPhaseConfigInputs(phases){
+  const allPhases = !!$("p_allPhases")?.checked;
+  if (allPhases) return { allPhases: true, transportByPhase: {} };
+
+  const map = {};
+  (phases || []).forEach(ph => {
+    const cb = Array.from(document.querySelectorAll("[data-phase-transport]")).find(x => (x.dataset.phaseTransport || "") === ph.id);
+    map[ph.id] = !!cb?.checked;
+  });
+
+  return { allPhases: false, transportByPhase: map };
+}
+
 async function loadPassengerEventMeta(eventId, passengerId){
   if (!eventId || !passengerId) return null;
   const snap = await getDoc(doc(db, "events", eventId, "eventPassengers", passengerId));
@@ -289,11 +378,15 @@ async function refreshPassengerEventPanel(passenger){
   const inputAddress = $("p_evAddress");
   const inputLocalidad = $("p_evLocalidad");
   const inputTime = $("p_evTime");
+  const allPhasesInput = $("p_allPhases");
+  const phaseWrap = $("p_phaseTransportWrap");
 
-  if (!sel || !hint || !btnAdd || !btnRemove || !btnSaveMeta || !inputAddress || !inputLocalidad || !inputTime) return;
+  if (!sel || !hint || !btnAdd || !btnRemove || !btnSaveMeta || !inputAddress || !inputLocalidad || !inputTime || !allPhasesInput || !phaseWrap) return;
 
   const eventId = String(sel.value || "").trim();
+  const phases = await getEventPhases(eventId);
   const canManage = !!eventId && !!currentPassengerId;
+
   if (!canManage){
     hint.textContent = !currentPassengerId
       ? "Guardá el pasajero para poder vincularlo a un evento."
@@ -304,7 +397,10 @@ async function refreshPassengerEventPanel(passenger){
     inputAddress.value = "";
     inputLocalidad.value = "";
     inputTime.value = "";
-    return;
+    allPhasesInput.checked = true;
+    phaseWrap.style.display = "none";
+    renderPhaseTransportControls(phases, { transportByPhase:{} });
+    return { linked:false, phases, eventId, meta:null };
   }
 
   const meta = await loadPassengerEventMeta(eventId, currentPassengerId);
@@ -313,6 +409,11 @@ async function refreshPassengerEventPanel(passenger){
   inputAddress.value = linked ? String(meta.address || "") : String(passenger?.address || "");
   inputLocalidad.value = linked ? String(meta.localidad || "") : String(passenger?.localidad || "");
   inputTime.value = linked ? String(meta.time || "") : "";
+
+  const allPhases = linked ? (meta.allPhases !== false) : true;
+  allPhasesInput.checked = allPhases;
+  renderPhaseTransportControls(phases, meta || { transportByPhase:{} });
+  phaseWrap.style.display = allPhases ? "none" : "block";
 
   const ev = (STATE.events || []).find(x => x.id === eventId);
   const evName = eventLabel(ev || { id: eventId });
@@ -323,7 +424,10 @@ async function refreshPassengerEventPanel(passenger){
   btnAdd.disabled = linked;
   btnRemove.disabled = !linked;
   btnSaveMeta.disabled = !linked;
+
+  return { linked, phases, eventId, meta };
 }
+
 
 function wireFormButtons({ isNew, passenger }){
   $("btnSavePassenger")?.addEventListener("click", savePassenger);
@@ -354,12 +458,23 @@ function wireFormButtons({ isNew, passenger }){
     });
   }
 
+  const refreshPanel = async () => {
+    const state = await refreshPassengerEventPanel(passenger);
+    return state || { linked:false, phases:[], eventId:"" };
+  };
+
   const eventSelect = $("p_eventSelect");
   eventSelect?.addEventListener("change", () => {
-    refreshPassengerEventPanel(passenger).catch((e)=>{
+    refreshPanel().catch((e)=>{
       console.error(e);
       toast(e.message || String(e));
     });
+  });
+
+  $("p_allPhases")?.addEventListener("change", () => {
+    const wrap = $("p_phaseTransportWrap");
+    if (!wrap) return;
+    wrap.style.display = $("p_allPhases")?.checked ? "none" : "block";
   });
 
   $("btnAddPassengerToEvent")?.addEventListener("click", async () => {
@@ -369,9 +484,18 @@ function wireFormButtons({ isNew, passenger }){
       if (!eventId) return toast("Seleccioná un evento.");
       if (!currentPassengerId) return toast("Guardá el pasajero antes de asignarlo al evento.");
 
-      await addPassengerToEvent(eventId, currentPassengerId, getPassengerEventInputs());
+      const phases = await getEventPhases(eventId);
+      const phaseCfg = getPassengerPhaseConfigInputs(phases);
+
+      await addPassengerToEvent(eventId, currentPassengerId, {
+        ...getPassengerEventInputs(),
+        ...phaseCfg,
+        updatedAt: serverTimestamp()
+      });
+
       if (eventId === STATE.event?.id) await loadEventContext(eventId);
-      await refreshPassengerEventPanel(passenger);
+      await refreshPanel();
+      renderAll();
       toast("Pasajero agregado al evento");
     }catch(e){
       console.error(e);
@@ -391,7 +515,8 @@ function wireFormButtons({ isNew, passenger }){
 
       await removePassengerFromEvent(eventId, currentPassengerId);
       if (eventId === STATE.event?.id) await loadEventContext(eventId);
-      await refreshPassengerEventPanel(passenger);
+      await refreshPanel();
+      renderAll();
       toast("Pasajero quitado del evento");
     }catch(e){
       console.error(e);
@@ -402,20 +527,26 @@ function wireFormButtons({ isNew, passenger }){
   $("btnSavePassengerEventMeta")?.addEventListener("click", async () => {
     try{
       if (!isAdmin()) return toast("Solo Admin");
-      const eventId = String($("p_eventSelect")?.value || "").trim();
+      const panelState = await refreshPanel();
+      const eventId = panelState.eventId || String($("p_eventSelect")?.value || "").trim();
       if (!eventId) return toast("Seleccioná un evento.");
       if (!currentPassengerId) return toast("Guardá el pasajero antes de actualizar el evento.");
 
       const currentMeta = await loadPassengerEventMeta(eventId, currentPassengerId);
       if (!currentMeta) return toast("Primero agregá al pasajero al evento.");
 
+      const phases = panelState.phases || await getEventPhases(eventId);
+      const phaseCfg = getPassengerPhaseConfigInputs(phases);
+
       await setDoc(doc(db, "events", eventId, "eventPassengers", currentPassengerId), {
         ...getPassengerEventInputs(),
+        ...phaseCfg,
         updatedAt: serverTimestamp()
       }, { merge: true });
 
       if (eventId === STATE.event?.id) await loadEventContext(eventId);
-      await refreshPassengerEventPanel(passenger);
+      await refreshPanel();
+      renderAll();
       toast("Datos del evento guardados");
     }catch(e){
       console.error(e);
@@ -423,11 +554,12 @@ function wireFormButtons({ isNew, passenger }){
     }
   });
 
-  refreshPassengerEventPanel(passenger).catch((e)=>{
+  refreshPanel().catch((e)=>{
     console.error(e);
     toast(e.message || String(e));
   });
 }
+
 
 
 function getPayloadFromForm(){
@@ -777,6 +909,16 @@ async function geocodeMissingPassengers(){
     wireGeoLogButtons();
 
     $("passSearch")?.addEventListener("input", renderAll);
+
+    $("btnFilterAllPassengers")?.addEventListener("click", () => {
+      currentPassengerScope = "all";
+      renderAll();
+    });
+    $("btnFilterEventPassengers")?.addEventListener("click", () => {
+      currentPassengerScope = "event";
+      renderAll();
+    });
+
     $("btnReloadPassengers")?.addEventListener("click", async () => {
       await loadMasterPassengers();
       renderAll();
@@ -797,6 +939,7 @@ async function geocodeMissingPassengers(){
       }catch(err){
         console.error(err);
       }
+      renderAll();
       if (currentPassengerId) openDetail(currentPassengerId);
     });
   }catch(e){

@@ -183,6 +183,19 @@ function driverCapacity(d){
   return Number.isFinite(cap) && cap > 0 ? cap : 4;
 }
 
+function passengerRequiresTransportForPhase(passengerId, phaseId){
+  const meta = STATE.event?.passengersMeta?.get(passengerId) || {};
+  const allPhases = meta?.allPhases;
+  if (allPhases === undefined || allPhases === null || allPhases === true) return true;
+
+  const byPhase = (meta?.transportByPhase && typeof meta.transportByPhase === "object") ? meta.transportByPhase : {};
+  if (!phaseId) return true;
+  if (Object.prototype.hasOwnProperty.call(byPhase, phaseId)) return !!byPhase[phaseId];
+
+  // Compat: si no está definido explícitamente, asumir que requiere transporte
+  return true;
+}
+
 function renderDrivers(){
   const host = $("driversList");
   if (!host) return;
@@ -298,6 +311,8 @@ function renderPassengers(){
       localidad: (meta.localidad || base.localidad || "")
     };
   });
+
+  list = list.filter(p => passengerRequiresTransportForPhase(p.id, phaseId));
 
   const q = (($("passSearch") || $("passengerSearch"))?.value || "").trim().toLowerCase();
   if (q) list = list.filter(p => passengerLabel(p).toLowerCase().includes(q));
