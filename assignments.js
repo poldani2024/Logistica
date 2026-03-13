@@ -178,6 +178,11 @@ function passengerLocationLabel(p){
   return `Domicilio: ${domicilio} · Localidad: ${localidad}`;
 }
 
+function driverCapacity(d){
+  const cap = Number(d?.capacity ?? 4);
+  return Number.isFinite(cap) && cap > 0 ? cap : 4;
+}
+
 function renderDrivers(){
   const host = $("driversList");
   if (!host) return;
@@ -201,14 +206,18 @@ function renderDrivers(){
   }
 
   const active = STATE.ui.activeDriverId;
+  const { byDriver } = getPhaseAssignments();
 
   host.innerHTML = drivers.map(d=>{
     const isActive = d.id === active;
+    const assigned = (byDriver.get(d.id) || new Set()).size;
+    const capacity = driverCapacity(d);
+    const free = Math.max(capacity - assigned, 0);
     return `
       <div class="row" style="justify-content:space-between; gap:10px; padding:12px; border:1px solid rgba(255,255,255,.08); border-radius:16px;">
         <div>
-          <div style="font-weight:800">${escapeHtml(driverLabel(d))}</div>
-          <div class="hint">${escapeHtml(d.email || "")}</div>
+          <div style="font-weight:800">${escapeHtml(driverLabel(d))} <span class="hint" style="font-weight:600; margin-left:6px;">${escapeHtml(`${assigned}/${capacity}`)}</span></div>
+          <div class="hint">${escapeHtml(d.email || "")} · Disponible: ${escapeHtml(String(free))}</div>
         </div>
         <button class="btn ${isActive ? "primary" : ""}" data-driver="${escapeHtml(d.id)}" type="button">${isActive ? "Activo" : "Ver"}</button>
       </div>
@@ -279,14 +288,27 @@ function renderPassengers(){
   const eventPassengerIds = Array.from(STATE.event?.passengersIds || []);
   const master = STATE.master?.passengers || [];
   const byId = new Map(master.map(p => [p.id, p]));
-  let list = eventPassengerIds.map(id => byId.get(id) || { id });
+  const metaById = STATE.event?.passengersMeta || new Map();
+  let list = eventPassengerIds.map(id => {
+    const base = byId.get(id) || { id };
+    const meta = metaById.get(id) || {};
+    return {
+      ...base,
+      address: (meta.address || base.address || ""),
+      localidad: (meta.localidad || base.localidad || "")
+    };
+  });
 
   const q = (($("passSearch") || $("passengerSearch"))?.value || "").trim().toLowerCase();
   if (q) list = list.filter(p => passengerLabel(p).toLowerCase().includes(q));
 
   const filter = (STATE.ui?.passFilter || "pendientes").toLowerCase();
   if (filter === "pendientes" || filter === "pending") list = list.filter(p => !assignedAll.has(p.id));
-  if (filter === "asignados" || filter === "assigned") list = list.filter(p => assignedAll.has(p.id));
+  if (filter === "asignados" || filter === "assigned") {
+    list = activeDriverId
+      ? list.filter(p => assignedToActive.has(p.id))
+      : list.filter(p => assignedAll.has(p.id));
+  }
   // todos/all no filtra
 
   if (!list.length){
