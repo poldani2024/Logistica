@@ -58,14 +58,6 @@ function wireOnce(){
   
   });
 
-  $("btnDriverPdfReports")?.addEventListener("click", ()=>{
-    try{
-      generateDriverPdfReports();
-    }catch(e){
-      console.error(e);
-      toast(e?.message || String(e));
-    }
-  });
 
   ($("passSearch") || $("passengerSearch"))?.addEventListener("input", ()=>renderPassengers());
 
@@ -80,7 +72,7 @@ function wireOnce(){
       return;
     }
 
-    const el = ev.target.closest("[data-passenger],[data-driver],[data-phase],button");
+    const el = ev.target.closest("[data-passenger],[data-driver],[data-driver-pdf],[data-phase],button");
     if (!el) return;
 
     // 2) ✅ Asignar / Quitar pasajero (PRIMERO para que no lo “robe” data-driver)
@@ -111,7 +103,21 @@ function wireOnce(){
       return;
     }
 
-    // 3) Selección de chofer
+    // 3) PDF por chofer (fase activa)
+    const pdfBtn = el.closest("[data-driver-pdf]");
+    if (pdfBtn){
+      const driverId = pdfBtn.dataset.driverPdf;
+      if (!driverId) return;
+      try{
+        generateDriverPdfReport(driverId);
+      }catch(err){
+        console.error(err);
+        toast(err?.message || String(err));
+      }
+      return;
+    }
+
+    // 4) Selección de chofer
     const drvBtn = el.closest("[data-driver]");
     if (drvBtn) {
       STATE.ui.activeDriverId = drvBtn.dataset.driver || null;
@@ -122,7 +128,7 @@ function wireOnce(){
       return;
     }
 
-    // 4) Cambio de fase
+    // 5) Cambio de fase
     const phaseBtn = el.closest("[data-phase]");
     if (phaseBtn) {
       STATE.ui.activePhase = phaseBtn.dataset.phase || null;
@@ -241,7 +247,10 @@ function renderDrivers(){
           <div style="font-weight:800">${escapeHtml(driverLabel(d))} <span class="hint" style="font-weight:600; margin-left:6px;">${escapeHtml(`${assigned}/${capacity}`)}</span></div>
           <div class="hint">${escapeHtml(d.email || "")} · Disponible: ${escapeHtml(String(free))}</div>
         </div>
-        <button class="btn ${isActive ? "primary" : ""}" data-driver="${escapeHtml(d.id)}" type="button">${isActive ? "Activo" : "Ver"}</button>
+        <div class="row" style="gap:8px;">
+          <button class="btn" data-driver-pdf="${escapeHtml(d.id)}" type="button" title="Generar PDF para este chofer en la fase activa">PDF</button>
+          <button class="btn ${isActive ? "primary" : ""}" data-driver="${escapeHtml(d.id)}" type="button">${isActive ? "Activo" : "Ver"}</button>
+        </div>
       </div>
     `;
   }).join("");
@@ -448,14 +457,16 @@ function buildDriverReportHtml({ eventName, driverName, phaseLabel, destinationA
 </html>`;
 }
 
-function generateDriverPdfReports(){
+function generateDriverPdfReport(driverId){
   const eventId = STATE.event?.id;
   const phaseId = getActivePhaseId();
   if (!eventId) return toast("Seleccioná un evento.");
   if (!phaseId) return toast("Seleccioná una fase.");
+  if (!driverId) return toast("Chofer inválido.");
 
   const drivers = driversForPhase(phaseId) || [];
-  if (!drivers.length) return toast("No hay choferes para la fase seleccionada.");
+  const d = drivers.find(x => x.id === driverId) || (STATE.master?.drivers || []).find(x => x.id === driverId);
+  if (!d) return toast("El chofer no está disponible en la fase seleccionada.");
 
   const phaseObj = (STATE.event?.phases || []).find(p => p.id === phaseId) || {};
   const destinationAddress = phaseObj.destinationAddress || phaseObj.address || STATE.event?.address || "";
@@ -464,38 +475,33 @@ function generateDriverPdfReports(){
   const eventName = eventData.name || eventData.title || STATE.event?.name || STATE.event?.title || eventId;
   const phaseLabel = phaseLabelById(phaseId);
 
-  let opened = 0;
-
-  drivers.forEach((d, idx) => {
-    const rows = collectDriverReportRows(d.id, phaseId);
-    const html = buildDriverReportHtml({
-      eventName,
-      driverName: driverLabel(d),
-      phaseLabel,
-      destinationAddress,
-      destinationLocalidad,
-      rows
-    });
-
-    const win = window.open("", `_report_${d.id}_${idx}`);
-    if (!win) return;
-    opened += 1;
-    win.document.open();
-    win.document.write(html);
-    win.document.close();
-    win.focus();
-    setTimeout(()=>{
-      try{ win.print(); }catch{}
-    }, 300);
+  const rows = collectDriverReportRows(driverId, phaseId);
+  const html = buildDriverReportHtml({
+    eventName,
+    driverName: driverLabel(d),
+    phaseLabel,
+    destinationAddress,
+    destinationLocalidad,
+    rows
   });
 
-  if (!opened) {
+  const win = window.open("", `_report_${driverId}_${Date.now()}`);
+  if (!win) {
     toast("El navegador bloqueó ventanas emergentes. Habilitá popups para generar PDFs.");
     return;
   }
 
-  toast(`Se abrieron ${opened} reporte(s). Guardá cada impresión como PDF.`);
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+  setTimeout(()=>{
+    try{ win.print(); }catch{}
+  }, 300);
+
+  toast("Reporte del chofer abierto. Guardalo como PDF.");
 }
+
 
 async function toggleAssign(driverId, passengerId, phaseId){
   const eventId = STATE.event?.id;
