@@ -58,6 +58,14 @@ function wireOnce(){
   
   });
 
+  $("btnExportList")?.addEventListener("click", ()=>{
+    try{
+      exportPhaseListToExcel();
+    }catch(e){
+      console.error(e);
+      toast(e?.message || String(e));
+    }
+  });
 
   ($("passSearch") || $("passengerSearch"))?.addEventListener("input", ()=>renderPassengers());
 
@@ -247,10 +255,6 @@ function renderDrivers(){
           <div style="font-weight:800">${escapeHtml(driverLabel(d))} <span class="hint" style="font-weight:600; margin-left:6px;">${escapeHtml(`${assigned}/${capacity}`)}</span></div>
           <div class="hint">${escapeHtml(d.email || "")} · Disponible: ${escapeHtml(String(free))}</div>
         </div>
-        <div class="row" style="gap:8px;">
-          <button class="btn" data-driver-pdf="${escapeHtml(d.id)}" type="button" title="Generar PDF para este chofer en la fase activa">PDF</button>
-          <button class="btn ${isActive ? "primary" : ""}" data-driver="${escapeHtml(d.id)}" type="button">${isActive ? "Activo" : "Ver"}</button>
-        </div>
       </div>
     `;
   }).join("");
@@ -373,133 +377,136 @@ function phaseLabelById(phaseId){
   return p?.name || phaseId || "Fase";
 }
 
-function collectDriverReportRows(driverId, phaseId){
-  const masterPassengers = STATE.master?.passengers || [];
-  const passengerById = new Map(masterPassengers.map(p => [p.id, p]));
-  const eventMetaByPassengerId = STATE.event?.passengersMeta || new Map();
-  const { byDriver } = getPhaseAssignments();
-  const assignedIds = Array.from(byDriver.get(driverId) || []);
+function toDisplayDate(v){
+  const raw = String(v || "").trim();
+  if (!raw) return "";
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return raw;
+  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth()+1).padStart(2, "0")}/${d.getFullYear()}`;
+}
 
-  return assignedIds
-    .filter(pid => passengerRequiresTransportForPhase(pid, phaseId))
-    .map((pid, idx) => {
-      const base = passengerById.get(pid) || { id: pid };
-      const meta = eventMetaByPassengerId.get(pid) || {};
-      return {
-        index: idx + 1,
+function getPhaseExportRows(phaseId){
+  const drivers = driversForPhase(phaseId) || [];
+  const byDriverMaster = new Map((STATE.master?.drivers || []).map(d => [d.id, d]));
+  const byPassengerMaster = new Map((STATE.master?.passengers || []).map(p => [p.id, p]));
+  const metaByPassenger = STATE.event?.passengersMeta || new Map();
+  const { byDriver } = getPhaseAssignments();
+
+  const rows = [];
+  for (const d of drivers){
+    const ids = Array.from(byDriver.get(d.id) || []).filter(pid => passengerRequiresTransportForPhase(pid, phaseId));
+    const drv = byDriverMaster.get(d.id) || d;
+
+    if (!ids.length){
+      rows.push({
+        driverName: driverLabel(drv),
+        driverPhone: drv.phone || "",
+        phase: phaseLabelById(phaseId),
+        passenger: "",
+        passengerPhone: "",
+        originAddress: "",
+        originLocalidad: "",
+        time: "",
+        destinationAddress: "",
+        destinationLocalidad: "",
+        notes: ""
+      });
+      continue;
+    }
+
+    ids.forEach(pid => {
+      const base = byPassengerMaster.get(pid) || { id: pid };
+      const meta = metaByPassenger.get(pid) || {};
+      rows.push({
+        driverName: driverLabel(drv),
+        driverPhone: drv.phone || "",
+        phase: phaseLabelById(phaseId),
         passenger: passengerLabel(base),
-        phone: base.phone || "",
+        passengerPhone: base.phone || "",
         originAddress: meta.address || base.address || "",
         originLocalidad: meta.localidad || base.localidad || "",
         time: meta.time || "",
+        destinationAddress: "",
+        destinationLocalidad: "",
         notes: meta.notes || ""
-      };
+      });
     });
+  }
+  return rows;
 }
 
-function buildDriverReportHtml({ eventName, driverName, phaseLabel, destinationAddress, destinationLocalidad, rows }){
-  const bodyRows = rows.length
-    ? rows.map(r => `
-      <tr>
-        <td class="num">${r.index}</td>
-        <td>${escapeHtml(r.passenger)}</td>
-        <td>${escapeHtml(r.phone)}</td>
-        <td>${escapeHtml(r.originAddress)}</td>
-        <td>${escapeHtml(r.originLocalidad)}</td>
-        <td>${escapeHtml(r.time)}</td>
-        <td>${escapeHtml(destinationAddress || "")}</td>
-        <td>${escapeHtml(destinationLocalidad || "")}</td>
-        <td>${escapeHtml(r.notes)}</td>
-      </tr>`).join("")
-    : '<tr><td colspan="9" style="text-align:center; color:#6b7280;">Sin pasajeros asignados en esta fase.</td></tr>';
-
-  return `<!doctype html>
-<html lang="es">
-<head>
-  <meta charset="utf-8" />
-  <title>Hoja de ruta - ${escapeHtml(driverName)}</title>
-  <style>
-    body{ font-family: Arial, Helvetica, sans-serif; margin:20px; color:#111827; }
-    .hdr{ margin-bottom:12px; font-size:18px; }
-    .meta{ width:100%; border-collapse:collapse; margin-bottom:12px; }
-    .meta td{ padding:4px 6px; font-size:16px; }
-    table{ width:100%; border-collapse:collapse; }
-    th{ background:#0f5f84; color:white; font-size:20px; text-align:left; padding:8px 6px; }
-    td{ border:1px solid #cbd5e1; padding:7px 6px; font-size:18px; }
-    tr:nth-child(even) td{ background:#e0f2fe; }
-    .num{ width:40px; text-align:right; }
-    @media print{ body{ margin:10mm; } }
-  </style>
-</head>
-<body>
-  <table class="meta">
-    <tr><td><b>Evento:</b></td><td>${escapeHtml(eventName)}</td><td><b>Fase:</b></td><td>${escapeHtml(phaseLabel)}</td></tr>
-    <tr><td><b>Chofer:</b></td><td>${escapeHtml(driverName)}</td><td></td><td></td></tr>
-  </table>
-
-  <table>
-    <thead>
-      <tr>
-        <th>#</th>
-        <th>Pasajero</th>
-        <th>Teléfono</th>
-        <th>Domicilio Origen</th>
-        <th>Localidad</th>
-        <th>Horario</th>
-        <th>Domicilio Destino</th>
-        <th>Localidad2</th>
-        <th>Observaciones</th>
-      </tr>
-    </thead>
-    <tbody>${bodyRows}</tbody>
-  </table>
-</body>
-</html>`;
-}
-
-function generateDriverPdfReport(driverId){
+function exportPhaseListToExcel(){
   const eventId = STATE.event?.id;
   const phaseId = getActivePhaseId();
   if (!eventId) return toast("Seleccioná un evento.");
   if (!phaseId) return toast("Seleccioná una fase.");
-  if (!driverId) return toast("Chofer inválido.");
-
-  const drivers = driversForPhase(phaseId) || [];
-  const d = drivers.find(x => x.id === driverId) || (STATE.master?.drivers || []).find(x => x.id === driverId);
-  if (!d) return toast("El chofer no está disponible en la fase seleccionada.");
 
   const phaseObj = (STATE.event?.phases || []).find(p => p.id === phaseId) || {};
-  const destinationAddress = phaseObj.destinationAddress || phaseObj.address || STATE.event?.address || "";
-  const destinationLocalidad = phaseObj.localidad || STATE.event?.localidad || "";
   const eventData = (STATE.events || []).find(ev => ev.id === eventId) || {};
   const eventName = eventData.name || eventData.title || STATE.event?.name || STATE.event?.title || eventId;
-  const phaseLabel = phaseLabelById(phaseId);
+  const eventDate = toDisplayDate(phaseObj.date || eventData.dateStart || eventData.startDate || "");
+  const eventTime = phaseObj.time || "";
+  const destinationAddress = phaseObj.destinationAddress || phaseObj.address || eventData.address || "";
+  const destinationLocalidad = phaseObj.localidad || eventData.localidad || "";
 
-  const rows = collectDriverReportRows(driverId, phaseId);
-  const html = buildDriverReportHtml({
-    eventName,
-    driverName: driverLabel(d),
-    phaseLabel,
-    destinationAddress,
-    destinationLocalidad,
-    rows
-  });
+  const rows = getPhaseExportRows(phaseId).map(r => ({ ...r, destinationAddress, destinationLocalidad }));
 
-  const win = window.open("", `_report_${driverId}_${Date.now()}`);
-  if (!win) {
-    toast("El navegador bloqueó ventanas emergentes. Habilitá popups para generar PDFs.");
-    return;
-  }
+  const tableRows = rows.map((r, idx) => `
+    <tr>
+      <td>${idx + 1}</td>
+      <td>${escapeHtml(r.driverName)}</td>
+      <td>${escapeHtml(r.driverPhone)}</td>
+      <td>${escapeHtml(r.phase)}</td>
+      <td>${escapeHtml(r.passenger)}</td>
+      <td>${escapeHtml(r.passengerPhone)}</td>
+      <td>${escapeHtml(r.originAddress)}</td>
+      <td>${escapeHtml(r.originLocalidad)}</td>
+      <td>${escapeHtml(r.time)}</td>
+      <td>${escapeHtml(r.destinationAddress)}</td>
+      <td>${escapeHtml(r.destinationLocalidad)}</td>
+      <td>${escapeHtml(r.notes)}</td>
+    </tr>`).join("");
 
-  win.document.open();
-  win.document.write(html);
-  win.document.close();
-  win.focus();
-  setTimeout(()=>{
-    try{ win.print(); }catch{}
-  }, 300);
+  const html = `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+  table{ border-collapse:collapse; width:100%; font-family:Arial, Helvetica, sans-serif; }
+  td, th{ border:1px solid #93c5fd; padding:6px 8px; font-size:14px; }
+  .meta td{ border:none; padding:4px 8px; font-size:18px; font-weight:700; }
+  .hdr th{ background:#0f5f84; color:#fff; font-size:30px; }
+  .body tr:nth-child(odd) td{ background:#dbeafe; }
+</style>
+</head>
+<body>
+  <table class="meta">
+    <tr><td>Evento:</td><td>${escapeHtml(eventName)}</td></tr>
+    <tr><td>Fecha Evento</td><td>${escapeHtml(eventDate)}</td><td>Horario</td><td>${escapeHtml(eventTime)}</td></tr>
+  </table>
+  <br/>
+  <table>
+    <thead class="hdr">
+      <tr>
+        <th>#</th><th>Chofer</th><th>Teléfono</th><th>Fase</th><th>Pasajero</th><th>Teléfono2</th><th>Domicilio Origen</th><th>Localidad</th><th>Horario</th><th>Domicilio Destino</th><th>Localidad2</th><th>Observaciones</th>
+      </tr>
+    </thead>
+    <tbody class="body">${tableRows}</tbody>
+  </table>
+</body>
+</html>`;
 
-  toast("Reporte del chofer abierto. Guardalo como PDF.");
+  const blob = new Blob(["﻿", html], { type: "application/vnd.ms-excel;charset=utf-8;" });
+  const a = document.createElement("a");
+  const phaseLabel = phaseLabelById(phaseId).replace(/\s+/g, "_");
+  a.href = URL.createObjectURL(blob);
+  a.download = `listado_${eventId}_${phaseLabel}.xls`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=> URL.revokeObjectURL(a.href), 1200);
+
+  toast("Listado exportado a Excel");
 }
 
 
