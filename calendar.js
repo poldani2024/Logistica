@@ -13,6 +13,10 @@ const PHASE_COLORS = ["#0f5f84", "#6d28d9", "#0f766e", "#b45309", "#be123c", "#3
 (async function init(){
   await initCorePage({ page: "calendar" });
 
+  if (!STATE.ui) STATE.ui = {};
+  if (!STATE.ui.calendarPhaseFilter) STATE.ui.calendarPhaseFilter = "all";
+  if (!STATE.ui.calendarDriverFilter) STATE.ui.calendarDriverFilter = "all";
+
   if (STATE.event?.id) {
     await loadEventContext(STATE.event.id);
   }
@@ -24,6 +28,8 @@ const PHASE_COLORS = ["#0f5f84", "#6d28d9", "#0f766e", "#b45309", "#be123c", "#3
     const id = ev?.detail?.eventId;
     if (!id) return;
     await loadEventContext(id);
+    STATE.ui.calendarPhaseFilter = "all";
+    STATE.ui.calendarDriverFilter = "all";
     renderCalendar();
   });
 })().catch((e)=>{
@@ -37,6 +43,16 @@ function wireOnce(){
     await loadEventContext(STATE.event.id);
     renderCalendar();
     toast("Calendario actualizado");
+  });
+
+  $("calendarPhaseFilter")?.addEventListener("change", (ev)=>{
+    STATE.ui.calendarPhaseFilter = ev.target.value || "all";
+    renderCalendar();
+  });
+
+  $("calendarDriverFilter")?.addEventListener("change", (ev)=>{
+    STATE.ui.calendarDriverFilter = ev.target.value || "all";
+    renderCalendar();
   });
 }
 
@@ -85,6 +101,26 @@ function minutesToLabel(mins){
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
+function normalizeText(value){
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+}
+
+function statusInfo(meta, phaseId){
+  const byPhase = (meta?.trackingByPhase && typeof meta.trackingByPhase === "object") ? meta.trackingByPhase : {};
+  const phaseStatus = byPhase?.[phaseId]?.status;
+  const raw = phaseStatus || meta?.trackingStatus || meta?.status || "planificado";
+  const n = normalizeText(raw);
+
+  if (n.includes("destino")) return { key: "destino", label: "En destino", icon: "✅" };
+  if (n.includes("transito") || n.includes("transit")) return { key: "transito", label: "En tránsito", icon: "🚐" };
+  if (n.includes("pendiente") || n.includes("pending")) return { key: "pendiente", label: "Pendiente", icon: "⏳" };
+  return { key: "planificado", label: "Planificado", icon: "📌" };
+}
+
 function getAssignmentsForPhase(phaseId){
   const byDriver = new Map();
   const map = STATE.event?.assignments || new Map();
@@ -114,11 +150,23 @@ function passengerLabel(p){
   return `${p.lastName || ""} ${p.firstName || ""}`.trim() || p.name || p.email || p.id;
 }
 
+function buildPassengerIndex(){
+  const idx = new Map();
+  (STATE.master?.passengers || []).forEach(p => {
+    if (!p || typeof p !== "object") return;
+    [p.id, p.uid, p.passengerId].forEach(k => {
+      const key = String(k || "").trim();
+      if (key) idx.set(key, p);
+    });
+  });
+  return idx;
+}
+
 function passengerDisplayName(base, meta, passengerId){
   const fromMaster = passengerLabel(base || {});
   if (fromMaster && fromMaster !== passengerId) return fromMaster;
 
-  const fromMetaFull = String(meta?.fullName || meta?.name || "").trim();
+  const fromMetaFull = String(meta?.fullName || meta?.name || meta?.passengerName || "").trim();
   if (fromMetaFull) return fromMetaFull;
 
   const fromMetaSplit = `${meta?.lastName || ""} ${meta?.firstName || ""}`.trim();
@@ -139,7 +187,7 @@ function passengerAddress(meta, base){
 
 function buildEntries(){
   const phases = STATE.event?.phases || [];
-  const passengers = new Map((STATE.master?.passengers || []).map(p => [p.id, p]));
+  const passengerIndex = buildPassengerIndex();
   const drivers = new Map((STATE.master?.drivers || []).map(d => [d.id, d]));
   const metaByPassenger = STATE.event?.passengersMeta || new Map();
   const defaultDate = toISODateLike(eventDate());
@@ -156,7 +204,7 @@ function buildEntries(){
     byDriver.forEach((passengerIds, driverId) => {
       const driver = drivers.get(driverId) || (driversForPhase(phaseId) || []).find(d => d.id === driverId) || { id: driverId };
       passengerIds.forEach(pid => {
-        const base = passengers.get(pid) || { id: pid };
+        const base = passengerIndex.get(pid) || { id: pid };
         const meta = metaByPassenger.get(pid) || {};
         const timeRaw = (meta.timeByPhase && meta.timeByPhase[phaseId]) || meta.time || phase.time || "";
         const mins = parseTimeToMinutes(timeRaw);
@@ -171,8 +219,10 @@ function buildEntries(){
           hasExplicitTime: mins != null,
           passenger: passengerDisplayName(base, meta, pid),
           driver: driverLabel(driver),
+          driverId,
           address: passengerAddress(meta, base),
-          notes: ((meta.notesByPhase && meta.notesByPhase[phaseId]) || meta.notes || "")
+          notes: ((meta.notesByPhase && meta.notesByPhase[phaseId]) || meta.notes || ""),
+          status: statusInfo(meta, phaseId)
         });
       });
     });
@@ -189,14 +239,55 @@ function renderLegend(entries){
     if (!unique.has(e.phaseId)) unique.set(e.phaseId, { color: e.color, name: e.phaseName });
   });
 
-  if (!unique.size){
-    host.innerHTML = "";
-    return;
-  }
+  const statusLegend = [
+    '<span class="legendItem">📌 Planificado</span>',
+    '<span class="legendItem">⏳ Pendiente</span>',
+    '<span class="legendItem">🚐 En tránsito</span>',
+    '<span class="legendItem">✅ En destino</span>'
+  ];
 
-  host.innerHTML = Array.from(unique.values()).map(x =>
+  const phaseLegend = Array.from(unique.values()).map(x =>
     `<span class="legendItem" style="background:${x.color};">${escapeHtml(x.name)}</span>`
-  ).join(" ");
+  );
+
+  host.innerHTML = [...phaseLegend, ...statusLegend].join(" ");
+}
+
+function renderFilters(entries){
+  const phaseSel = $("calendarPhaseFilter");
+  const driverSel = $("calendarDriverFilter");
+  if (!phaseSel || !driverSel) return;
+
+  const selectedPhase = STATE.ui?.calendarPhaseFilter || "all";
+  const selectedDriver = STATE.ui?.calendarDriverFilter || "all";
+
+  const phases = STATE.event?.phases || [];
+  phaseSel.innerHTML = `<option value="all">Todas</option>` + phases.map(p =>
+    `<option value="${escapeHtml(p.id)}">${escapeHtml(p.name || p.id)}</option>`
+  ).join("");
+
+  const driverMap = new Map();
+  entries.forEach(e => driverMap.set(e.driverId, e.driver));
+  driverSel.innerHTML = `<option value="all">Todos</option>` + Array.from(driverMap.entries())
+    .sort((a,b)=> String(a[1]).localeCompare(String(b[1]), "es", { sensitivity:"base" }))
+    .map(([id, label]) => `<option value="${escapeHtml(id)}">${escapeHtml(label)}</option>`).join("");
+
+  phaseSel.value = phaseSel.querySelector(`option[value="${selectedPhase}"]`) ? selectedPhase : "all";
+  driverSel.value = driverSel.querySelector(`option[value="${selectedDriver}"]`) ? selectedDriver : "all";
+
+  STATE.ui.calendarPhaseFilter = phaseSel.value;
+  STATE.ui.calendarDriverFilter = driverSel.value;
+}
+
+function applyFilters(entries){
+  const phase = STATE.ui?.calendarPhaseFilter || "all";
+  const driver = STATE.ui?.calendarDriverFilter || "all";
+
+  return entries.filter(e => {
+    if (phase !== "all" && e.phaseId !== phase) return false;
+    if (driver !== "all" && e.driverId !== driver) return false;
+    return true;
+  });
 }
 
 function renderCalendar(){
@@ -209,22 +300,25 @@ function renderCalendar(){
     info.textContent = "Seleccioná un evento para ver el calendario.";
     table.innerHTML = "<tbody><tr><td style='padding:12px;'>Sin evento seleccionado.</td></tr></tbody>";
     renderLegend([]);
+    renderFilters([]);
     return;
   }
 
-  const entries = buildEntries();
+  const allEntries = buildEntries();
+  renderFilters(allEntries);
+  const entries = applyFilters(allEntries);
   renderLegend(entries);
 
   const dates = Array.from(new Set(entries.map(e => e.dateISO))).sort();
-  info.innerHTML = `<b>${escapeHtml(eventName())}</b> · Pasajeros agendados: <b>${entries.length}</b> · Días con agenda: <b>${dates.length}</b>`;
+  info.innerHTML = `<b>${escapeHtml(eventName())}</b> · Registros filtrados: <b>${entries.length}</b> de <b>${allEntries.length}</b> · Días con agenda: <b>${dates.length}</b>`;
 
   if (!entries.length || !dates.length){
-    table.innerHTML = "<tbody><tr><td style='padding:12px;'>No hay pasajeros asignados con fecha/horario para mostrar en calendario.</td></tr></tbody>";
+    table.innerHTML = "<tbody><tr><td style='padding:12px;'>No hay asignaciones para el filtro seleccionado.</td></tr></tbody>";
     return;
   }
 
-  const minMins = Math.max(360, Math.min(...entries.map(e => e.mins)) - 30); // mínimo 06:00
-  const maxMins = Math.min(1380, Math.max(...entries.map(e => e.mins)) + 60); // máximo 23:00
+  const minMins = Math.max(360, Math.min(...entries.map(e => e.mins)) - 30);
+  const maxMins = Math.min(1380, Math.max(...entries.map(e => e.mins)) + 60);
   const start = Math.floor(minMins / 30) * 30;
   const end = Math.ceil(maxMins / 30) * 30;
 
@@ -243,10 +337,11 @@ function renderCalendar(){
       const key = `${d}|${mins}`;
       const items = (bucket.get(key) || []).map(e => `
         <div class="entry" style="background:${e.color};">
-          <div class="who">${escapeHtml(e.passenger)}</div>
+          <div class="who">${e.status.icon} ${escapeHtml(e.passenger)}</div>
           <div class="meta">${escapeHtml(e.address || "Sin domicilio/localidad")}</div>
           <div class="meta">Chofer: ${escapeHtml(e.driver)}</div>
           <div class="meta">${escapeHtml(e.phaseName)}${e.hasExplicitTime ? "" : " · Horario sin definir"}</div>
+          <div class="meta">Estado: ${escapeHtml(e.status.label)}</div>
           ${e.notes ? `<div class="meta">Obs: ${escapeHtml(e.notes)}</div>` : ""}
         </div>
       `).join("");

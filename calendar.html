@@ -18,6 +18,8 @@
     .legend{ display:flex; gap:8px; flex-wrap:wrap; }
     .legendItem{ font-size:12px; padding:6px 10px; border-radius:999px; border:1px solid rgba(255,255,255,.16); }
     .headerRow{ display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+    .filters{ display:flex; gap:10px; flex-wrap:wrap; align-items:end; margin-top:10px; }
+    .filters .field{ min-width:180px; }
   </style>
 </head>
 <body>
@@ -55,6 +57,17 @@
         <div class="subtitle">Vista horaria por día/fase con pasajeros y chofer asignado.</div>
       </div>
       <button class="btn" id="btnRefreshCalendar">↻ Actualizar</button>
+    </div>
+
+    <div class="filters">
+      <div class="field">
+        <label>Fase</label>
+        <select id="calendarPhaseFilter"></select>
+      </div>
+      <div class="field">
+        <label>Chofer</label>
+        <select id="calendarDriverFilter"></select>
+      </div>
     </div>
 
     <div id="calendarEventInfo" class="hint" style="margin-top:10px;"></div>
