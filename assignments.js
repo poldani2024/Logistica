@@ -201,6 +201,11 @@ function passengerLocationLabel(p){
   return `Domicilio: ${domicilio} · Localidad: ${localidad}`;
 }
 
+function passengerDivisionVipLabel(p){
+  const div = (p?.division || "").trim() || "—";
+  return `División: ${div}${p?.vip ? " · VIP" : ""}`;
+}
+
 function driverCapacity(d){
   const cap = Number(d?.capacity ?? 4);
   return Number.isFinite(cap) && cap > 0 ? cap : 4;
@@ -365,6 +370,7 @@ function renderPassengers(){
         <div>
           <div style="font-weight:800">${escapeHtml(passengerLabel(p))}</div>
           <div class="hint">${escapeHtml(passengerLocationLabel(p))}</div>
+          <div class="hint">${escapeHtml(passengerDivisionVipLabel(p))}</div>
           <div class="hint">${escapeHtml(status)} — Fase: ${escapeHtml(phaseId)}</div>
         </div>
         <button class="btn ${isAssignedActive ? "danger" : ""}" data-passenger="${escapeHtml(pid)}" type="button">${actionLabel}</button>
@@ -418,6 +424,8 @@ function getExportRowsAllPhases(){
           phase: ph.name || phaseLabelById(phaseId),
           passenger: "",
           passengerPhone: "",
+          division: "",
+          vip: false,
           originAddress: "",
           originLocalidad: "",
           time: ph.time || "",
@@ -437,6 +445,8 @@ function getExportRowsAllPhases(){
           phase: ph.name || phaseLabelById(phaseId),
           passenger: passengerLabel(base),
           passengerPhone: base.phone || "",
+          division: base.division || "",
+          vip: !!base.vip,
           originAddress: meta.address || base.address || "",
           originLocalidad: meta.localidad || base.localidad || "",
           time: meta.time || ph.time || "",
@@ -497,6 +507,8 @@ function exportPhaseListToExcel(){
       <td>${escapeHtml(r.phase)}</td>
       <td>${escapeHtml(r.passenger)}</td>
       <td class="txt">${escapeHtml(asExcelTextFormula(r.passengerPhone))}</td>
+      <td>${escapeHtml(r.division || "")}</td>
+      <td>${r.vip ? "Sí" : ""}</td>
       <td>${escapeHtml(r.originAddress)}</td>
       <td>${escapeHtml(r.originLocalidad)}</td>
       <td>${escapeHtml(r.time)}</td>
@@ -527,7 +539,7 @@ function exportPhaseListToExcel(){
   <table>
     <thead class="hdr">
       <tr>
-        <th>#</th><th>Chofer</th><th>Teléfono</th><th>Fase</th><th>Pasajero</th><th>Teléfono2</th><th>Domicilio Origen</th><th>Localidad</th><th>Horario</th><th>Domicilio Destino</th><th>Localidad2</th><th>Observaciones</th>
+        <th>#</th><th>Chofer</th><th>Teléfono</th><th>Fase</th><th>Pasajero</th><th>Teléfono2</th><th>División</th><th>VIP</th><th>Domicilio Origen</th><th>Localidad</th><th>Horario</th><th>Domicilio Destino</th><th>Localidad2</th><th>Observaciones</th>
       </tr>
     </thead>
     <tbody class="body">${tableRows}</tbody>

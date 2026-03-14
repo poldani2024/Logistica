@@ -152,7 +152,7 @@ function getFiltered(){
 
   const list = (STATE.master.passengers || []).filter(p => {
     if (currentPassengerScope === "event" && !inEvent.has(p.id)) return false;
-    const hay = `${p.firstName||""} ${p.lastName||""} ${p.phone||""} ${p.address||""} ${p.localidad||""}`.toLowerCase();
+    const hay = `${p.firstName||""} ${p.lastName||""} ${p.phone||""} ${p.address||""} ${p.localidad||""} ${p.division||""} ${p.vip ? "vip" : ""}`.toLowerCase();
     return !q || hay.includes(q);
   });
   list.sort((a,b)=> `${a.lastName||""} ${a.firstName||""}`.localeCompare(`${b.lastName||""} ${b.firstName||""}`));
@@ -167,7 +167,7 @@ function renderTable(){
   const list = getFiltered();
   tbody.innerHTML = list.map(p => `
     <tr>
-      <td><strong>${escapeHtml(fullName(p))}</strong><div class="muted">${escapeHtml(p.address||"")}</div></td>
+      <td><strong>${escapeHtml(fullName(p))}</strong><div class="muted">${escapeHtml(p.address||"")}</div><div class="muted">División: ${escapeHtml(p.division || "—")}${p.vip ? " · VIP" : ""}</div></td>
       <td>${escapeHtml(p.localidad||"")}</td>
       <td>${escapeHtml(p.phone||"")}</td>
       <td>${hasGeo(p) ? "✅" : "—"}</td>
@@ -192,7 +192,7 @@ function renderCards(){
         <div>
           <div style="font-weight:800;">${escapeHtml(fullName(p))}</div>
           <div class="subtitle">${escapeHtml(p.phone||"")}${p.localidad ? " · " + escapeHtml(p.localidad) : ""}</div>
-          <div class="subtitle">${escapeHtml(p.address||"")}</div>
+          <div class="subtitle">${escapeHtml(p.address||"")}</div><div class="subtitle">División: ${escapeHtml(p.division || "—")}${p.vip ? " · VIP" : ""}</div>
         </div>
         <div class="row">
           <span class="pillSmall" style="padding:6px 10px;">${hasGeo(p) ? "📍" : "—"}</span>
@@ -216,6 +216,7 @@ function openDetailNew(){
 
   $("passengerDetail").innerHTML = formHtml({
     firstName:"", lastName:"", phone:"", localidad:"", address:"", zone:"",
+    division:"", vip:false,
     lat:"", lng:""
   }, true);
 
@@ -295,6 +296,20 @@ function formHtml(p, isNew){
 
       <div class="field"><label>Teléfono</label><input id="p_phone" value="${escapeHtml(p.phone||"")}" placeholder="(sin guiones)"></div>
       <div class="field"><label>Localidad</label><input id="p_localidad" value="${escapeHtml(p.localidad||"")}" placeholder="Rosario / Funes / ..."></div>
+
+      <div class="field"><label>División</label>
+        <select id="p_division">
+          <option value="" ${!p.division ? "selected" : ""}>(sin división)</option>
+          <option value="DS" ${p.division === "DS" ? "selected" : ""}>DS</option>
+          <option value="DD" ${p.division === "DD" ? "selected" : ""}>DD</option>
+          <option value="DJM" ${p.division === "DJM" ? "selected" : ""}>DJM</option>
+          <option value="DJS" ${p.division === "DJS" ? "selected" : ""}>DJS</option>
+          <option value="MH" ${p.division === "MH" ? "selected" : ""}>MH</option>
+        </select>
+      </div>
+      <div class="field" style="display:flex; justify-content:flex-end; align-items:flex-end;">
+        <label class="row" style="gap:8px; margin:0;"><input id="p_vip" type="checkbox" ${p.vip ? "checked" : ""}> VIP</label>
+      </div>
 
       <div class="field" style="grid-column:1/-1;"><label>Dirección</label><input id="p_address" value="${escapeHtml(p.address||"")}" placeholder="Calle y número"></div>
 
@@ -577,6 +592,8 @@ function getPayloadFromForm(){
     localidad: ($("p_localidad")?.value || "").trim(),
     address: ($("p_address")?.value || "").trim(),
     zone: ($("p_zone")?.value || "").trim(),
+    division: ($("p_division")?.value || "").trim(),
+    vip: !!$("p_vip")?.checked,
     lat: (lat != null && Number.isFinite(lat)) ? lat : null,
     lng: (lng != null && Number.isFinite(lng)) ? lng : null
   };
