@@ -400,6 +400,17 @@ function excelPhoneText(value){
   return String(value ?? "").trim();
 }
 
+function parseClockToMinutes(value){
+  const raw = String(value || "").trim();
+  const m = raw.match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return Number.MAX_SAFE_INTEGER;
+  const hh = Number(m[1]);
+  const mm = Number(m[2]);
+  if (!Number.isFinite(hh) || !Number.isFinite(mm)) return Number.MAX_SAFE_INTEGER;
+  if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return Number.MAX_SAFE_INTEGER;
+  return hh * 60 + mm;
+}
+
 function getExportRowsAllPhases(){
   const phases = STATE.event?.phases || [];
   const byDriverMaster = new Map((STATE.master?.drivers || []).map(d => [d.id, d]));
@@ -419,25 +430,6 @@ function getExportRowsAllPhases(){
       const ids = Array.from(byDriver.get(d.id) || [])
         .filter(pid => passengerRequiresTransportForPhase(pid, phaseId));
       const drv = byDriverMaster.get(d.id) || d;
-
-      if (!ids.length){
-        rows.push({
-          driverName: driverLabel(drv),
-          driverPhone: drv.phone || "",
-          phase: ph.name || phaseLabelById(phaseId),
-          passenger: "",
-          passengerPhone: "",
-          division: "",
-          vip: false,
-          originAddress: "",
-          originLocalidad: "",
-          time: ph.time || "",
-          destinationAddress: ph.destinationAddress || ph.address || STATE.event?.address || "",
-          destinationLocalidad: ph.localidad || STATE.event?.localidad || "",
-          notes: ""
-        });
-        continue;
-      }
 
       ids.forEach(pid => {
         const base = byPassengerMaster.get(pid) || { id: pid };
@@ -460,6 +452,16 @@ function getExportRowsAllPhases(){
       });
     }
   }
+
+  rows.sort((a, b) => {
+    const byTime = parseClockToMinutes(a.time) - parseClockToMinutes(b.time);
+    if (byTime !== 0) return byTime;
+
+    const byDriver = String(a.driverName || "").localeCompare(String(b.driverName || ""), "es", { sensitivity: "base" });
+    if (byDriver !== 0) return byDriver;
+
+    return String(a.phase || "").localeCompare(String(b.phase || ""), "es", { sensitivity: "base" });
+  });
 
   return rows;
 }
