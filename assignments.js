@@ -379,9 +379,8 @@ function toDisplayDate(v){
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth()+1).padStart(2, "0")}/${d.getFullYear()}`;
 }
 
-function asExcelTextFormula(value){
-  const v = String(value ?? "").replace(/"/g, '""');
-  return `="${v}"`;
+function excelPhoneText(value){
+  return String(value ?? "").trim();
 }
 
 function getExportRowsAllPhases(){
@@ -491,10 +490,10 @@ function exportPhaseListToExcel(){
     <tr>
       <td>${idx + 1}</td>
       <td>${escapeHtml(r.driverName)}</td>
-      <td class="txt">${escapeHtml(asExcelTextFormula(r.driverPhone))}</td>
+      <td class="txt">${escapeHtml(excelPhoneText(r.driverPhone))}</td>
       <td>${escapeHtml(r.phase)}</td>
       <td>${escapeHtml(r.passenger)}</td>
-      <td class="txt">${escapeHtml(asExcelTextFormula(r.passengerPhone))}</td>
+      <td class="txt">${escapeHtml(excelPhoneText(r.passengerPhone))}</td>
       <td>${escapeHtml(r.division || "")}</td>
       <td>${r.vip ? "Sí" : ""}</td>
       <td>${escapeHtml(r.originAddress)}</td>
