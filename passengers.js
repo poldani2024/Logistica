@@ -26,6 +26,8 @@ async function addPassengerToEvent(eventId, passengerId, extra = {}){
     geo: null,
     allPhases: true,
     transportByPhase: {},
+    usePhaseTimes: false,
+    timeByPhase: {},
     updatedAt: serverTimestamp(),
     ...extra
   }, { merge:true });
@@ -288,6 +290,24 @@ function renderPhaseTransportControls(phases, meta){
   }).join("");
 }
 
+function renderPhaseTimeControls(phases, meta){
+  const host = $("p_phaseTimes");
+  if (!host) return;
+
+  if (!Array.isArray(phases) || !phases.length){
+    host.innerHTML = '<div class="muted">Este evento no tiene fases definidas.</div>';
+    return;
+  }
+
+  const byPhase = (meta?.timeByPhase && typeof meta.timeByPhase === "object") ? meta.timeByPhase : {};
+  const fallback = String(meta?.time || "");
+
+  host.innerHTML = phases.map(ph => {
+    const v = String(byPhase[ph.id] ?? fallback ?? "");
+    return `<div class="field"><label>${escapeHtml(ph.name || ph.id)}</label><input data-phase-time="${escapeHtml(ph.id)}" placeholder="Ej: 18:30" value="${escapeHtml(v)}"></div>`;
+  }).join("");
+}
+
 function formHtml(p, isNew){
   return `
     <div class="grid2">
@@ -337,6 +357,14 @@ function formHtml(p, isNew){
       </div>
 
       <div class="field" style="margin-top:10px;">
+        <label class="row" style="gap:8px;"><input id="p_usePhaseTimes" type="checkbox"> Definir horario por fase</label>
+        <div id="p_phaseTimesWrap" style="margin-top:8px; display:none;">
+          <div class="subtitle" style="margin-bottom:6px;">Horarios por fase</div>
+          <div id="p_phaseTimes" class="grid2"></div>
+        </div>
+      </div>
+
+      <div class="field" style="margin-top:10px;">
         <label class="row" style="gap:8px;"><input id="p_allPhases" type="checkbox" checked> Participa en todas las fases</label>
         <div id="p_phaseTransportWrap" style="margin-top:8px; display:none;">
           <div class="subtitle" style="margin-bottom:6px;">Fases que requieren transporte</div>
@@ -362,6 +390,20 @@ function getPassengerEventInputs(){
     localidad: ($("p_evLocalidad")?.value || "").trim(),
     time: ($("p_evTime")?.value || "").trim()
   };
+}
+
+function getPassengerPhaseTimeInputs(phases){
+  const usePhaseTimes = !!$("p_usePhaseTimes")?.checked;
+  if (!usePhaseTimes) return { usePhaseTimes: false, timeByPhase: {} };
+
+  const map = {};
+  (phases || []).forEach(ph => {
+    const input = Array.from(document.querySelectorAll("[data-phase-time]")).find(x => (x.dataset.phaseTime || "") === ph.id);
+    const val = (input?.value || "").trim();
+    if (val) map[ph.id] = val;
+  });
+
+  return { usePhaseTimes: true, timeByPhase: map };
 }
 
 function getPassengerPhaseConfigInputs(phases){
@@ -395,8 +437,10 @@ async function refreshPassengerEventPanel(passenger){
   const inputTime = $("p_evTime");
   const allPhasesInput = $("p_allPhases");
   const phaseWrap = $("p_phaseTransportWrap");
+  const usePhaseTimesInput = $("p_usePhaseTimes");
+  const phaseTimesWrap = $("p_phaseTimesWrap");
 
-  if (!sel || !hint || !btnAdd || !btnRemove || !btnSaveMeta || !inputAddress || !inputLocalidad || !inputTime || !allPhasesInput || !phaseWrap) return;
+  if (!sel || !hint || !btnAdd || !btnRemove || !btnSaveMeta || !inputAddress || !inputLocalidad || !inputTime || !allPhasesInput || !phaseWrap || !usePhaseTimesInput || !phaseTimesWrap) return;
 
   const eventId = String(sel.value || "").trim();
   const phases = await getEventPhases(eventId);
@@ -414,7 +458,10 @@ async function refreshPassengerEventPanel(passenger){
     inputTime.value = "";
     allPhasesInput.checked = true;
     phaseWrap.style.display = "none";
+    usePhaseTimesInput.checked = false;
+    phaseTimesWrap.style.display = "none";
     renderPhaseTransportControls(phases, { transportByPhase:{} });
+    renderPhaseTimeControls(phases, { time:"", timeByPhase:{} });
     return { linked:false, phases, eventId, meta:null };
   }
 
@@ -429,6 +476,13 @@ async function refreshPassengerEventPanel(passenger){
   allPhasesInput.checked = allPhases;
   renderPhaseTransportControls(phases, meta || { transportByPhase:{} });
   phaseWrap.style.display = allPhases ? "none" : "block";
+
+  const usePhaseTimes = linked
+    ? (meta.usePhaseTimes === true || (meta.timeByPhase && Object.keys(meta.timeByPhase || {}).length > 0))
+    : false;
+  usePhaseTimesInput.checked = usePhaseTimes;
+  renderPhaseTimeControls(phases, meta || { time:"", timeByPhase:{} });
+  phaseTimesWrap.style.display = usePhaseTimes ? "block" : "none";
 
   const ev = (STATE.events || []).find(x => x.id === eventId);
   const evName = eventLabel(ev || { id: eventId });
@@ -492,6 +546,12 @@ function wireFormButtons({ isNew, passenger }){
     wrap.style.display = $("p_allPhases")?.checked ? "none" : "block";
   });
 
+  $("p_usePhaseTimes")?.addEventListener("change", () => {
+    const wrap = $("p_phaseTimesWrap");
+    if (!wrap) return;
+    wrap.style.display = $("p_usePhaseTimes")?.checked ? "block" : "none";
+  });
+
   $("btnAddPassengerToEvent")?.addEventListener("click", async () => {
     try{
       if (!isAdmin()) return toast("Solo Admin");
@@ -501,10 +561,12 @@ function wireFormButtons({ isNew, passenger }){
 
       const phases = await getEventPhases(eventId);
       const phaseCfg = getPassengerPhaseConfigInputs(phases);
+      const timeCfg = getPassengerPhaseTimeInputs(phases);
 
       await addPassengerToEvent(eventId, currentPassengerId, {
         ...getPassengerEventInputs(),
         ...phaseCfg,
+        ...timeCfg,
         updatedAt: serverTimestamp()
       });
 
@@ -554,10 +616,12 @@ function wireFormButtons({ isNew, passenger }){
       const eventInputs = getPassengerEventInputs();
       const phases = await getEventPhases(eventId);
       const phaseCfg = getPassengerPhaseConfigInputs(phases);
+      const timeCfg = getPassengerPhaseTimeInputs(phases);
 
       await setDoc(doc(db, "events", eventId, "eventPassengers", currentPassengerId), {
         ...eventInputs,
         ...phaseCfg,
+        ...timeCfg,
         updatedAt: serverTimestamp()
       }, { merge: true });
 

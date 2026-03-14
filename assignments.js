@@ -449,7 +449,7 @@ function getExportRowsAllPhases(){
           vip: !!base.vip,
           originAddress: meta.address || base.address || "",
           originLocalidad: meta.localidad || base.localidad || "",
-          time: meta.time || ph.time || "",
+          time: ((meta.timeByPhase && meta.timeByPhase[phaseId]) || meta.time || ph.time || ""),
           destinationAddress: ph.destinationAddress || ph.address || STATE.event?.address || "",
           destinationLocalidad: ph.localidad || STATE.event?.localidad || "",
           notes: meta.notes || ""
