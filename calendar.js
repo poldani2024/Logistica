@@ -114,6 +114,19 @@ function passengerLabel(p){
   return `${p.lastName || ""} ${p.firstName || ""}`.trim() || p.name || p.email || p.id;
 }
 
+function passengerDisplayName(base, meta, passengerId){
+  const fromMaster = passengerLabel(base || {});
+  if (fromMaster && fromMaster !== passengerId) return fromMaster;
+
+  const fromMetaFull = String(meta?.fullName || meta?.name || "").trim();
+  if (fromMetaFull) return fromMetaFull;
+
+  const fromMetaSplit = `${meta?.lastName || ""} ${meta?.firstName || ""}`.trim();
+  if (fromMetaSplit) return fromMetaSplit;
+
+  return passengerId || "Pasajero";
+}
+
 function driverLabel(d){
   return `${d.lastName || ""} ${d.firstName || ""}`.trim() || d.name || d.email || d.id;
 }
@@ -147,17 +160,19 @@ function buildEntries(){
         const meta = metaByPassenger.get(pid) || {};
         const timeRaw = (meta.timeByPhase && meta.timeByPhase[phaseId]) || meta.time || phase.time || "";
         const mins = parseTimeToMinutes(timeRaw);
-        if (!phaseDate || mins == null) return;
+        if (!phaseDate) return;
 
         entries.push({
           phaseId,
           phaseName: phase.name || phaseId,
           color: PHASE_COLORS[phaseIdx % PHASE_COLORS.length],
           dateISO: phaseDate,
-          mins,
-          passenger: passengerLabel(base),
+          mins: mins == null ? 480 : mins,
+          hasExplicitTime: mins != null,
+          passenger: passengerDisplayName(base, meta, pid),
           driver: driverLabel(driver),
-          address: passengerAddress(meta, base)
+          address: passengerAddress(meta, base),
+          notes: ((meta.notesByPhase && meta.notesByPhase[phaseId]) || meta.notes || "")
         });
       });
     });
@@ -231,7 +246,8 @@ function renderCalendar(){
           <div class="who">${escapeHtml(e.passenger)}</div>
           <div class="meta">${escapeHtml(e.address || "Sin domicilio/localidad")}</div>
           <div class="meta">Chofer: ${escapeHtml(e.driver)}</div>
-          <div class="meta">${escapeHtml(e.phaseName)}</div>
+          <div class="meta">${escapeHtml(e.phaseName)}${e.hasExplicitTime ? "" : " · Horario sin definir"}</div>
+          ${e.notes ? `<div class="meta">Obs: ${escapeHtml(e.notes)}</div>` : ""}
         </div>
       `).join("");
       return `<td class="calendarCell">${items}</td>`;
