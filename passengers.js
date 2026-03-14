@@ -37,6 +37,37 @@ async function addPassengerToEvent(eventId, passengerId, extra = {}){
 async function removePassengerFromEvent(eventId, passengerId){
   if (!eventId) throw new Error("No hay evento seleccionado");
   if (!passengerId) throw new Error("No hay pasajero");
+
+  // Limpia asignaciones colgantes del pasajero en todas las fases/choferes del evento
+  const aSnap = await getDocs(collection(db, "events", eventId, "assignments"));
+  for (const row of aSnap.docs){
+    const raw = row.data() || {};
+    const phasesIn = (raw.phases && typeof raw.phases === "object") ? raw.phases : {};
+    const phasesOut = { ...phasesIn };
+    let changed = false;
+
+    Object.keys(phasesOut).forEach(phaseId => {
+      const arr = Array.isArray(phasesOut[phaseId]) ? phasesOut[phaseId] : [];
+      const next = arr.filter(id => id && id !== passengerId);
+      if (next.length !== arr.length){
+        phasesOut[phaseId] = next;
+        changed = true;
+      }
+    });
+
+    const legacy = Array.isArray(raw.passengerIds) ? raw.passengerIds : [];
+    const legacyNext = legacy.filter(id => id && id !== passengerId);
+    if (legacyNext.length !== legacy.length) changed = true;
+
+    if (changed){
+      await setDoc(doc(db, "events", eventId, "assignments", row.id), {
+        phases: phasesOut,
+        passengerIds: legacyNext,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+    }
+  }
+
   await deleteDoc(doc(db, "events", eventId, "eventPassengers", passengerId));
 }
 
