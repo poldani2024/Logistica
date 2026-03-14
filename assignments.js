@@ -116,11 +116,17 @@ function wireOnce(){
     if (pdfBtn){
       const driverId = pdfBtn.dataset.driverPdf || "";
       if (!driverId) return;
+      const printWin = window.open("", "_blank");
+      if (!printWin){
+        toast("El navegador bloqueó la ventana emergente del PDF.");
+        return;
+      }
       try{
-        generateDriverPdfReport(driverId);
+        generateDriverPdfReport(driverId, printWin);
       }catch(err){
         console.error("PDF ERROR", err);
         toast(err?.message || String(err));
+        try { printWin.close(); } catch {}
       }
       return;
     }
@@ -635,7 +641,7 @@ function buildDriverReportHtml(driver, phaseId, rows){
 </html>`;
 }
 
-function generateDriverPdfReport(driverId){
+function generateDriverPdfReport(driverId, win){
   const phaseId = getActivePhaseId();
   if (!STATE.event?.id) throw new Error("Seleccioná un evento.");
   if (!phaseId) throw new Error("Seleccioná una fase.");
@@ -644,15 +650,15 @@ function generateDriverPdfReport(driverId){
   const rows = collectDriverReportRows(driverId, phaseId);
   const html = buildDriverReportHtml(driver, phaseId, rows);
 
-  const win = window.open("", "_blank", "noopener,noreferrer");
-  if (!win) throw new Error("El navegador bloqueó la ventana emergente del PDF.");
+  const target = win || window.open("", "_blank");
+  if (!target) throw new Error("El navegador bloqueó la ventana emergente del PDF.");
 
-  win.document.open();
-  win.document.write(html);
-  win.document.close();
-  win.focus();
+  target.document.open();
+  target.document.write(html);
+  target.document.close();
+  target.focus();
   setTimeout(()=>{
-    win.print();
+    target.print();
   }, 250);
 }
 
