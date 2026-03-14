@@ -301,7 +301,7 @@ function formHtml(p, isNew){
         <select id="p_division">
           <option value="" ${!p.division ? "selected" : ""}>(sin división)</option>
           <option value="DS" ${p.division === "DS" ? "selected" : ""}>DS</option>
-          <option value="DD" ${p.division === "DD" ? "selected" : ""}>DD</option>
+          <option value="DF" ${p.division === "DF" ? "selected" : ""}>DF</option>
           <option value="DJM" ${p.division === "DJM" ? "selected" : ""}>DJM</option>
           <option value="DJF" ${p.division === "DJF" ? "selected" : ""}>DJF</option>
           <option value="MH" ${p.division === "MH" ? "selected" : ""}>MH</option>
