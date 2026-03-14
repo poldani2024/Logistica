@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Calendario · Gestión de Transporte Soka Gakkai</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <style>
+    .calendarWrap{ overflow:auto; border:1px solid rgba(255,255,255,.15); border-radius:16px; }
+    .calendarTable{ min-width:980px; width:100%; border-collapse:collapse; }
+    .calendarTable th, .calendarTable td{ border:1px solid rgba(255,255,255,.18); vertical-align:top; }
+    .calendarTable thead th{ background:rgba(15,95,132,.55); padding:10px 8px; font-size:13px; text-align:center; }
+    .calendarTime{ width:74px; font-weight:800; text-align:center; background:rgba(255,255,255,.06); padding:8px 4px; }
+    .calendarCell{ height:54px; padding:4px; background:rgba(255,255,255,.03); }
+    .entry{ color:#fff; border-radius:10px; padding:6px 8px; margin:2px 0; font-size:11px; line-height:1.25; border:1px solid rgba(0,0,0,.28); box-shadow:0 1px 4px rgba(0,0,0,.24); }
+    .entry .who{ font-weight:900; font-size:11px; }
+    .entry .meta{ opacity:.95; font-size:10px; }
+    .legend{ display:flex; gap:8px; flex-wrap:wrap; }
+    .legendItem{ font-size:12px; padding:6px 10px; border-radius:999px; border:1px solid rgba(255,255,255,.16); }
+    .headerRow{ display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+  </style>
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <div class="title">Gestión de Transporte Soka Gakkai</div>
+      <div class="sub">Rosario / Gran Rosario</div>
+    </div>
+
+    <div class="topbar-center">
+      <div class="field topbar-event-field">
+        <label>Evento activo</label>
+        <select id="eventSelect"></select>
+        <div class="subtitle" id="eventHint">No hay evento seleccionado</div>
+      </div>
+    </div>
+
+    <div class="row">
+      <a href="index.html" class="iconbtn primary" title="Inicio">🏠</a>
+      <div class="pill">
+        <span id="authStatus">No ingresado</span>
+        <button id="btnLogin" type="button" style="display:none">Ingresar</button>
+        <button id="btnLogout" type="button" class="danger">Salir</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="container">
+  <section class="card">
+    <div class="headerRow">
+      <div>
+        <div class="cardTitle">Calendario</div>
+        <div class="subtitle">Vista horaria por día/fase con pasajeros y chofer asignado.</div>
+      </div>
+      <button class="btn" id="btnRefreshCalendar">↻ Actualizar</button>
+    </div>
+
+    <div id="calendarEventInfo" class="hint" style="margin-top:10px;"></div>
+    <div id="calendarLegend" class="legend" style="margin-top:10px;"></div>
+
+    <div class="calendarWrap" style="margin-top:12px;">
+      <table class="calendarTable" id="calendarTable"></table>
+    </div>
+  </section>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script type="module" src="./calendar.js"></script>
+</body>
+</html>
