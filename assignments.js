@@ -58,6 +58,15 @@ function wireOnce(){
   
   });
 
+  $("btnExportList")?.addEventListener("click", ()=>{
+    try{
+      exportPhaseListToExcel();
+    }catch(e){
+      console.error(e);
+      toast(e?.message || String(e));
+    }
+  });
+
   ($("passSearch") || $("passengerSearch"))?.addEventListener("input", ()=>renderPassengers());
 
   // Delegación global: filtros (chips), fases, chofer activo, asignar/quitar
@@ -172,6 +181,35 @@ function passengerLabel(p){
   return `${p.lastName || ""} ${p.firstName || ""}`.trim() || p.name || p.email || p.id;
 }
 
+function passengerLocationLabel(p){
+  const domicilio = (p?.address || "").trim() || "—";
+  const localidad = (p?.localidad || "").trim() || "—";
+  return `Domicilio: ${domicilio} · Localidad: ${localidad}`;
+}
+
+function passengerDivisionVipLabel(p){
+  const div = (p?.division || "").trim() || "—";
+  return `División: ${div}${p?.vip ? " · VIP" : ""}`;
+}
+
+function driverCapacity(d){
+  const cap = Number(d?.capacity ?? 4);
+  return Number.isFinite(cap) && cap > 0 ? cap : 4;
+}
+
+function passengerRequiresTransportForPhase(passengerId, phaseId){
+  const meta = STATE.event?.passengersMeta?.get(passengerId) || {};
+  const allPhases = meta?.allPhases;
+  if (allPhases === undefined || allPhases === null || allPhases === true) return true;
+
+  const byPhase = (meta?.transportByPhase && typeof meta.transportByPhase === "object") ? meta.transportByPhase : {};
+  if (!phaseId) return true;
+  if (Object.prototype.hasOwnProperty.call(byPhase, phaseId)) return !!byPhase[phaseId];
+
+  // Compat: si no está definido explícitamente, asumir que requiere transporte
+  return true;
+}
+
 function renderDrivers(){
   const host = $("driversList");
   if (!host) return;
@@ -195,16 +233,20 @@ function renderDrivers(){
   }
 
   const active = STATE.ui.activeDriverId;
+  const { byDriver } = getPhaseAssignments();
 
   host.innerHTML = drivers.map(d=>{
     const isActive = d.id === active;
+    const assigned = (byDriver.get(d.id) || new Set()).size;
+    const capacity = driverCapacity(d);
+    const free = Math.max(capacity - assigned, 0);
     return `
       <div class="row" style="justify-content:space-between; gap:10px; padding:12px; border:1px solid rgba(255,255,255,.08); border-radius:16px;">
         <div>
-          <div style="font-weight:800">${escapeHtml(driverLabel(d))}</div>
-          <div class="hint">${escapeHtml(d.email || "")}</div>
+          <div style="font-weight:800">${escapeHtml(driverLabel(d))} <span class="hint" style="font-weight:600; margin-left:6px;">${escapeHtml(`${assigned}/${capacity}`)}</span></div>
+          <div class="hint">${escapeHtml(d.email || "")} · Disponible: ${escapeHtml(String(free))}</div>
         </div>
-        <button class="btn ${isActive ? "primary" : ""}" data-driver="${escapeHtml(d.id)}" type="button">${isActive ? "Activo" : "Ver"}</button>
+        <button class="btn ${isActive ? "primary" : ""}" data-driver="${escapeHtml(d.id)}" type="button" style="flex-shrink:0; min-width:84px;">${isActive ? "Activo" : "Ver"}</button>
       </div>
     `;
   }).join("");
@@ -215,6 +257,7 @@ function getPhaseAssignments(){
   const byDriver = new Map();
   const assignedAll = new Set();
   const map = STATE.event?.assignments || new Map();
+  const passengersInEvent = STATE.event?.passengersIds || new Set();
 
   for (const [driverId, a] of map.entries()){
     let ids = [];
@@ -234,7 +277,7 @@ function getPhaseAssignments(){
       if (!phaseId || phaseId === "ida") ids = a.passengerIds;
     }
 
-    const set = new Set((ids || []).filter(Boolean));
+    const set = new Set((ids || []).filter(pid => Boolean(pid) && passengersInEvent.has(pid)));
     byDriver.set(driverId, set);
     for (const pid of set) assignedAll.add(pid);
   }
@@ -273,14 +316,29 @@ function renderPassengers(){
   const eventPassengerIds = Array.from(STATE.event?.passengersIds || []);
   const master = STATE.master?.passengers || [];
   const byId = new Map(master.map(p => [p.id, p]));
-  let list = eventPassengerIds.map(id => byId.get(id) || { id });
+  const metaById = STATE.event?.passengersMeta || new Map();
+  let list = eventPassengerIds.map(id => {
+    const base = byId.get(id) || { id };
+    const meta = metaById.get(id) || {};
+    return {
+      ...base,
+      address: (meta.address || base.address || ""),
+      localidad: (meta.localidad || base.localidad || "")
+    };
+  });
+
+  list = list.filter(p => passengerRequiresTransportForPhase(p.id, phaseId));
 
   const q = (($("passSearch") || $("passengerSearch"))?.value || "").trim().toLowerCase();
   if (q) list = list.filter(p => passengerLabel(p).toLowerCase().includes(q));
 
   const filter = (STATE.ui?.passFilter || "pendientes").toLowerCase();
   if (filter === "pendientes" || filter === "pending") list = list.filter(p => !assignedAll.has(p.id));
-  if (filter === "asignados" || filter === "assigned") list = list.filter(p => assignedAll.has(p.id));
+  if (filter === "asignados" || filter === "assigned") {
+    list = activeDriverId
+      ? list.filter(p => assignedToActive.has(p.id))
+      : list.filter(p => assignedAll.has(p.id));
+  }
   // todos/all no filtra
 
   if (!list.length){
@@ -298,6 +356,8 @@ function renderPassengers(){
       <div class="row" style="justify-content:space-between; gap:10px; padding:12px; border:1px solid rgba(255,255,255,.08); border-radius:16px;">
         <div>
           <div style="font-weight:800">${escapeHtml(passengerLabel(p))}</div>
+          <div class="hint">${escapeHtml(passengerLocationLabel(p))}</div>
+          <div class="hint">${escapeHtml(passengerDivisionVipLabel(p))}</div>
           <div class="hint">${escapeHtml(status)} — Fase: ${escapeHtml(phaseId)}</div>
         </div>
         <button class="btn ${isAssignedActive ? "danger" : ""}" data-passenger="${escapeHtml(pid)}" type="button">${actionLabel}</button>
@@ -305,6 +365,187 @@ function renderPassengers(){
     `;
   }).join("");
 }
+
+function phaseLabelById(phaseId){
+  const p = (STATE.event?.phases || []).find(x => x.id === phaseId);
+  return p?.name || phaseId || "Fase";
+}
+
+function toDisplayDate(v){
+  const raw = String(v || "").trim();
+  if (!raw) return "";
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return raw;
+  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth()+1).padStart(2, "0")}/${d.getFullYear()}`;
+}
+
+function excelPhoneText(value){
+  return String(value ?? "").trim();
+}
+
+function getExportRowsAllPhases(){
+  const phases = STATE.event?.phases || [];
+  const byDriverMaster = new Map((STATE.master?.drivers || []).map(d => [d.id, d]));
+  const byPassengerMaster = new Map((STATE.master?.passengers || []).map(p => [p.id, p]));
+  const metaByPassenger = STATE.event?.passengersMeta || new Map();
+
+  const rows = [];
+
+  for (const ph of phases){
+    const phaseId = ph.id;
+    if (!phaseId) continue;
+
+    const drivers = driversForPhase(phaseId) || [];
+    const { byDriver } = getPhaseAssignmentsFor(phaseId);
+
+    for (const d of drivers){
+      const ids = Array.from(byDriver.get(d.id) || [])
+        .filter(pid => passengerRequiresTransportForPhase(pid, phaseId));
+      const drv = byDriverMaster.get(d.id) || d;
+
+      if (!ids.length){
+        rows.push({
+          driverName: driverLabel(drv),
+          driverPhone: drv.phone || "",
+          phase: ph.name || phaseLabelById(phaseId),
+          passenger: "",
+          passengerPhone: "",
+          division: "",
+          vip: false,
+          originAddress: "",
+          originLocalidad: "",
+          time: ph.time || "",
+          destinationAddress: ph.destinationAddress || ph.address || STATE.event?.address || "",
+          destinationLocalidad: ph.localidad || STATE.event?.localidad || "",
+          notes: ""
+        });
+        continue;
+      }
+
+      ids.forEach(pid => {
+        const base = byPassengerMaster.get(pid) || { id: pid };
+        const meta = metaByPassenger.get(pid) || {};
+        rows.push({
+          driverName: driverLabel(drv),
+          driverPhone: drv.phone || "",
+          phase: ph.name || phaseLabelById(phaseId),
+          passenger: passengerLabel(base),
+          passengerPhone: base.phone || "",
+          division: base.division || "",
+          vip: !!base.vip,
+          originAddress: meta.address || base.address || "",
+          originLocalidad: meta.localidad || base.localidad || "",
+          time: ((meta.timeByPhase && meta.timeByPhase[phaseId]) || meta.time || ph.time || ""),
+          destinationAddress: ph.destinationAddress || ph.address || STATE.event?.address || "",
+          destinationLocalidad: ph.localidad || STATE.event?.localidad || "",
+          notes: ((meta.notesByPhase && meta.notesByPhase[phaseId]) || meta.notes || "")
+        });
+      });
+    }
+  }
+
+  return rows;
+}
+
+function getPhaseAssignmentsFor(phaseId){
+  const byDriver = new Map();
+  const assignedAll = new Set();
+  const map = STATE.event?.assignments || new Map();
+  const passengersInEvent = STATE.event?.passengersIds || new Set();
+
+  for (const [driverId, a] of map.entries()){
+    let ids = [];
+
+    const hasPhases = a?.phases && typeof a.phases === "object";
+    if (hasPhases && phaseId){
+      const arr = Array.isArray(a.phases[phaseId]) ? a.phases[phaseId] : [];
+      if (phaseId === "ida" && (!arr || arr.length === 0) && Array.isArray(a?.passengerIds) && a.passengerIds.length){
+        ids = a.passengerIds;
+      } else {
+        ids = arr;
+      }
+    } else if (Array.isArray(a?.passengerIds)) {
+      if (!phaseId || phaseId === "ida") ids = a.passengerIds;
+    }
+
+    const set = new Set((ids || []).filter(pid => Boolean(pid) && passengersInEvent.has(pid)));
+    byDriver.set(driverId, set);
+    for (const pid of set) assignedAll.add(pid);
+  }
+
+  return { byDriver, assignedAll };
+}
+
+function exportPhaseListToExcel(){
+  const eventId = STATE.event?.id;
+  if (!eventId) return toast("Seleccioná un evento.");
+
+  const eventData = (STATE.events || []).find(ev => ev.id === eventId) || {};
+  const eventName = eventData.name || eventData.title || STATE.event?.name || STATE.event?.title || eventId;
+  const eventDate = toDisplayDate(eventData.dateStart || eventData.startDate || "");
+
+  const rows = getExportRowsAllPhases();
+
+  const tableRows = rows.map((r, idx) => `
+    <tr>
+      <td>${idx + 1}</td>
+      <td>${escapeHtml(r.driverName)}</td>
+      <td class="txt">${escapeHtml(excelPhoneText(r.driverPhone))}</td>
+      <td>${escapeHtml(r.phase)}</td>
+      <td>${escapeHtml(r.passenger)}</td>
+      <td class="txt">${escapeHtml(excelPhoneText(r.passengerPhone))}</td>
+      <td>${escapeHtml(r.division || "")}</td>
+      <td>${r.vip ? "Sí" : ""}</td>
+      <td>${escapeHtml(r.originAddress)}</td>
+      <td>${escapeHtml(r.originLocalidad)}</td>
+      <td>${escapeHtml(r.time)}</td>
+      <td>${escapeHtml(r.destinationAddress)}</td>
+      <td>${escapeHtml(r.destinationLocalidad)}</td>
+      <td>${escapeHtml(r.notes)}</td>
+    </tr>`).join("");
+
+  const html = `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+  table{ border-collapse:collapse; width:100%; font-family:Arial, Helvetica, sans-serif; }
+  td, th{ border:1px solid #93c5fd; padding:6px 8px; font-size:14px; }
+  .meta td{ border:none; padding:4px 8px; font-size:18px; font-weight:700; }
+  .hdr th{ background:#0f5f84; color:#fff; font-size:30px; }
+  .body tr:nth-child(odd) td{ background:#dbeafe; }
+  .txt{ mso-number-format:"\@"; }
+</style>
+</head>
+<body>
+  <table class="meta">
+    <tr><td>Evento:</td><td>${escapeHtml(eventName)}</td></tr>
+    <tr><td>Fecha Evento</td><td>${escapeHtml(eventDate)}</td></tr>
+  </table>
+  <br/>
+  <table>
+    <thead class="hdr">
+      <tr>
+        <th>#</th><th>Chofer</th><th>Teléfono</th><th>Fase</th><th>Pasajero</th><th>Teléfono2</th><th>División</th><th>VIP</th><th>Domicilio Origen</th><th>Localidad</th><th>Horario</th><th>Domicilio Destino</th><th>Localidad2</th><th>Observaciones</th>
+      </tr>
+    </thead>
+    <tbody class="body">${tableRows}</tbody>
+  </table>
+</body>
+</html>`;
+
+  const blob = new Blob(["﻿", html], { type: "application/vnd.ms-excel;charset=utf-8;" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `listado_${eventId}_todas_las_fases.xls`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=> URL.revokeObjectURL(a.href), 1200);
+
+  toast("Listado exportado a Excel (todas las fases)");
+}
+
 
 async function toggleAssign(driverId, passengerId, phaseId){
   const eventId = STATE.event?.id;
