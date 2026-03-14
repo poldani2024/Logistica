@@ -11,6 +11,8 @@ import {
   onAuthStateChanged,
   GoogleAuthProvider,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signOut,
   setPersistence,
   browserLocalPersistence
@@ -340,6 +342,13 @@ export async function ensureAuth() {
       // seguimos igual: auth puede funcionar sin persistencia
     }
 
+    // Soporte mobile/redirect: al volver del flujo OAuth no debe romper init
+    try {
+      await getRedirectResult(auth);
+    } catch (e) {
+      console.warn("getRedirectResult warning:", e);
+    }
+
     return new Promise((resolve) => {
       const unsub = onAuthStateChanged(auth, (user) => {
         STATE.auth.user = user || null;
@@ -362,7 +371,20 @@ window.waitForAuth = ensureAuth;
 
 export async function loginGoogle() {
   const provider = new GoogleAuthProvider();
-  await signInWithPopup(auth, provider);
+  try {
+    await signInWithPopup(auth, provider);
+  } catch (e) {
+    const code = String(e?.code || "");
+    const msg = String(e?.message || "").toLowerCase();
+    const popupBlocked = code.includes("popup") || msg.includes("popup") || msg.includes("blocked");
+    const mobileLike = /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent || "");
+
+    if (popupBlocked || mobileLike) {
+      await signInWithRedirect(auth, provider);
+      return;
+    }
+    throw e;
+  }
 }
 
 export async function logout() {
@@ -472,9 +494,10 @@ export function renderEventSelect() {
   sel.innerHTML = opts.join("") || `<option value="">(sin eventos)</option>`;
 
   const current = getSelectedEventId();
-  const currentEv = sortedByRecent.find(ev => ev.id === current);
+  const currentEv = sortedByRecent.find(ev => ev.id === current) || null;
+  const currentIsActive = String(currentEv?.status || "").trim().toLowerCase() === "activo";
   const fallbackEv = activeEvents[0] || sortedByRecent[0] || null;
-  const selectedEv = currentEv || fallbackEv;
+  const selectedEv = (currentEv && currentIsActive) ? currentEv : fallbackEv;
 
   if (selectedEv?.id) {
     setSelectedEventId(selectedEv.id);
