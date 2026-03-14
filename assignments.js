@@ -452,7 +452,7 @@ function getExportRowsAllPhases(){
           time: ((meta.timeByPhase && meta.timeByPhase[phaseId]) || meta.time || ph.time || ""),
           destinationAddress: ph.destinationAddress || ph.address || STATE.event?.address || "",
           destinationLocalidad: ph.localidad || STATE.event?.localidad || "",
-          notes: meta.notes || ""
+          notes: ((meta.notesByPhase && meta.notesByPhase[phaseId]) || meta.notes || "")
         });
       });
     }
