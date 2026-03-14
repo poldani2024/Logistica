@@ -25,9 +25,14 @@ function normalizeStatus(s){
     .trim();
 }
 
+function eventPassengerSet(){
+  return STATE.event?.passengersIds || new Set();
+}
+
 function phaseAssignedPassengers(phaseId){
   const set = new Set();
   const assignments = STATE.event?.assignments || new Map();
+  const passengersInEvent = eventPassengerSet();
 
   assignments.forEach(a => {
     const phases = (a?.phases && typeof a.phases === "object") ? a.phases : {};
@@ -35,7 +40,9 @@ function phaseAssignedPassengers(phaseId){
     if ((!ids || !ids.length) && phaseId === "ida" && Array.isArray(a?.passengerIds)) {
       ids = a.passengerIds;
     }
-    ids.forEach(id => id && set.add(id));
+    ids.forEach(id => {
+      if (id && passengersInEvent.has(id)) set.add(id);
+    });
   });
 
   return set;
@@ -44,6 +51,7 @@ function phaseAssignedPassengers(phaseId){
 function phaseAssignedDrivers(phaseId){
   let count = 0;
   const assignments = STATE.event?.assignments || new Map();
+  const passengersInEvent = eventPassengerSet();
 
   assignments.forEach(a => {
     const phases = (a?.phases && typeof a.phases === "object") ? a.phases : {};
@@ -51,7 +59,8 @@ function phaseAssignedDrivers(phaseId){
     if ((!ids || !ids.length) && phaseId === "ida" && Array.isArray(a?.passengerIds)) {
       ids = a.passengerIds;
     }
-    if ((ids || []).length > 0) count++;
+    const validIds = (ids || []).filter(id => id && passengersInEvent.has(id));
+    if (validIds.length > 0) count++;
   });
 
   return count;
