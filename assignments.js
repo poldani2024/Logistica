@@ -80,7 +80,7 @@ function wireOnce(){
       return;
     }
 
-    const el = ev.target.closest("[data-passenger],[data-driver],[data-phase],button");
+    const el = ev.target.closest("[data-passenger],[data-driver],[data-driver-pdf],[data-phase],button");
     if (!el) return;
 
     // 2) ✅ Asignar / Quitar pasajero (PRIMERO para que no lo “robe” data-driver)
@@ -111,7 +111,21 @@ function wireOnce(){
       return;
     }
 
-    // 3) Selección de chofer
+    // 3) PDF por chofer (fase activa)
+    const pdfBtn = el.closest("[data-driver-pdf]");
+    if (pdfBtn){
+      const driverId = pdfBtn.dataset.driverPdf;
+      if (!driverId) return;
+      try{
+        generateDriverPdfReport(driverId);
+      }catch(err){
+        console.error(err);
+        toast(err?.message || String(err));
+      }
+      return;
+    }
+
+    // 4) Selección de chofer
     const drvBtn = el.closest("[data-driver]");
     if (drvBtn) {
       STATE.ui.activeDriverId = drvBtn.dataset.driver || null;
@@ -122,7 +136,7 @@ function wireOnce(){
       return;
     }
 
-    // 4) Cambio de fase
+    // 5) Cambio de fase
     const phaseBtn = el.closest("[data-phase]");
     if (phaseBtn) {
       STATE.ui.activePhase = phaseBtn.dataset.phase || null;
@@ -241,7 +255,6 @@ function renderDrivers(){
           <div style="font-weight:800">${escapeHtml(driverLabel(d))} <span class="hint" style="font-weight:600; margin-left:6px;">${escapeHtml(`${assigned}/${capacity}`)}</span></div>
           <div class="hint">${escapeHtml(d.email || "")} · Disponible: ${escapeHtml(String(free))}</div>
         </div>
-        <button class="btn ${isActive ? "primary" : ""}" data-driver="${escapeHtml(d.id)}" type="button">${isActive ? "Activo" : "Ver"}</button>
       </div>
     `;
   }).join("");
