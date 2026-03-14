@@ -527,19 +527,21 @@ function wireFormButtons({ isNew, passenger }){
   $("btnSavePassengerEventMeta")?.addEventListener("click", async () => {
     try{
       if (!isAdmin()) return toast("Solo Admin");
-      const panelState = await refreshPanel();
-      const eventId = panelState.eventId || String($("p_eventSelect")?.value || "").trim();
+
+      const eventId = String($("p_eventSelect")?.value || "").trim();
       if (!eventId) return toast("Seleccioná un evento.");
       if (!currentPassengerId) return toast("Guardá el pasajero antes de actualizar el evento.");
 
       const currentMeta = await loadPassengerEventMeta(eventId, currentPassengerId);
       if (!currentMeta) return toast("Primero agregá al pasajero al evento.");
 
-      const phases = panelState.phases || await getEventPhases(eventId);
+      // ⚠️ Importante: leer inputs ANTES de refrescar panel para no pisar cambios del usuario.
+      const eventInputs = getPassengerEventInputs();
+      const phases = await getEventPhases(eventId);
       const phaseCfg = getPassengerPhaseConfigInputs(phases);
 
       await setDoc(doc(db, "events", eventId, "eventPassengers", currentPassengerId), {
-        ...getPassengerEventInputs(),
+        ...eventInputs,
         ...phaseCfg,
         updatedAt: serverTimestamp()
       }, { merge: true });

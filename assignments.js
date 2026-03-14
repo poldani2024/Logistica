@@ -255,6 +255,7 @@ function renderDrivers(){
           <div style="font-weight:800">${escapeHtml(driverLabel(d))} <span class="hint" style="font-weight:600; margin-left:6px;">${escapeHtml(`${assigned}/${capacity}`)}</span></div>
           <div class="hint">${escapeHtml(d.email || "")} · Disponible: ${escapeHtml(String(free))}</div>
         </div>
+        <button class="btn ${isActive ? "primary" : ""}" data-driver="${escapeHtml(d.id)}" type="button" style="flex-shrink:0; min-width:84px;">${isActive ? "Activo" : "Ver"}</button>
       </div>
     `;
   }).join("");
