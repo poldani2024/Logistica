@@ -154,12 +154,39 @@ function buildPassengerIndex(){
   const idx = new Map();
   (STATE.master?.passengers || []).forEach(p => {
     if (!p || typeof p !== "object") return;
-    [p.id, p.uid, p.passengerId].forEach(k => {
+    [p.id, p.uid, p.passengerId, p.userId].forEach(k => {
       const key = String(k || "").trim();
       if (key) idx.set(key, p);
     });
   });
   return idx;
+}
+
+function resolvePassengerBase(passengerId, meta, passengerIndex){
+  const direct = passengerIndex.get(passengerId);
+  if (direct) return direct;
+
+  const keys = [
+    meta?.passengerId,
+    meta?.masterPassengerId,
+    meta?.linkedPassengerId,
+    meta?.userId,
+    meta?.uid,
+    meta?.id
+  ].map(v => String(v || "").trim()).filter(Boolean);
+
+  for (const key of keys){
+    const hit = passengerIndex.get(key);
+    if (hit) return hit;
+  }
+
+  const metaEmail = String(meta?.email || "").trim().toLowerCase();
+  if (metaEmail){
+    const byEmail = (STATE.master?.passengers || []).find(p => String(p?.email || "").trim().toLowerCase() === metaEmail);
+    if (byEmail) return byEmail;
+  }
+
+  return { id: passengerId };
 }
 
 function passengerDisplayName(base, meta, passengerId){
@@ -204,8 +231,8 @@ function buildEntries(){
     byDriver.forEach((passengerIds, driverId) => {
       const driver = drivers.get(driverId) || (driversForPhase(phaseId) || []).find(d => d.id === driverId) || { id: driverId };
       passengerIds.forEach(pid => {
-        const base = passengerIndex.get(pid) || { id: pid };
         const meta = metaByPassenger.get(pid) || {};
+        const base = resolvePassengerBase(pid, meta, passengerIndex);
         const timeRaw = (meta.timeByPhase && meta.timeByPhase[phaseId]) || meta.time || phase.time || "";
         const mins = parseTimeToMinutes(timeRaw);
         if (!phaseDate) return;
