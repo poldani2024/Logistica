@@ -350,15 +350,34 @@ export async function ensureAuth() {
     }
 
     return new Promise((resolve) => {
-      const unsub = onAuthStateChanged(auth, (user) => {
+      let resolved = false;
+      let nullTimer = null;
+
+      const resolveReady = (user) => {
+        if (resolved) return;
+        resolved = true;
+        if (nullTimer) clearTimeout(nullTimer);
+        resolve(user || null);
+      };
+
+      nullTimer = setTimeout(() => {
+        console.warn("onAuthStateChanged timeout: continuing with user=null");
+        resolveReady(null);
+      }, 4000);
+
+      onAuthStateChanged(auth, (user) => {
         STATE.auth.user = user || null;
         const email = (user?.email || "").trim().toLowerCase();
         STATE.auth.isAdmin = email === ADMIN_EMAIL.toLowerCase();
-        // driver se resuelve luego de cargar master drivers
-        resolve(user || null);
-        // No hacemos unsub: es útil mantenerlo para cambios de sesión.
-        // Si preferís 1-shot: descomentá la línea siguiente.
-        // unsub();
+
+        if (typeof refreshAuthUi === "function") refreshAuthUi();
+
+        if (user) {
+          resolveReady(user);
+          return;
+        }
+
+        resolveReady(null);
       });
     });
   })();
@@ -389,6 +408,10 @@ export async function loginGoogle() {
 
 export async function logout() {
   await signOut(auth);
+  STATE.auth.user = null;
+  STATE.auth.driver = null;
+  STATE.auth.isAdmin = false;
+  refreshAuthUi();
 }
 
 /* -------------------------
@@ -938,6 +961,21 @@ export async function updateTrackingAsDriver({
 }
 
 
+function refreshAuthUi(){
+  const st = $("authStatus");
+  const btnLogin = $("btnLogin");
+  const btnLogout = $("btnLogout");
+  const u = STATE.auth.user;
+
+  if (st) {
+    st.textContent = u
+      ? `Ingresado: ${u.email}${STATE.auth.isAdmin ? " (Admin)" : (STATE.auth.driver ? " (Chofer)" : "")}${STATE.auth.isActive === false ? " (Inactivo)" : ""}`
+      : "No ingresado";
+  }
+
+  if (btnLogin) btnLogin.style.display = u ? "none" : "";
+  if (btnLogout) btnLogout.style.display = u ? "" : "none";
+}
 
 /* -------------------------
  * Inicialización por página
@@ -954,12 +992,12 @@ export async function updateTrackingAsDriver({
  * page: "home" | "events" | "drivers" | "passengers" | "assignments" | "tracking"
  */
 export async function initCorePage({ page }) {
+  refreshAuthUi();
+
   // Botones auth (si existen)
  $("btnLogin")?.addEventListener("click", async () => {
-  console.log("CLICK login"); // <-- agregado
   try {
     await loginGoogle();
-    console.log("loginGoogle resolved");
   } catch (e) {
     console.error("loginGoogle error", e);
     toast(e.message || String(e));
@@ -974,13 +1012,7 @@ export async function initCorePage({ page }) {
   await ensureAuth();
 
   // UI status
-  const st = $("authStatus");
-  if (st) {
-    const u = STATE.auth.user;
-    st.textContent = u
-      ? `Ingresado: ${u.email}${STATE.auth.isAdmin ? " (Admin)" : ""}${STATE.auth.isActive === false ? " (Inactivo)" : ""}`
-      : "No ingresado";
-  }
+  refreshAuthUi();
 
   if (!STATE.auth.user) {
     toast("Necesitás ingresar con Google para usar la app");
@@ -1005,12 +1037,7 @@ export async function initCorePage({ page }) {
   resolveDriverRoleFromMaster();
 
   // Update status con rol chofer si aplica
-  if (st) {
-    const u = STATE.auth.user;
-    st.textContent = u
-      ? `Ingresado: ${u.email}${STATE.auth.isAdmin ? " (Admin)" : (STATE.auth.driver ? " (Chofer)" : "")}${STATE.auth.isActive === false ? " (Inactivo)" : ""}`
-      : "No ingresado";
-  }
+  refreshAuthUi();
 
   // 3) Eventos + selector
   await loadEvents();
