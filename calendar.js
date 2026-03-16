@@ -5,7 +5,8 @@ import {
   toast,
   escapeHtml,
   loadEventContext,
-  driversForPhase
+  driversForPhase,
+  loadMasterPassengers
 } from "./core.js";
 
 const PHASE_COLORS = ["#0f5f84", "#6d28d9", "#0f766e", "#b45309", "#be123c", "#334155"];
@@ -13,6 +14,8 @@ const MISSING_PASSENGER_NAME_LOGGED = new Set();
 
 (async function init(){
   await initCorePage({ page: "calendar" });
+
+  await loadMasterPassengers();
 
   if (!STATE.ui) STATE.ui = {};
   if (!STATE.ui.calendarPhaseFilter) STATE.ui.calendarPhaseFilter = "all";
