@@ -9,6 +9,7 @@ import {
 } from "./core.js";
 
 const PHASE_COLORS = ["#0f5f84", "#6d28d9", "#0f766e", "#b45309", "#be123c", "#334155"];
+const MISSING_PASSENGER_NAME_LOGGED = new Set();
 
 (async function init(){
   await initCorePage({ page: "calendar" });
@@ -189,7 +190,7 @@ function resolvePassengerBase(passengerId, meta, passengerIndex){
   return { id: passengerId };
 }
 
-function passengerDisplayName(base, meta, passengerId){
+function passengerDisplayName(base, meta, passengerId, phaseId){
   const fromMaster = passengerLabel(base || {});
   if (fromMaster && fromMaster !== passengerId) return fromMaster;
 
@@ -199,7 +200,18 @@ function passengerDisplayName(base, meta, passengerId){
   const fromMetaSplit = `${meta?.lastName || ""} ${meta?.firstName || ""}`.trim();
   if (fromMetaSplit) return fromMetaSplit;
 
-  return passengerId || "Pasajero";
+  const logKey = `${STATE.event?.id || ""}:${phaseId || ""}:${passengerId || ""}`;
+  if (!MISSING_PASSENGER_NAME_LOGGED.has(logKey)) {
+    MISSING_PASSENGER_NAME_LOGGED.add(logKey);
+    console.warn("[calendar] No se pudo resolver nombre de pasajero", {
+      eventId: STATE.event?.id || "",
+      phaseId: phaseId || "",
+      passengerId: passengerId || "",
+      meta
+    });
+  }
+
+  return "(Falta información)";
 }
 
 function driverLabel(d){
@@ -244,7 +256,7 @@ function buildEntries(){
           dateISO: phaseDate,
           mins: mins == null ? 480 : mins,
           hasExplicitTime: mins != null,
-          passenger: passengerDisplayName(base, meta, pid),
+          passenger: passengerDisplayName(base, meta, pid, phaseId),
           driver: driverLabel(driver),
           driverId,
           address: passengerAddress(meta, base),
