@@ -80,7 +80,7 @@ function wireOnce(){
       return;
     }
 
-    const el = ev.target.closest("[data-passenger],[data-driver],[data-phase],button");
+    const el = ev.target.closest("[data-passenger],[data-driver],[data-driver-pdf],[data-phase],button");
     if (!el) return;
 
     // 2) ✅ Asignar / Quitar pasajero (PRIMERO para que no lo “robe” data-driver)
