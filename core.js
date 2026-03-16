@@ -11,6 +11,8 @@ import {
   onAuthStateChanged,
   GoogleAuthProvider,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signOut,
   setPersistence,
   browserLocalPersistence
@@ -340,16 +342,42 @@ export async function ensureAuth() {
       // seguimos igual: auth puede funcionar sin persistencia
     }
 
+    // Soporte mobile/redirect: al volver del flujo OAuth no debe romper init
+    try {
+      await getRedirectResult(auth);
+    } catch (e) {
+      console.warn("getRedirectResult warning:", e);
+    }
+
     return new Promise((resolve) => {
-      const unsub = onAuthStateChanged(auth, (user) => {
+      let resolved = false;
+      let nullTimer = null;
+
+      const resolveReady = (user) => {
+        if (resolved) return;
+        resolved = true;
+        if (nullTimer) clearTimeout(nullTimer);
+        resolve(user || null);
+      };
+
+      nullTimer = setTimeout(() => {
+        console.warn("onAuthStateChanged timeout: continuing with user=null");
+        resolveReady(null);
+      }, 4000);
+
+      onAuthStateChanged(auth, (user) => {
         STATE.auth.user = user || null;
         const email = (user?.email || "").trim().toLowerCase();
         STATE.auth.isAdmin = email === ADMIN_EMAIL.toLowerCase();
-        // driver se resuelve luego de cargar master drivers
-        resolve(user || null);
-        // No hacemos unsub: es útil mantenerlo para cambios de sesión.
-        // Si preferís 1-shot: descomentá la línea siguiente.
-        // unsub();
+
+        if (typeof refreshAuthUi === "function") refreshAuthUi();
+
+        if (user) {
+          resolveReady(user);
+          return;
+        }
+
+        resolveReady(null);
       });
     });
   })();
@@ -362,11 +390,28 @@ window.waitForAuth = ensureAuth;
 
 export async function loginGoogle() {
   const provider = new GoogleAuthProvider();
-  await signInWithPopup(auth, provider);
+  try {
+    await signInWithPopup(auth, provider);
+  } catch (e) {
+    const code = String(e?.code || "");
+    const msg = String(e?.message || "").toLowerCase();
+    const popupBlocked = code.includes("popup") || msg.includes("popup") || msg.includes("blocked");
+    const mobileLike = /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent || "");
+
+    if (popupBlocked || mobileLike) {
+      await signInWithRedirect(auth, provider);
+      return;
+    }
+    throw e;
+  }
 }
 
 export async function logout() {
   await signOut(auth);
+  STATE.auth.user = null;
+  STATE.auth.driver = null;
+  STATE.auth.isAdmin = false;
+  refreshAuthUi();
 }
 
 /* -------------------------
@@ -472,9 +517,10 @@ export function renderEventSelect() {
   sel.innerHTML = opts.join("") || `<option value="">(sin eventos)</option>`;
 
   const current = getSelectedEventId();
-  const currentEv = sortedByRecent.find(ev => ev.id === current);
+  const currentEv = sortedByRecent.find(ev => ev.id === current) || null;
+  const currentIsActive = String(currentEv?.status || "").trim().toLowerCase() === "activo";
   const fallbackEv = activeEvents[0] || sortedByRecent[0] || null;
-  const selectedEv = currentEv || fallbackEv;
+  const selectedEv = (currentEv && currentIsActive) ? currentEv : fallbackEv;
 
   if (selectedEv?.id) {
     setSelectedEventId(selectedEv.id);
@@ -915,6 +961,21 @@ export async function updateTrackingAsDriver({
 }
 
 
+function refreshAuthUi(){
+  const st = $("authStatus");
+  const btnLogin = $("btnLogin");
+  const btnLogout = $("btnLogout");
+  const u = STATE.auth.user;
+
+  if (st) {
+    st.textContent = u
+      ? `Ingresado: ${u.email}${STATE.auth.isAdmin ? " (Admin)" : (STATE.auth.driver ? " (Chofer)" : "")}${STATE.auth.isActive === false ? " (Inactivo)" : ""}`
+      : "No ingresado";
+  }
+
+  if (btnLogin) btnLogin.style.display = u ? "none" : "";
+  if (btnLogout) btnLogout.style.display = u ? "" : "none";
+}
 
 /* -------------------------
  * Inicialización por página
@@ -931,12 +992,12 @@ export async function updateTrackingAsDriver({
  * page: "home" | "events" | "drivers" | "passengers" | "assignments" | "tracking"
  */
 export async function initCorePage({ page }) {
+  refreshAuthUi();
+
   // Botones auth (si existen)
  $("btnLogin")?.addEventListener("click", async () => {
-  console.log("CLICK login"); // <-- agregado
   try {
     await loginGoogle();
-    console.log("loginGoogle resolved");
   } catch (e) {
     console.error("loginGoogle error", e);
     toast(e.message || String(e));
@@ -951,13 +1012,7 @@ export async function initCorePage({ page }) {
   await ensureAuth();
 
   // UI status
-  const st = $("authStatus");
-  if (st) {
-    const u = STATE.auth.user;
-    st.textContent = u
-      ? `Ingresado: ${u.email}${STATE.auth.isAdmin ? " (Admin)" : ""}${STATE.auth.isActive === false ? " (Inactivo)" : ""}`
-      : "No ingresado";
-  }
+  refreshAuthUi();
 
   if (!STATE.auth.user) {
     toast("Necesitás ingresar con Google para usar la app");
@@ -982,12 +1037,7 @@ export async function initCorePage({ page }) {
   resolveDriverRoleFromMaster();
 
   // Update status con rol chofer si aplica
-  if (st) {
-    const u = STATE.auth.user;
-    st.textContent = u
-      ? `Ingresado: ${u.email}${STATE.auth.isAdmin ? " (Admin)" : (STATE.auth.driver ? " (Chofer)" : "")}${STATE.auth.isActive === false ? " (Inactivo)" : ""}`
-      : "No ingresado";
-  }
+  refreshAuthUi();
 
   // 3) Eventos + selector
   await loadEvents();
