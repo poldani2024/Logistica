@@ -29,6 +29,8 @@ async function addPassengerToEvent(eventId, passengerId, extra = {}){
     usePhaseTimes: false,
     timeByPhase: {},
     notesByPhase: {},
+    transportType: "Omnibus",
+    transportCompany: "",
     updatedAt: serverTimestamp(),
     ...extra
   }, { merge:true });
@@ -404,6 +406,15 @@ function formHtml(p, isNew){
         <div class="field"><label>Domicilio (evento)</label><input id="p_evAddress" placeholder="Calle y número"></div>
         <div class="field"><label>Localidad (evento)</label><input id="p_evLocalidad" placeholder="Rosario / Funes / ..."></div>
         <div class="field"><label>Horario (evento)</label><input id="p_evTime" placeholder="Ej: 18:30"></div>
+        <div class="field"><label>Tipo de transporte</label>
+          <select id="p_evTransportType">
+            <option value="Omnibus" selected>Omnibus</option>
+            <option value="Avion">Avión</option>
+            <option value="Tren">Tren</option>
+            <option value="Barco">Barco</option>
+          </select>
+        </div>
+        <div class="field"><label>Empresa de transporte</label><input id="p_evTransportCompany" placeholder="Nombre de empresa"></div>
       </div>
 
       <div class="field" style="margin-top:10px;">
@@ -443,7 +454,9 @@ function getPassengerEventInputs(){
   return {
     address: ($("p_evAddress")?.value || "").trim(),
     localidad: ($("p_evLocalidad")?.value || "").trim(),
-    time: ($("p_evTime")?.value || "").trim()
+    time: ($("p_evTime")?.value || "").trim(),
+    transportType: ($("p_evTransportType")?.value || "Omnibus").trim() || "Omnibus",
+    transportCompany: ($("p_evTransportCompany")?.value || "").trim()
   };
 }
 
@@ -501,13 +514,15 @@ async function refreshPassengerEventPanel(passenger){
   const inputAddress = $("p_evAddress");
   const inputLocalidad = $("p_evLocalidad");
   const inputTime = $("p_evTime");
+  const inputTransportType = $("p_evTransportType");
+  const inputTransportCompany = $("p_evTransportCompany");
   const allPhasesInput = $("p_allPhases");
   const phaseWrap = $("p_phaseTransportWrap");
   const usePhaseTimesInput = $("p_usePhaseTimes");
   const phaseTimesWrap = $("p_phaseTimesWrap");
   const phaseNotesHost = $("p_phaseNotes");
 
-  if (!sel || !hint || !btnAdd || !btnRemove || !btnSaveMeta || !inputAddress || !inputLocalidad || !inputTime || !allPhasesInput || !phaseWrap || !usePhaseTimesInput || !phaseTimesWrap || !phaseNotesHost) return;
+  if (!sel || !hint || !btnAdd || !btnRemove || !btnSaveMeta || !inputAddress || !inputLocalidad || !inputTime || !inputTransportType || !inputTransportCompany || !allPhasesInput || !phaseWrap || !usePhaseTimesInput || !phaseTimesWrap || !phaseNotesHost) return;
 
   const eventId = String(sel.value || "").trim();
   const phases = await getEventPhases(eventId);
@@ -523,6 +538,8 @@ async function refreshPassengerEventPanel(passenger){
     inputAddress.value = "";
     inputLocalidad.value = "";
     inputTime.value = "";
+    inputTransportType.value = "Omnibus";
+    inputTransportCompany.value = "";
     allPhasesInput.checked = true;
     phaseWrap.style.display = "none";
     usePhaseTimesInput.checked = false;
@@ -539,6 +556,8 @@ async function refreshPassengerEventPanel(passenger){
   inputAddress.value = linked ? String(meta.address || "") : String(passenger?.address || "");
   inputLocalidad.value = linked ? String(meta.localidad || "") : String(passenger?.localidad || "");
   inputTime.value = linked ? String(meta.time || "") : "";
+  inputTransportType.value = linked ? String(meta.transportType || "Omnibus") : "Omnibus";
+  inputTransportCompany.value = linked ? String(meta.transportCompany || "") : "";
 
   const allPhases = linked ? (meta.allPhases !== false) : true;
   allPhasesInput.checked = allPhases;

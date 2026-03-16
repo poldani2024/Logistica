@@ -212,6 +212,18 @@ function passengerDivisionVipLabel(p){
   return `División: ${div}${p?.vip ? " · VIP" : ""}`;
 }
 
+function passengerTimeForPhase(meta, phaseId){
+  const m = (meta && typeof meta === "object") ? meta : {};
+  return String(((m.timeByPhase && m.timeByPhase[phaseId]) || m.time || "")).trim();
+}
+
+function comparePassengersByTimeThenName(a, b){
+  const ta = parseClockToMinutes(a._phaseTime || "");
+  const tb = parseClockToMinutes(b._phaseTime || "");
+  if (ta !== tb) return ta - tb;
+  return passengerLabel(a).localeCompare(passengerLabel(b), "es", { sensitivity: "base" });
+}
+
 function driverCapacity(d){
   const cap = Number(d?.capacity ?? 4);
   return Number.isFinite(cap) && cap > 0 ? cap : 4;
@@ -345,6 +357,7 @@ function renderPassengers(){
     const meta = metaById.get(id) || {};
     return {
       ...base,
+      _phaseTime: passengerTimeForPhase(meta, phaseId),
       address: (meta.address || base.address || ""),
       localidad: (meta.localidad || base.localidad || "")
     };
@@ -364,6 +377,8 @@ function renderPassengers(){
   }
   // todos/all no filtra
 
+  list.sort(comparePassengersByTimeThenName);
+
   if (!list.length){
     host.innerHTML = '<div class="emptyBox">Sin resultados.</div>';
     return;
@@ -381,6 +396,7 @@ function renderPassengers(){
           <div style="font-weight:800">${escapeHtml(passengerLabel(p))}</div>
           <div class="hint">${escapeHtml(passengerLocationLabel(p))}</div>
           <div class="hint">${escapeHtml(passengerDivisionVipLabel(p))}</div>
+          <div class="hint">Horario: ${escapeHtml(p._phaseTime || "—")}</div>
           <div class="hint">${escapeHtml(status)} — Fase: ${escapeHtml(phaseId)}</div>
         </div>
         <button class="btn ${isAssignedActive ? "danger" : ""}" data-passenger="${escapeHtml(pid)}" type="button">${actionLabel}</button>
