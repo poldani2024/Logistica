@@ -433,6 +433,12 @@ function parseClockToMinutes(value){
   return hh * 60 + mm;
 }
 
+function transportTypeForPhase(meta, phaseId){
+  const m = (meta && typeof meta === "object") ? meta : {};
+  const byPhase = (m.transportTypeByPhase && typeof m.transportTypeByPhase === "object") ? m.transportTypeByPhase : {};
+  return String(byPhase[phaseId] || m.transportType || "Omnibus").trim() || "Omnibus";
+}
+
 function getExportRowsAllPhases(){
   const phases = STATE.event?.phases || [];
   const byDriverMaster = new Map((STATE.master?.drivers || []).map(d => [d.id, d]));
@@ -467,6 +473,7 @@ function getExportRowsAllPhases(){
           originAddress: meta.address || base.address || "",
           originLocalidad: meta.localidad || base.localidad || "",
           time: ((meta.timeByPhase && meta.timeByPhase[phaseId]) || meta.time || ph.time || ""),
+          transportType: transportTypeForPhase(meta, phaseId),
           destinationAddress: ph.destinationAddress || ph.address || STATE.event?.address || "",
           destinationLocalidad: ph.localidad || STATE.event?.localidad || "",
           notes: ((meta.notesByPhase && meta.notesByPhase[phaseId]) || meta.notes || "")
@@ -540,6 +547,7 @@ function exportPhaseListToExcel(){
       <td>${escapeHtml(r.originAddress)}</td>
       <td>${escapeHtml(r.originLocalidad)}</td>
       <td>${escapeHtml(r.time)}</td>
+      <td>${escapeHtml(r.transportType || "")}</td>
       <td>${escapeHtml(r.destinationAddress)}</td>
       <td>${escapeHtml(r.destinationLocalidad)}</td>
       <td>${escapeHtml(r.notes)}</td>
@@ -567,7 +575,7 @@ function exportPhaseListToExcel(){
   <table>
     <thead class="hdr">
       <tr>
-        <th>#</th><th>Chofer</th><th>Teléfono</th><th>Fase</th><th>Pasajero</th><th>Teléfono2</th><th>División</th><th>VIP</th><th>Domicilio Origen</th><th>Localidad</th><th>Horario</th><th>Domicilio Destino</th><th>Localidad2</th><th>Observaciones</th>
+        <th>#</th><th>Chofer</th><th>Teléfono</th><th>Fase</th><th>Pasajero</th><th>Teléfono2</th><th>División</th><th>VIP</th><th>Domicilio Origen</th><th>Localidad</th><th>Horario</th><th>Tipo Transporte</th><th>Domicilio Destino</th><th>Localidad2</th><th>Observaciones</th>
       </tr>
     </thead>
     <tbody class="body">${tableRows}</tbody>
@@ -606,6 +614,7 @@ function collectDriverReportRows(driverId, phaseId){
       address: meta.address || base.address || "",
       localidad: meta.localidad || base.localidad || "",
       time: ((meta.timeByPhase && meta.timeByPhase[phaseId]) || meta.time || ""),
+      transportType: transportTypeForPhase(meta, phaseId),
       notes: ((meta.notesByPhase && meta.notesByPhase[phaseId]) || meta.notes || "")
     };
   });
@@ -626,9 +635,10 @@ function buildDriverReportHtml(driver, phaseId, rows){
       <td>${escapeHtml(r.address)}</td>
       <td>${escapeHtml(r.localidad)}</td>
       <td>${escapeHtml(r.time)}</td>
+      <td>${escapeHtml(r.transportType || "")}</td>
       <td>${escapeHtml(r.notes)}</td>
     </tr>
-  `).join("") : '<tr><td colspan="8">Sin pasajeros asignados para este chofer en la fase activa.</td></tr>';
+  `).join("") : '<tr><td colspan="9">Sin pasajeros asignados para este chofer en la fase activa.</td></tr>';
 
   return `<!doctype html>
 <html>
@@ -649,7 +659,7 @@ function buildDriverReportHtml(driver, phaseId, rows){
   <div class="meta"><b>Evento:</b> ${escapeHtml(eventName)} · <b>Fase:</b> ${escapeHtml(phaseName)} · <b>Chofer:</b> ${escapeHtml(driverLabel(driver))}</div>
   <table>
     <thead>
-      <tr><th>#</th><th>Pasajero</th><th>Teléfono</th><th>División/VIP</th><th>Domicilio</th><th>Localidad</th><th>Horario</th><th>Observaciones</th></tr>
+      <tr><th>#</th><th>Pasajero</th><th>Teléfono</th><th>División/VIP</th><th>Domicilio</th><th>Localidad</th><th>Horario</th><th>Tipo transporte</th><th>Observaciones</th></tr>
     </thead>
     <tbody>${bodyRows}</tbody>
   </table>
