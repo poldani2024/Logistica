@@ -29,8 +29,8 @@ async function addPassengerToEvent(eventId, passengerId, extra = {}){
     usePhaseTimes: false,
     timeByPhase: {},
     notesByPhase: {},
-    transportType: "Omnibus",
-    transportCompany: "",
+    transportTypeByPhase: {},
+    transportCompanyByPhase: {},
     updatedAt: serverTimestamp(),
     ...extra
   }, { merge:true });
@@ -360,6 +360,42 @@ function renderPhaseNoteControls(phases, meta){
   }).join("");
 }
 
+function renderPhaseTransportDetailsControls(phases, meta){
+  const host = $("p_phaseTransportDetails");
+  if (!host) return;
+
+  if (!Array.isArray(phases) || !phases.length){
+    host.innerHTML = '<div class="muted">Este evento no tiene fases definidas.</div>';
+    return;
+  }
+
+  const typeByPhase = (meta?.transportTypeByPhase && typeof meta.transportTypeByPhase === "object") ? meta.transportTypeByPhase : {};
+  const companyByPhase = (meta?.transportCompanyByPhase && typeof meta.transportCompanyByPhase === "object") ? meta.transportCompanyByPhase : {};
+  const legacyType = String(meta?.transportType || "").trim();
+  const legacyCompany = String(meta?.transportCompany || "").trim();
+
+  host.innerHTML = phases.map(ph => {
+    const typeVal = String(typeByPhase[ph.id] ?? legacyType ?? "Omnibus").trim() || "Omnibus";
+    const companyVal = String(companyByPhase[ph.id] ?? legacyCompany ?? "");
+    return `
+      <div class="card" style="padding:10px; border:1px solid rgba(255,255,255,.08);">
+        <div style="font-weight:700; margin-bottom:8px;">${escapeHtml(ph.name || ph.id)}</div>
+        <div class="grid2">
+          <div class="field"><label>Tipo de transporte</label>
+            <select data-phase-transport-type="${escapeHtml(ph.id)}">
+              <option value="Omnibus" ${typeVal === "Omnibus" ? "selected" : ""}>Omnibus</option>
+              <option value="Avion" ${typeVal === "Avion" ? "selected" : ""}>Avión</option>
+              <option value="Tren" ${typeVal === "Tren" ? "selected" : ""}>Tren</option>
+              <option value="Barco" ${typeVal === "Barco" ? "selected" : ""}>Barco</option>
+            </select>
+          </div>
+          <div class="field"><label>Empresa de transporte</label><input data-phase-transport-company="${escapeHtml(ph.id)}" placeholder="Nombre de empresa" value="${escapeHtml(companyVal)}"></div>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
 function formHtml(p, isNew){
   return `
     <div class="grid2">
@@ -406,15 +442,6 @@ function formHtml(p, isNew){
         <div class="field"><label>Domicilio (evento)</label><input id="p_evAddress" placeholder="Calle y número"></div>
         <div class="field"><label>Localidad (evento)</label><input id="p_evLocalidad" placeholder="Rosario / Funes / ..."></div>
         <div class="field"><label>Horario (evento)</label><input id="p_evTime" placeholder="Ej: 18:30"></div>
-        <div class="field"><label>Tipo de transporte</label>
-          <select id="p_evTransportType">
-            <option value="Omnibus" selected>Omnibus</option>
-            <option value="Avion">Avión</option>
-            <option value="Tren">Tren</option>
-            <option value="Barco">Barco</option>
-          </select>
-        </div>
-        <div class="field"><label>Empresa de transporte</label><input id="p_evTransportCompany" placeholder="Nombre de empresa"></div>
       </div>
 
       <div class="field" style="margin-top:10px;">
@@ -428,6 +455,11 @@ function formHtml(p, isNew){
       <div class="field" style="margin-top:10px;">
         <div class="subtitle" style="margin-bottom:6px;">Observaciones por fase</div>
         <div id="p_phaseNotes" class="grid2"></div>
+      </div>
+
+      <div class="field" style="margin-top:10px;">
+        <div class="subtitle" style="margin-bottom:6px;">Transporte por fase</div>
+        <div id="p_phaseTransportDetails" class="grid2"></div>
       </div>
 
       <div class="field" style="margin-top:10px;">
@@ -454,9 +486,7 @@ function getPassengerEventInputs(){
   return {
     address: ($("p_evAddress")?.value || "").trim(),
     localidad: ($("p_evLocalidad")?.value || "").trim(),
-    time: ($("p_evTime")?.value || "").trim(),
-    transportType: ($("p_evTransportType")?.value || "Omnibus").trim() || "Omnibus",
-    transportCompany: ($("p_evTransportCompany")?.value || "").trim()
+    time: ($("p_evTime")?.value || "").trim()
   };
 }
 
@@ -483,6 +513,22 @@ function getPassengerPhaseNotesInputs(phases){
   });
 
   return { notesByPhase: map };
+}
+
+function getPassengerPhaseTransportDetailsInputs(phases){
+  const typeByPhase = {};
+  const companyByPhase = {};
+
+  (phases || []).forEach(ph => {
+    const typeInput = Array.from(document.querySelectorAll("[data-phase-transport-type]")).find(x => (x.dataset.phaseTransportType || "") === ph.id);
+    const companyInput = Array.from(document.querySelectorAll("[data-phase-transport-company]")).find(x => (x.dataset.phaseTransportCompany || "") === ph.id);
+    const typeVal = (typeInput?.value || "Omnibus").trim() || "Omnibus";
+    const companyVal = (companyInput?.value || "").trim();
+    typeByPhase[ph.id] = typeVal;
+    if (companyVal) companyByPhase[ph.id] = companyVal;
+  });
+
+  return { transportTypeByPhase: typeByPhase, transportCompanyByPhase: companyByPhase };
 }
 
 function getPassengerPhaseConfigInputs(phases){
@@ -514,15 +560,14 @@ async function refreshPassengerEventPanel(passenger){
   const inputAddress = $("p_evAddress");
   const inputLocalidad = $("p_evLocalidad");
   const inputTime = $("p_evTime");
-  const inputTransportType = $("p_evTransportType");
-  const inputTransportCompany = $("p_evTransportCompany");
+  const phaseTransportDetailsHost = $("p_phaseTransportDetails");
   const allPhasesInput = $("p_allPhases");
   const phaseWrap = $("p_phaseTransportWrap");
   const usePhaseTimesInput = $("p_usePhaseTimes");
   const phaseTimesWrap = $("p_phaseTimesWrap");
   const phaseNotesHost = $("p_phaseNotes");
 
-  if (!sel || !hint || !btnAdd || !btnRemove || !btnSaveMeta || !inputAddress || !inputLocalidad || !inputTime || !inputTransportType || !inputTransportCompany || !allPhasesInput || !phaseWrap || !usePhaseTimesInput || !phaseTimesWrap || !phaseNotesHost) return;
+  if (!sel || !hint || !btnAdd || !btnRemove || !btnSaveMeta || !inputAddress || !inputLocalidad || !inputTime || !phaseTransportDetailsHost || !allPhasesInput || !phaseWrap || !usePhaseTimesInput || !phaseTimesWrap || !phaseNotesHost) return;
 
   const eventId = String(sel.value || "").trim();
   const phases = await getEventPhases(eventId);
@@ -538,8 +583,6 @@ async function refreshPassengerEventPanel(passenger){
     inputAddress.value = "";
     inputLocalidad.value = "";
     inputTime.value = "";
-    inputTransportType.value = "Omnibus";
-    inputTransportCompany.value = "";
     allPhasesInput.checked = true;
     phaseWrap.style.display = "none";
     usePhaseTimesInput.checked = false;
@@ -547,6 +590,7 @@ async function refreshPassengerEventPanel(passenger){
     renderPhaseTransportControls(phases, { transportByPhase:{} });
     renderPhaseTimeControls(phases, { time:"", timeByPhase:{} });
     renderPhaseNoteControls(phases, { notes:"", notesByPhase:{} });
+    renderPhaseTransportDetailsControls(phases, { transportTypeByPhase:{}, transportCompanyByPhase:{} });
     return { linked:false, phases, eventId, meta:null };
   }
 
@@ -556,8 +600,6 @@ async function refreshPassengerEventPanel(passenger){
   inputAddress.value = linked ? String(meta.address || "") : String(passenger?.address || "");
   inputLocalidad.value = linked ? String(meta.localidad || "") : String(passenger?.localidad || "");
   inputTime.value = linked ? String(meta.time || "") : "";
-  inputTransportType.value = linked ? String(meta.transportType || "Omnibus") : "Omnibus";
-  inputTransportCompany.value = linked ? String(meta.transportCompany || "") : "";
 
   const allPhases = linked ? (meta.allPhases !== false) : true;
   allPhasesInput.checked = allPhases;
@@ -572,6 +614,7 @@ async function refreshPassengerEventPanel(passenger){
   phaseTimesWrap.style.display = usePhaseTimes ? "block" : "none";
 
   renderPhaseNoteControls(phases, meta || { notes:"", notesByPhase:{} });
+  renderPhaseTransportDetailsControls(phases, meta || { transportTypeByPhase:{}, transportCompanyByPhase:{} });
 
   const ev = (STATE.events || []).find(x => x.id === eventId);
   const evName = eventLabel(ev || { id: eventId });
@@ -652,12 +695,14 @@ function wireFormButtons({ isNew, passenger }){
       const phaseCfg = getPassengerPhaseConfigInputs(phases);
       const timeCfg = getPassengerPhaseTimeInputs(phases);
       const noteCfg = getPassengerPhaseNotesInputs(phases);
+      const transportDetailsCfg = getPassengerPhaseTransportDetailsInputs(phases);
 
       await addPassengerToEvent(eventId, currentPassengerId, {
         ...getPassengerEventInputs(),
         ...phaseCfg,
         ...timeCfg,
         ...noteCfg,
+        ...transportDetailsCfg,
         updatedAt: serverTimestamp()
       });
 
@@ -709,12 +754,14 @@ function wireFormButtons({ isNew, passenger }){
       const phaseCfg = getPassengerPhaseConfigInputs(phases);
       const timeCfg = getPassengerPhaseTimeInputs(phases);
       const noteCfg = getPassengerPhaseNotesInputs(phases);
+      const transportDetailsCfg = getPassengerPhaseTransportDetailsInputs(phases);
 
       await setDoc(doc(db, "events", eventId, "eventPassengers", currentPassengerId), {
         ...eventInputs,
         ...phaseCfg,
         ...timeCfg,
         ...noteCfg,
+        ...transportDetailsCfg,
         updatedAt: serverTimestamp()
       }, { merge: true });
 
