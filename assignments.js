@@ -444,6 +444,7 @@ function getExportRowsAllPhases(){
   const byDriverMaster = new Map((STATE.master?.drivers || []).map(d => [d.id, d]));
   const byPassengerMaster = new Map((STATE.master?.passengers || []).map(p => [p.id, p]));
   const metaByPassenger = STATE.event?.passengersMeta || new Map();
+  const eventPassengerIds = Array.from(STATE.event?.passengersIds || []);
 
   const rows = [];
 
@@ -451,35 +452,39 @@ function getExportRowsAllPhases(){
     const phaseId = ph.id;
     if (!phaseId) continue;
 
-    const drivers = driversForPhase(phaseId) || [];
     const { byDriver } = getPhaseAssignmentsFor(phaseId);
+    const driverByPassenger = new Map();
 
-    for (const d of drivers){
-      const ids = Array.from(byDriver.get(d.id) || [])
-        .filter(pid => passengerRequiresTransportForPhase(pid, phaseId));
-      const drv = byDriverMaster.get(d.id) || d;
-
-      ids.forEach(pid => {
-        const base = byPassengerMaster.get(pid) || { id: pid };
-        const meta = metaByPassenger.get(pid) || {};
-        rows.push({
-          driverName: driverLabel(drv),
-          driverPhone: drv.phone || "",
-          phase: ph.name || phaseLabelById(phaseId),
-          passenger: passengerLabel(base),
-          passengerPhone: base.phone || "",
-          division: base.division || "",
-          vip: !!base.vip,
-          originAddress: meta.address || base.address || "",
-          originLocalidad: meta.localidad || base.localidad || "",
-          time: ((meta.timeByPhase && meta.timeByPhase[phaseId]) || meta.time || ph.time || ""),
-          transportType: transportTypeForPhase(meta, phaseId),
-          destinationAddress: ph.destinationAddress || ph.address || STATE.event?.address || "",
-          destinationLocalidad: ph.localidad || STATE.event?.localidad || "",
-          notes: ((meta.notesByPhase && meta.notesByPhase[phaseId]) || meta.notes || "")
-        });
-      });
+    for (const [driverId, passengerSet] of byDriver.entries()){
+      for (const pid of passengerSet){
+        if (!passengerRequiresTransportForPhase(pid, phaseId)) continue;
+        if (!driverByPassenger.has(pid)) driverByPassenger.set(pid, driverId);
+      }
     }
+
+    const passengersInPhase = eventPassengerIds.filter(pid => passengerRequiresTransportForPhase(pid, phaseId));
+    passengersInPhase.forEach(pid => {
+      const base = byPassengerMaster.get(pid) || { id: pid };
+      const meta = metaByPassenger.get(pid) || {};
+      const driverId = driverByPassenger.get(pid) || "";
+      const drv = driverId ? (byDriverMaster.get(driverId) || { id: driverId, name: driverId }) : null;
+      rows.push({
+        driverName: drv ? driverLabel(drv) : "Sin chofer asignado",
+        driverPhone: drv?.phone || "",
+        phase: ph.name || phaseLabelById(phaseId),
+        passenger: passengerLabel(base),
+        passengerPhone: base.phone || "",
+        division: base.division || "",
+        vip: !!base.vip,
+        originAddress: meta.address || base.address || "",
+        originLocalidad: meta.localidad || base.localidad || "",
+        time: ((meta.timeByPhase && meta.timeByPhase[phaseId]) || meta.time || ph.time || ""),
+        transportType: transportTypeForPhase(meta, phaseId),
+        destinationAddress: ph.destinationAddress || ph.address || STATE.event?.address || "",
+        destinationLocalidad: ph.localidad || STATE.event?.localidad || "",
+        notes: ((meta.notesByPhase && meta.notesByPhase[phaseId]) || meta.notes || "")
+      });
+    });
   }
 
   rows.sort((a, b) => {
