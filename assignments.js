@@ -439,6 +439,12 @@ function transportTypeForPhase(meta, phaseId){
   return String(byPhase[phaseId] || m.transportType || "Omnibus").trim() || "Omnibus";
 }
 
+function transportCompanyForPhase(meta, phaseId){
+  const m = (meta && typeof meta === "object") ? meta : {};
+  const byPhase = (m.transportCompanyByPhase && typeof m.transportCompanyByPhase === "object") ? m.transportCompanyByPhase : {};
+  return String(byPhase[phaseId] || m.transportCompany || "").trim();
+}
+
 function getExportRowsAllPhases(){
   const phases = STATE.event?.phases || [];
   const byDriverMaster = new Map((STATE.master?.drivers || []).map(d => [d.id, d]));
@@ -480,6 +486,7 @@ function getExportRowsAllPhases(){
         originLocalidad: meta.localidad || base.localidad || "",
         time: ((meta.timeByPhase && meta.timeByPhase[phaseId]) || meta.time || ph.time || ""),
         transportType: transportTypeForPhase(meta, phaseId),
+        transportCompany: transportCompanyForPhase(meta, phaseId),
         destinationAddress: ph.destinationAddress || ph.address || STATE.event?.address || "",
         destinationLocalidad: ph.localidad || STATE.event?.localidad || "",
         notes: ((meta.notesByPhase && meta.notesByPhase[phaseId]) || meta.notes || "")
@@ -488,13 +495,16 @@ function getExportRowsAllPhases(){
   }
 
   rows.sort((a, b) => {
-    const byTime = parseClockToMinutes(a.time) - parseClockToMinutes(b.time);
-    if (byTime !== 0) return byTime;
+    const byPhase = String(a.phase || "").localeCompare(String(b.phase || ""), "es", { sensitivity: "base" });
+    if (byPhase !== 0) return byPhase;
 
     const byDriver = String(a.driverName || "").localeCompare(String(b.driverName || ""), "es", { sensitivity: "base" });
     if (byDriver !== 0) return byDriver;
 
-    return String(a.phase || "").localeCompare(String(b.phase || ""), "es", { sensitivity: "base" });
+    const byTime = parseClockToMinutes(a.time) - parseClockToMinutes(b.time);
+    if (byTime !== 0) return byTime;
+
+    return String(a.passenger || "").localeCompare(String(b.passenger || ""), "es", { sensitivity: "base" });
   });
 
   return rows;
@@ -542,9 +552,9 @@ function exportPhaseListToExcel(){
   const tableRows = rows.map((r, idx) => `
     <tr>
       <td>${idx + 1}</td>
+      <td>${escapeHtml(r.phase)}</td>
       <td>${escapeHtml(r.driverName)}</td>
       <td class="txt">${escapeHtml(excelPhoneText(r.driverPhone))}</td>
-      <td>${escapeHtml(r.phase)}</td>
       <td>${escapeHtml(r.passenger)}</td>
       <td class="txt">${escapeHtml(excelPhoneText(r.passengerPhone))}</td>
       <td>${escapeHtml(r.division || "")}</td>
@@ -553,6 +563,7 @@ function exportPhaseListToExcel(){
       <td>${escapeHtml(r.originLocalidad)}</td>
       <td>${escapeHtml(r.time)}</td>
       <td>${escapeHtml(r.transportType || "")}</td>
+      <td>${escapeHtml(r.transportCompany || "")}</td>
       <td>${escapeHtml(r.destinationAddress)}</td>
       <td>${escapeHtml(r.destinationLocalidad)}</td>
       <td>${escapeHtml(r.notes)}</td>
@@ -580,7 +591,7 @@ function exportPhaseListToExcel(){
   <table>
     <thead class="hdr">
       <tr>
-        <th>#</th><th>Chofer</th><th>Teléfono</th><th>Fase</th><th>Pasajero</th><th>Teléfono2</th><th>División</th><th>VIP</th><th>Domicilio Origen</th><th>Localidad</th><th>Horario</th><th>Tipo Transporte</th><th>Domicilio Destino</th><th>Localidad2</th><th>Observaciones</th>
+        <th>#</th><th>Fase</th><th>Chofer</th><th>Teléfono</th><th>Pasajero</th><th>Teléfono2</th><th>División</th><th>VIP</th><th>Domicilio Origen</th><th>Localidad</th><th>Horario</th><th>Tipo Transporte</th><th>Empresa de transporte</th><th>Domicilio Destino</th><th>Localidad2</th><th>Observaciones</th>
       </tr>
     </thead>
     <tbody class="body">${tableRows}</tbody>
