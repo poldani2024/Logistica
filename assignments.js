@@ -495,13 +495,16 @@ function getExportRowsAllPhases(){
   }
 
   rows.sort((a, b) => {
-    const byTime = parseClockToMinutes(a.time) - parseClockToMinutes(b.time);
-    if (byTime !== 0) return byTime;
+    const byPhase = String(a.phase || "").localeCompare(String(b.phase || ""), "es", { sensitivity: "base" });
+    if (byPhase !== 0) return byPhase;
 
     const byDriver = String(a.driverName || "").localeCompare(String(b.driverName || ""), "es", { sensitivity: "base" });
     if (byDriver !== 0) return byDriver;
 
-    return String(a.phase || "").localeCompare(String(b.phase || ""), "es", { sensitivity: "base" });
+    const byTime = parseClockToMinutes(a.time) - parseClockToMinutes(b.time);
+    if (byTime !== 0) return byTime;
+
+    return String(a.passenger || "").localeCompare(String(b.passenger || ""), "es", { sensitivity: "base" });
   });
 
   return rows;
