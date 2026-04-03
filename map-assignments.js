@@ -114,7 +114,8 @@ function getPassengersInPhase(){
       return {
         ...base,
         id: pid,
-        _time: passengerTimeForPhase(meta, phaseId)
+        _time: passengerTimeForPhase(meta, phaseId),
+        _destination: passengerDestinationForPhase(meta, phaseId)
       };
     })
     .sort((a, b) => passengerLabel(a).localeCompare(passengerLabel(b), "es", { sensitivity: "base" }));
@@ -186,7 +187,12 @@ function renderVehicles(){
     const passengers = passengerIds
       .map(pid => passengerById(pid))
       .filter(Boolean)
-      .map(p => `<div class="dragItem passenger" draggable="true" data-drag-type="passenger" data-passenger-id="${escapeHtml(p.id)}">${escapeHtml(passengerLabel(p))}</div>`)
+      .map(p => {
+        const meta = STATE.event?.passengersMeta?.get(p.id) || {};
+        const time = passengerTimeForPhase(meta, getActivePhaseId());
+        const destination = passengerDestinationForPhase(meta, getActivePhaseId());
+        return `<div class="dragItem passenger" draggable="true" data-drag-type="passenger" data-passenger-id="${escapeHtml(p.id)}">${escapeHtml(passengerLabel(p))}<small>Horario: ${escapeHtml(time || "—")}</small><small>Destino: ${escapeHtml(destination || "—")}</small></div>`;
+      })
       .join("");
 
     return `
@@ -243,7 +249,7 @@ function renderPassengerPool(){
   if (count) count.textContent = `${all.length}`;
 
   host.innerHTML = pending.length
-    ? pending.map(p => `<div class="dragItem passenger" draggable="true" data-drag-type="passenger" data-passenger-id="${escapeHtml(p.id)}">${escapeHtml(passengerLabel(p))}<small>Horario: ${escapeHtml(p._time || "—")}</small></div>`).join("")
+    ? pending.map(p => `<div class="dragItem passenger" draggable="true" data-drag-type="passenger" data-passenger-id="${escapeHtml(p.id)}">${escapeHtml(passengerLabel(p))}<small>Horario: ${escapeHtml(p._time || "—")}</small><small>Destino: ${escapeHtml(p._destination || "—")}</small></div>`).join("")
     : '<div class="emptyHint">No hay pasajeros pendientes para esta fase.</div>';
 }
 
@@ -375,6 +381,11 @@ async function handlePassengerDrop(payload, zone){
   const targetSet = new Set(Array.from(byDriver.get(driverId) || []));
   const sourceDriver = currentDriverOfPassenger(passengerId);
 
+  if (shouldConfirmScheduleDifference(passengerId, targetSet)) {
+    const ok = window.confirm("Este móvil ya tiene pasajeros con más de 30 minutos de diferencia horaria. ¿Querés continuar igualmente?");
+    if (!ok) return;
+  }
+
   if (!targetSet.has(passengerId) && targetSet.size >= capacity){
     toast(`El móvil llegó al máximo (${capacity}). Quitá un pasajero para continuar.`);
     return;
@@ -470,6 +481,45 @@ function driverCapacity(d){
 function passengerTimeForPhase(meta, phaseId){
   const m = (meta && typeof meta === "object") ? meta : {};
   return String(((m.timeByPhase && m.timeByPhase[phaseId]) || m.time || "")).trim();
+}
+
+function passengerDestinationForPhase(meta, phaseId){
+  const m = (meta && typeof meta === "object") ? meta : {};
+  const byPhase = (m.destinationAddressByPhase && typeof m.destinationAddressByPhase === "object") ? m.destinationAddressByPhase : {};
+  const phaseDestination = phaseDestinationForPhase(phaseId);
+  return String(byPhase[phaseId] || m.destinationAddress || phaseDestination || "").trim();
+}
+
+function phaseDestinationForPhase(phaseId){
+  const phase = (STATE.event?.phases || []).find(p => p.id === phaseId) || {};
+  return String(phase.destinationAddress || phase.address || "").trim();
+}
+
+function parseClockToMinutes(value){
+  const raw = String(value || "").trim();
+  const m = raw.match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return Number.NaN;
+  const hh = Number(m[1]);
+  const mm = Number(m[2]);
+  if (!Number.isFinite(hh) || !Number.isFinite(mm)) return Number.NaN;
+  if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return Number.NaN;
+  return (hh * 60) + mm;
+}
+
+function shouldConfirmScheduleDifference(passengerId, targetSet){
+  const phaseId = getActivePhaseId();
+  const incomingMeta = STATE.event?.passengersMeta?.get(passengerId) || {};
+  const incomingMin = parseClockToMinutes(passengerTimeForPhase(incomingMeta, phaseId));
+  if (!Number.isFinite(incomingMin)) return false;
+
+  for (const pid of targetSet) {
+    if (pid === passengerId) continue;
+    const meta = STATE.event?.passengersMeta?.get(pid) || {};
+    const targetMin = parseClockToMinutes(passengerTimeForPhase(meta, phaseId));
+    if (!Number.isFinite(targetMin)) continue;
+    if (Math.abs(targetMin - incomingMin) > 30) return true;
+  }
+  return false;
 }
 
 function passengerRequiresTransportForPhase(passengerId, phaseId){
