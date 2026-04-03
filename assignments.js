@@ -433,6 +433,28 @@ function parseClockToMinutes(value){
   return hh * 60 + mm;
 }
 
+function parseDateToUtcMs(value){
+  const raw = String(value || "").trim();
+  if (!raw) return Number.MAX_SAFE_INTEGER;
+
+  const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (iso) return Date.UTC(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
+
+  const dmy = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (dmy) return Date.UTC(Number(dmy[3]), Number(dmy[2]) - 1, Number(dmy[1]));
+
+  const t = Date.parse(raw);
+  return Number.isFinite(t) ? t : Number.MAX_SAFE_INTEGER;
+}
+
+function phaseDateTimeSortValue(phase){
+  const base = parseDateToUtcMs(phase?.date || "");
+  const mins = parseClockToMinutes(phase?.time || "");
+  const safeMins = mins === Number.MAX_SAFE_INTEGER ? 0 : mins;
+  if (base === Number.MAX_SAFE_INTEGER) return Number.MAX_SAFE_INTEGER;
+  return base + (safeMins * 60000);
+}
+
 function transportTypeForPhase(meta, phaseId){
   const m = (meta && typeof meta === "object") ? meta : {};
   const byPhase = (m.transportTypeByPhase && typeof m.transportTypeByPhase === "object") ? m.transportTypeByPhase : {};
@@ -478,6 +500,7 @@ function getExportRowsAllPhases(){
         driverName: drv ? driverLabel(drv) : "Sin chofer asignado",
         driverPhone: drv?.phone || "",
         phase: ph.name || phaseLabelById(phaseId),
+        phaseSortTs: phaseDateTimeSortValue(ph),
         passenger: passengerLabel(base),
         passengerPhone: base.phone || "",
         division: base.division || "",
@@ -495,8 +518,8 @@ function getExportRowsAllPhases(){
   }
 
   rows.sort((a, b) => {
-    const byPhase = String(a.phase || "").localeCompare(String(b.phase || ""), "es", { sensitivity: "base" });
-    if (byPhase !== 0) return byPhase;
+    const byPhaseDateTime = Number(a.phaseSortTs ?? Number.MAX_SAFE_INTEGER) - Number(b.phaseSortTs ?? Number.MAX_SAFE_INTEGER);
+    if (byPhaseDateTime !== 0) return byPhaseDateTime;
 
     const byDriver = String(a.driverName || "").localeCompare(String(b.driverName || ""), "es", { sensitivity: "base" });
     if (byDriver !== 0) return byDriver;
