@@ -654,6 +654,7 @@ function collectDriverReportRows(driverId, phaseId){
       localidad: meta.localidad || base.localidad || "",
       time: ((meta.timeByPhase && meta.timeByPhase[phaseId]) || meta.time || ""),
       transportType: transportTypeForPhase(meta, phaseId),
+      transportCompany: transportCompanyForPhase(meta, phaseId),
       notes: ((meta.notesByPhase && meta.notesByPhase[phaseId]) || meta.notes || "")
     };
   });
@@ -675,9 +676,10 @@ function buildDriverReportHtml(driver, phaseId, rows){
       <td>${escapeHtml(r.localidad)}</td>
       <td>${escapeHtml(r.time)}</td>
       <td>${escapeHtml(r.transportType || "")}</td>
+      <td>${escapeHtml(r.transportCompany || "")}</td>
       <td>${escapeHtml(r.notes)}</td>
     </tr>
-  `).join("") : '<tr><td colspan="9">Sin pasajeros asignados para este chofer en la fase activa.</td></tr>';
+  `).join("") : '<tr><td colspan="10">Sin pasajeros asignados para este chofer en la fase activa.</td></tr>';
 
   return `<!doctype html>
 <html>
@@ -698,7 +700,7 @@ function buildDriverReportHtml(driver, phaseId, rows){
   <div class="meta"><b>Evento:</b> ${escapeHtml(eventName)} · <b>Fase:</b> ${escapeHtml(phaseName)} · <b>Chofer:</b> ${escapeHtml(driverLabel(driver))}</div>
   <table>
     <thead>
-      <tr><th>#</th><th>Pasajero</th><th>Teléfono</th><th>División/VIP</th><th>Domicilio</th><th>Localidad</th><th>Horario</th><th>Tipo transporte</th><th>Observaciones</th></tr>
+      <tr><th>#</th><th>Pasajero</th><th>Teléfono</th><th>División/VIP</th><th>Domicilio</th><th>Localidad</th><th>Horario</th><th>Tipo transporte</th><th>Empresa de transporte</th><th>Observaciones</th></tr>
     </thead>
     <tbody>${bodyRows}</tbody>
   </table>
