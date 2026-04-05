@@ -518,14 +518,14 @@ function getExportRowsAllPhases(){
   }
 
   rows.sort((a, b) => {
-    const byPhaseDateTime = Number(a.phaseSortTs ?? Number.MAX_SAFE_INTEGER) - Number(b.phaseSortTs ?? Number.MAX_SAFE_INTEGER);
-    if (byPhaseDateTime !== 0) return byPhaseDateTime;
+    let cmp = parseClockToMinutes(a.time) - parseClockToMinutes(b.time);
+    if (cmp !== 0) return cmp;
 
-    const byPhaseDateTime = Number(a.phaseSortTs ?? Number.MAX_SAFE_INTEGER) - Number(b.phaseSortTs ?? Number.MAX_SAFE_INTEGER);
-    if (byPhaseDateTime !== 0) return byPhaseDateTime;
+    cmp = Number(a.phaseSortTs ?? Number.MAX_SAFE_INTEGER) - Number(b.phaseSortTs ?? Number.MAX_SAFE_INTEGER);
+    if (cmp !== 0) return cmp;
 
-    const byDriver = String(a.driverName || "").localeCompare(String(b.driverName || ""), "es", { sensitivity: "base" });
-    if (byDriver !== 0) return byDriver;
+    cmp = String(a.driverName || "").localeCompare(String(b.driverName || ""), "es", { sensitivity: "base" });
+    if (cmp !== 0) return cmp;
 
     return String(a.passenger || "").localeCompare(String(b.passenger || ""), "es", { sensitivity: "base" });
   });
