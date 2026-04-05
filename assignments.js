@@ -521,11 +521,11 @@ function getExportRowsAllPhases(){
     const byPhaseDateTime = Number(a.phaseSortTs ?? Number.MAX_SAFE_INTEGER) - Number(b.phaseSortTs ?? Number.MAX_SAFE_INTEGER);
     if (byPhaseDateTime !== 0) return byPhaseDateTime;
 
+    const byPhaseDateTime = Number(a.phaseSortTs ?? Number.MAX_SAFE_INTEGER) - Number(b.phaseSortTs ?? Number.MAX_SAFE_INTEGER);
+    if (byPhaseDateTime !== 0) return byPhaseDateTime;
+
     const byDriver = String(a.driverName || "").localeCompare(String(b.driverName || ""), "es", { sensitivity: "base" });
     if (byDriver !== 0) return byDriver;
-
-    const byTime = parseClockToMinutes(a.time) - parseClockToMinutes(b.time);
-    if (byTime !== 0) return byTime;
 
     return String(a.passenger || "").localeCompare(String(b.passenger || ""), "es", { sensitivity: "base" });
   });
