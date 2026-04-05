@@ -433,10 +433,38 @@ function parseClockToMinutes(value){
   return hh * 60 + mm;
 }
 
+function parseDateToUtcMs(value){
+  const raw = String(value || "").trim();
+  if (!raw) return Number.MAX_SAFE_INTEGER;
+
+  const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (iso) return Date.UTC(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
+
+  const dmy = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (dmy) return Date.UTC(Number(dmy[3]), Number(dmy[2]) - 1, Number(dmy[1]));
+
+  const t = Date.parse(raw);
+  return Number.isFinite(t) ? t : Number.MAX_SAFE_INTEGER;
+}
+
+function phaseDateTimeSortValue(phase){
+  const base = parseDateToUtcMs(phase?.date || "");
+  const mins = parseClockToMinutes(phase?.time || "");
+  const safeMins = mins === Number.MAX_SAFE_INTEGER ? 0 : mins;
+  if (base === Number.MAX_SAFE_INTEGER) return Number.MAX_SAFE_INTEGER;
+  return base + (safeMins * 60000);
+}
+
 function transportTypeForPhase(meta, phaseId){
   const m = (meta && typeof meta === "object") ? meta : {};
   const byPhase = (m.transportTypeByPhase && typeof m.transportTypeByPhase === "object") ? m.transportTypeByPhase : {};
   return String(byPhase[phaseId] || m.transportType || "Omnibus").trim() || "Omnibus";
+}
+
+function transportCompanyForPhase(meta, phaseId){
+  const m = (meta && typeof meta === "object") ? meta : {};
+  const byPhase = (m.transportCompanyByPhase && typeof m.transportCompanyByPhase === "object") ? m.transportCompanyByPhase : {};
+  return String(byPhase[phaseId] || m.transportCompany || "").trim();
 }
 
 function getExportRowsAllPhases(){
@@ -472,6 +500,7 @@ function getExportRowsAllPhases(){
         driverName: drv ? driverLabel(drv) : "Sin chofer asignado",
         driverPhone: drv?.phone || "",
         phase: ph.name || phaseLabelById(phaseId),
+        phaseSortTs: phaseDateTimeSortValue(ph),
         passenger: passengerLabel(base),
         passengerPhone: base.phone || "",
         division: base.division || "",
@@ -480,6 +509,7 @@ function getExportRowsAllPhases(){
         originLocalidad: meta.localidad || base.localidad || "",
         time: ((meta.timeByPhase && meta.timeByPhase[phaseId]) || meta.time || ph.time || ""),
         transportType: transportTypeForPhase(meta, phaseId),
+        transportCompany: transportCompanyForPhase(meta, phaseId),
         destinationAddress: ph.destinationAddress || ph.address || STATE.event?.address || "",
         destinationLocalidad: ph.localidad || STATE.event?.localidad || "",
         notes: ((meta.notesByPhase && meta.notesByPhase[phaseId]) || meta.notes || "")
@@ -488,13 +518,16 @@ function getExportRowsAllPhases(){
   }
 
   rows.sort((a, b) => {
-    const byTime = parseClockToMinutes(a.time) - parseClockToMinutes(b.time);
-    if (byTime !== 0) return byTime;
+    let cmp = parseClockToMinutes(a.time) - parseClockToMinutes(b.time);
+    if (cmp !== 0) return cmp;
 
-    const byDriver = String(a.driverName || "").localeCompare(String(b.driverName || ""), "es", { sensitivity: "base" });
-    if (byDriver !== 0) return byDriver;
+    cmp = Number(a.phaseSortTs ?? Number.MAX_SAFE_INTEGER) - Number(b.phaseSortTs ?? Number.MAX_SAFE_INTEGER);
+    if (cmp !== 0) return cmp;
 
-    return String(a.phase || "").localeCompare(String(b.phase || ""), "es", { sensitivity: "base" });
+    cmp = String(a.driverName || "").localeCompare(String(b.driverName || ""), "es", { sensitivity: "base" });
+    if (cmp !== 0) return cmp;
+
+    return String(a.passenger || "").localeCompare(String(b.passenger || ""), "es", { sensitivity: "base" });
   });
 
   return rows;
@@ -529,6 +562,71 @@ function getPhaseAssignmentsFor(phaseId){
   return { byDriver, assignedAll };
 }
 
+function isMobileDevice(){
+  const ua = String(navigator.userAgent || "").toLowerCase();
+  return /android|iphone|ipad|ipod|mobile/.test(ua);
+}
+
+function csvCell(value){
+  const text = String(value ?? "");
+  const escaped = text.replaceAll("\"", "\"\"");
+  return `"${escaped}"`;
+}
+
+function buildCsvFromRows(rows){
+  const headers = [
+    "#",
+    "Fase",
+    "Chofer",
+    "Teléfono",
+    "Pasajero",
+    "Teléfono2",
+    "División",
+    "VIP",
+    "Domicilio Origen",
+    "Localidad",
+    "Horario",
+    "Tipo Transporte",
+    "Empresa de transporte",
+    "Domicilio Destino",
+    "Localidad2",
+    "Observaciones"
+  ];
+
+  const data = rows.map((r, idx) => [
+    idx + 1,
+    r.phase || "",
+    r.driverName || "",
+    excelPhoneText(r.driverPhone || ""),
+    r.passenger || "",
+    excelPhoneText(r.passengerPhone || ""),
+    r.division || "",
+    r.vip ? "Sí" : "",
+    r.originAddress || "",
+    r.originLocalidad || "",
+    r.time || "",
+    r.transportType || "",
+    r.transportCompany || "",
+    r.destinationAddress || "",
+    r.destinationLocalidad || "",
+    r.notes || ""
+  ]);
+
+  const lines = [headers, ...data].map(row => row.map(csvCell).join(";"));
+  return lines.join("\r\n");
+}
+
+function triggerDownloadBlob(blob, filename){
+  const a = document.createElement("a");
+  const url = URL.createObjectURL(blob);
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=> URL.revokeObjectURL(url), 1200);
+}
+
 function exportPhaseListToExcel(){
   const eventId = STATE.event?.id;
   if (!eventId) return toast("Seleccioná un evento.");
@@ -539,12 +637,20 @@ function exportPhaseListToExcel(){
 
   const rows = getExportRowsAllPhases();
 
+  if (isMobileDevice()){
+    const csv = buildCsvFromRows(rows);
+    const blob = new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8;" });
+    triggerDownloadBlob(blob, `listado_${eventId}_todas_las_fases.csv`);
+    toast("Listado exportado (CSV compatible móvil/Excel)");
+    return;
+  }
+
   const tableRows = rows.map((r, idx) => `
     <tr>
       <td>${idx + 1}</td>
+      <td>${escapeHtml(r.phase)}</td>
       <td>${escapeHtml(r.driverName)}</td>
       <td class="txt">${escapeHtml(excelPhoneText(r.driverPhone))}</td>
-      <td>${escapeHtml(r.phase)}</td>
       <td>${escapeHtml(r.passenger)}</td>
       <td class="txt">${escapeHtml(excelPhoneText(r.passengerPhone))}</td>
       <td>${escapeHtml(r.division || "")}</td>
@@ -553,6 +659,7 @@ function exportPhaseListToExcel(){
       <td>${escapeHtml(r.originLocalidad)}</td>
       <td>${escapeHtml(r.time)}</td>
       <td>${escapeHtml(r.transportType || "")}</td>
+      <td>${escapeHtml(r.transportCompany || "")}</td>
       <td>${escapeHtml(r.destinationAddress)}</td>
       <td>${escapeHtml(r.destinationLocalidad)}</td>
       <td>${escapeHtml(r.notes)}</td>
@@ -580,7 +687,7 @@ function exportPhaseListToExcel(){
   <table>
     <thead class="hdr">
       <tr>
-        <th>#</th><th>Chofer</th><th>Teléfono</th><th>Fase</th><th>Pasajero</th><th>Teléfono2</th><th>División</th><th>VIP</th><th>Domicilio Origen</th><th>Localidad</th><th>Horario</th><th>Tipo Transporte</th><th>Domicilio Destino</th><th>Localidad2</th><th>Observaciones</th>
+        <th>#</th><th>Fase</th><th>Chofer</th><th>Teléfono</th><th>Pasajero</th><th>Teléfono2</th><th>División</th><th>VIP</th><th>Domicilio Origen</th><th>Localidad</th><th>Horario</th><th>Tipo Transporte</th><th>Empresa de transporte</th><th>Domicilio Destino</th><th>Localidad2</th><th>Observaciones</th>
       </tr>
     </thead>
     <tbody class="body">${tableRows}</tbody>
@@ -589,13 +696,7 @@ function exportPhaseListToExcel(){
 </html>`;
 
   const blob = new Blob(["﻿", html], { type: "application/vnd.ms-excel;charset=utf-8;" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = `listado_${eventId}_todas_las_fases.xls`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(()=> URL.revokeObjectURL(a.href), 1200);
+  triggerDownloadBlob(blob, `listado_${eventId}_todas_las_fases.xls`);
 
   toast("Listado exportado a Excel (todas las fases)");
 }
@@ -620,6 +721,7 @@ function collectDriverReportRows(driverId, phaseId){
       localidad: meta.localidad || base.localidad || "",
       time: ((meta.timeByPhase && meta.timeByPhase[phaseId]) || meta.time || ""),
       transportType: transportTypeForPhase(meta, phaseId),
+      transportCompany: transportCompanyForPhase(meta, phaseId),
       notes: ((meta.notesByPhase && meta.notesByPhase[phaseId]) || meta.notes || "")
     };
   });
@@ -641,9 +743,10 @@ function buildDriverReportHtml(driver, phaseId, rows){
       <td>${escapeHtml(r.localidad)}</td>
       <td>${escapeHtml(r.time)}</td>
       <td>${escapeHtml(r.transportType || "")}</td>
+      <td>${escapeHtml(r.transportCompany || "")}</td>
       <td>${escapeHtml(r.notes)}</td>
     </tr>
-  `).join("") : '<tr><td colspan="9">Sin pasajeros asignados para este chofer en la fase activa.</td></tr>';
+  `).join("") : '<tr><td colspan="10">Sin pasajeros asignados para este chofer en la fase activa.</td></tr>';
 
   return `<!doctype html>
 <html>
@@ -664,7 +767,7 @@ function buildDriverReportHtml(driver, phaseId, rows){
   <div class="meta"><b>Evento:</b> ${escapeHtml(eventName)} · <b>Fase:</b> ${escapeHtml(phaseName)} · <b>Chofer:</b> ${escapeHtml(driverLabel(driver))}</div>
   <table>
     <thead>
-      <tr><th>#</th><th>Pasajero</th><th>Teléfono</th><th>División/VIP</th><th>Domicilio</th><th>Localidad</th><th>Horario</th><th>Tipo transporte</th><th>Observaciones</th></tr>
+      <tr><th>#</th><th>Pasajero</th><th>Teléfono</th><th>División/VIP</th><th>Domicilio</th><th>Localidad</th><th>Horario</th><th>Tipo transporte</th><th>Empresa de transporte</th><th>Observaciones</th></tr>
     </thead>
     <tbody>${bodyRows}</tbody>
   </table>
