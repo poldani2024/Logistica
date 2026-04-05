@@ -258,7 +258,9 @@ function buildEntries(){
           color: PHASE_COLORS[phaseIdx % PHASE_COLORS.length],
           dateISO: phaseDate,
           mins: mins == null ? 480 : mins,
+          slotMins: mins == null ? 480 : Math.floor(mins / 30) * 30,
           hasExplicitTime: mins != null,
+          timeLabel: mins == null ? "Sin definir" : minutesToLabel(mins),
           passenger: passengerDisplayName(base, meta, pid, phaseId),
           driver: driverLabel(driver),
           driverId,
@@ -359,14 +361,14 @@ function renderCalendar(){
     return;
   }
 
-  const minMins = Math.max(360, Math.min(...entries.map(e => e.mins)) - 30);
-  const maxMins = Math.min(1380, Math.max(...entries.map(e => e.mins)) + 60);
+  const minMins = Math.max(360, Math.min(...entries.map(e => e.slotMins)) - 30);
+  const maxMins = Math.min(1380, Math.max(...entries.map(e => e.slotMins)) + 60);
   const start = Math.floor(minMins / 30) * 30;
   const end = Math.ceil(maxMins / 30) * 30;
 
   const bucket = new Map();
   entries.forEach(e => {
-    const key = `${e.dateISO}|${e.mins}`;
+    const key = `${e.dateISO}|${e.slotMins}`;
     if (!bucket.has(key)) bucket.set(key, []);
     bucket.get(key).push(e);
   });
@@ -382,6 +384,7 @@ function renderCalendar(){
           <div class="who">${e.status.icon} ${escapeHtml(e.passenger)}</div>
           <div class="meta">${escapeHtml(e.address || "Sin domicilio/localidad")}</div>
           <div class="meta">Chofer: ${escapeHtml(e.driver)}</div>
+          <div class="meta">Horario: ${escapeHtml(e.timeLabel)}</div>
           <div class="meta">${escapeHtml(e.phaseName)}${e.hasExplicitTime ? "" : " · Horario sin definir"}</div>
           <div class="meta">Estado: ${escapeHtml(e.status.label)}</div>
           ${e.notes ? `<div class="meta">Obs: ${escapeHtml(e.notes)}</div>` : ""}
