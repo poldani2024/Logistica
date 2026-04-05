@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Mapa de Asignaciones · Gestión de Transporte Soka Gakkai</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <style>
+    .phasebar{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:10px; }
+    .assignGrid{ display:grid; grid-template-columns: 1.45fr 1fr; gap:16px; align-items:start; }
+    @media (max-width: 1050px){ .assignGrid{ grid-template-columns:1fr; } }
+
+    .vehicleGrid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:12px; }
+    .vehicleCard{ border:1px solid rgba(255,255,255,.16); border-radius:16px; background:rgba(0,0,0,.18); overflow:hidden; }
+    .vehicleHead{ padding:10px 12px; border-bottom:1px solid rgba(255,255,255,.14); font-weight:900; display:flex; justify-content:space-between; gap:8px; }
+    .vehicleBody{ padding:10px; display:grid; gap:10px; }
+
+    .driverSlot{ min-height:52px; border:1px dashed rgba(255,255,255,.28); border-radius:12px; padding:8px; display:flex; align-items:center; justify-content:center; text-align:center; background:rgba(255,255,255,.04); }
+    .driverSlot.filled{ border-style:solid; border-color:rgba(96,165,250,.55); }
+
+    .passengersZone{ min-height:130px; border:1px dashed rgba(255,255,255,.20); border-radius:12px; padding:8px; display:flex; flex-wrap:wrap; align-content:flex-start; gap:8px; background:rgba(255,255,255,.02); }
+
+    .dragItem{ border:1px solid rgba(255,255,255,.16); border-radius:10px; background:rgba(255,255,255,.08); padding:8px 10px; font-weight:700; cursor:grab; user-select:none; }
+    .dragItem small{ display:block; font-size:11px; color:rgba(234,241,255,.72); font-weight:600; }
+    .dragItem.driver{ border-color:rgba(96,165,250,.45); }
+    .dragItem.passenger{ border-color:rgba(250,204,21,.45); }
+
+    .dropHover{ outline:2px solid rgba(96,165,250,.65); outline-offset:1px; }
+
+    .listPanel{ border:1px solid rgba(255,255,255,.12); border-radius:16px; background:rgba(0,0,0,.18); padding:12px; }
+    .listStack{ display:flex; flex-direction:column; gap:8px; max-height:420px; overflow:auto; }
+    .split{ display:grid; gap:12px; }
+
+    .emptyHint{ color:rgba(234,241,255,.75); font-size:13px; border:1px dashed rgba(255,255,255,.2); border-radius:10px; padding:10px; }
+  </style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <div class="title">Gestión de Transporte Soka Gakkai</div>
+      <div class="sub">Rosario / Gran Rosario</div>
+    </div>
+
+    <div class="topbar-center">
+      <div class="field topbar-event-field">
+        <label>Evento activo</label>
+        <select id="eventSelect"></select>
+        <div class="subtitle" id="eventHint">No hay evento seleccionado</div>
+      </div>
+    </div>
+
+    <div class="row">
+      <a href="index.html" class="iconbtn primary" title="Inicio">🏠</a>
+      <div class="pill">
+        <span id="authStatus">No ingresado</span>
+        <button id="btnLogin" type="button" style="display:none">Ingresar</button>
+        <button id="btnLogout" type="button" class="danger">Salir</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="container">
+  <section class="card">
+    <div class="rowBetween" style="flex-wrap:wrap;">
+      <div>
+        <div class="cardTitle">Mapa de Asignaciones</div>
+        <div class="subtitle">Arrastrá choferes y pasajeros por fase para armar cada móvil.</div>
+      </div>
+      <button class="btn" id="btnRefresh" type="button">↻ Actualizar</button>
+    </div>
+
+    <div class="phasebar" id="phaseBar"></div>
+
+    <div class="assignGrid" style="margin-top:14px;">
+      <div class="card" style="padding:12px;">
+        <div style="font-weight:900; margin-bottom:10px;">Móviles (según choferes disponibles en la fase)</div>
+        <div id="vehiclesGrid" class="vehicleGrid"></div>
+      </div>
+
+      <div class="split">
+        <div class="listPanel">
+          <div class="rowBetween" style="margin-bottom:8px;">
+            <strong>Choferes fase</strong>
+            <span class="hint" id="driversCount">0</span>
+          </div>
+          <div id="driversPool" class="listStack" data-drop-zone="driversPool"></div>
+        </div>
+
+        <div class="listPanel">
+          <div class="rowBetween" style="margin-bottom:8px;">
+            <strong>Pasajeros fase</strong>
+            <span class="hint" id="passengersCount">0</span>
+          </div>
+          <input id="passengerSearch" placeholder="Buscar pasajero..." style="margin-bottom:8px;" />
+          <div id="passengersPool" class="listStack" data-drop-zone="passengersPool"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="toast" id="toast"></div>
+<script type="module" src="./map-assignments.js?v=1"></script>
+</body>
+</html>
