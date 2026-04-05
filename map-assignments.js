@@ -374,11 +374,23 @@ async function handleDriverSwap(payload, targetItem){
   const targetVehicle = vehicleOfDriver(targetDriverId);
   if (!sourceVehicle && !targetVehicle) return;
 
+  const byDriver = getAssignmentsByDriver();
+  const sourcePassengers = Array.from(byDriver.get(sourceDriverId) || []);
+  const targetPassengers = Array.from(byDriver.get(targetDriverId) || []);
+
+  const sourceCapacity = driverCapacity((getDrivers() || []).find(d => d.id === sourceDriverId));
+  const targetCapacity = driverCapacity((getDrivers() || []).find(d => d.id === targetDriverId));
+  if (targetPassengers.length > sourceCapacity || sourcePassengers.length > targetCapacity) {
+    toast("No se puede hacer enroque: la capacidad de alguno de los choferes queda excedida.");
+    return;
+  }
+
+  await persistSwapDriverPassengerLoads(sourceDriverId, targetPassengers, targetDriverId, sourcePassengers);
+
   if (sourceVehicle) UI.vehicleDriver.set(sourceVehicle, targetDriverId);
   if (targetVehicle) UI.vehicleDriver.set(targetVehicle, sourceDriverId);
 
-  render();
-  toast("Choferes intercambiados");
+  await reloadAndRender("Choferes intercambiados");
 }
 
 async function handlePassengerDrop(payload, zone){
@@ -498,6 +510,18 @@ async function persistSwapPassengers(sourcePassengerId, sourceDriverId, targetPa
       arr = Array.from(new Set(arr.filter(Boolean)));
       await persistDriverPassengers(driverId, phaseId, arr);
     }
+  } finally {
+    UI.saving = false;
+  }
+}
+
+async function persistSwapDriverPassengerLoads(sourceDriverId, sourcePassengersNext, targetDriverId, targetPassengersNext){
+  if (UI.saving) return;
+  UI.saving = true;
+  try {
+    const phaseId = getActivePhaseId();
+    await persistDriverPassengers(sourceDriverId, phaseId, sourcePassengersNext);
+    await persistDriverPassengers(targetDriverId, phaseId, targetPassengersNext);
   } finally {
     UI.saving = false;
   }
