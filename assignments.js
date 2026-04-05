@@ -562,6 +562,71 @@ function getPhaseAssignmentsFor(phaseId){
   return { byDriver, assignedAll };
 }
 
+function isMobileDevice(){
+  const ua = String(navigator.userAgent || "").toLowerCase();
+  return /android|iphone|ipad|ipod|mobile/.test(ua);
+}
+
+function csvCell(value){
+  const text = String(value ?? "");
+  const escaped = text.replaceAll("\"", "\"\"");
+  return `"${escaped}"`;
+}
+
+function buildCsvFromRows(rows){
+  const headers = [
+    "#",
+    "Fase",
+    "Chofer",
+    "Teléfono",
+    "Pasajero",
+    "Teléfono2",
+    "División",
+    "VIP",
+    "Domicilio Origen",
+    "Localidad",
+    "Horario",
+    "Tipo Transporte",
+    "Empresa de transporte",
+    "Domicilio Destino",
+    "Localidad2",
+    "Observaciones"
+  ];
+
+  const data = rows.map((r, idx) => [
+    idx + 1,
+    r.phase || "",
+    r.driverName || "",
+    excelPhoneText(r.driverPhone || ""),
+    r.passenger || "",
+    excelPhoneText(r.passengerPhone || ""),
+    r.division || "",
+    r.vip ? "Sí" : "",
+    r.originAddress || "",
+    r.originLocalidad || "",
+    r.time || "",
+    r.transportType || "",
+    r.transportCompany || "",
+    r.destinationAddress || "",
+    r.destinationLocalidad || "",
+    r.notes || ""
+  ]);
+
+  const lines = [headers, ...data].map(row => row.map(csvCell).join(";"));
+  return lines.join("\r\n");
+}
+
+function triggerDownloadBlob(blob, filename){
+  const a = document.createElement("a");
+  const url = URL.createObjectURL(blob);
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=> URL.revokeObjectURL(url), 1200);
+}
+
 function exportPhaseListToExcel(){
   const eventId = STATE.event?.id;
   if (!eventId) return toast("Seleccioná un evento.");
@@ -571,6 +636,14 @@ function exportPhaseListToExcel(){
   const eventDate = toDisplayDate(eventData.dateStart || eventData.startDate || "");
 
   const rows = getExportRowsAllPhases();
+
+  if (isMobileDevice()){
+    const csv = buildCsvFromRows(rows);
+    const blob = new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8;" });
+    triggerDownloadBlob(blob, `listado_${eventId}_todas_las_fases.csv`);
+    toast("Listado exportado (CSV compatible móvil/Excel)");
+    return;
+  }
 
   const tableRows = rows.map((r, idx) => `
     <tr>
@@ -623,13 +696,7 @@ function exportPhaseListToExcel(){
 </html>`;
 
   const blob = new Blob(["﻿", html], { type: "application/vnd.ms-excel;charset=utf-8;" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = `listado_${eventId}_todas_las_fases.xls`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(()=> URL.revokeObjectURL(a.href), 1200);
+  triggerDownloadBlob(blob, `listado_${eventId}_todas_las_fases.xls`);
 
   toast("Listado exportado a Excel (todas las fases)");
 }
