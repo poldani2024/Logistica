@@ -278,6 +278,7 @@ function onDragOver(ev){
 async function onDrop(ev){
   const zone = ev.target.closest("[data-drop-zone]");
   if (!zone) return;
+  const targetItem = ev.target.closest("[data-drag-type]");
 
   ev.preventDefault();
   clearDropHover();
@@ -288,8 +289,23 @@ async function onDrop(ev){
   let payload = null;
   try { payload = JSON.parse(raw); } catch { return; }
 
+  if ((payload.type === "driver-pool" || payload.type === "driver-assigned")
+      && targetItem?.dataset?.dragType
+      && String(targetItem.dataset.dragType).startsWith("driver")) {
+    await handleDriverSwap(payload, targetItem);
+    return;
+  }
+
   if (payload.type === "driver-pool" || payload.type === "driver-assigned") {
     await handleDriverDrop(payload, zone);
+    return;
+  }
+
+  if (payload.type === "passenger"
+      && targetItem?.dataset?.dragType === "passenger"
+      && targetItem?.dataset?.passengerId
+      && targetItem.dataset.passengerId !== payload.passengerId) {
+    await handlePassengerSwap(payload.passengerId, targetItem.dataset.passengerId);
     return;
   }
 
@@ -349,6 +365,22 @@ async function handleDriverDrop(payload, zone){
   render();
 }
 
+async function handleDriverSwap(payload, targetItem){
+  const sourceDriverId = payload.driverId;
+  const targetDriverId = targetItem?.dataset?.driverId || null;
+  if (!sourceDriverId || !targetDriverId || sourceDriverId === targetDriverId) return;
+
+  const sourceVehicle = vehicleOfDriver(sourceDriverId);
+  const targetVehicle = vehicleOfDriver(targetDriverId);
+  if (!sourceVehicle && !targetVehicle) return;
+
+  if (sourceVehicle) UI.vehicleDriver.set(sourceVehicle, targetDriverId);
+  if (targetVehicle) UI.vehicleDriver.set(targetVehicle, sourceDriverId);
+
+  render();
+  toast("Choferes intercambiados");
+}
+
 async function handlePassengerDrop(payload, zone){
   const passengerId = payload.passengerId;
   if (!passengerId) return;
@@ -397,6 +429,32 @@ async function handlePassengerDrop(payload, zone){
   await reloadAndRender("Asignación actualizada");
 }
 
+async function handlePassengerSwap(sourcePassengerId, targetPassengerId){
+  const sourceDriverId = currentDriverOfPassenger(sourcePassengerId);
+  const targetDriverId = currentDriverOfPassenger(targetPassengerId);
+
+  if (sourceDriverId === targetDriverId) return;
+
+  const byDriver = getAssignmentsByDriver();
+  if (targetDriverId) {
+    const targetSet = new Set(Array.from(byDriver.get(targetDriverId) || []));
+    if (shouldConfirmScheduleDifference(sourcePassengerId, targetSet, [targetPassengerId])) {
+      const ok = window.confirm("El intercambio genera diferencia horaria mayor a 30 minutos en el móvil destino. ¿Querés continuar?");
+      if (!ok) return;
+    }
+  }
+  if (sourceDriverId) {
+    const sourceSet = new Set(Array.from(byDriver.get(sourceDriverId) || []));
+    if (shouldConfirmScheduleDifference(targetPassengerId, sourceSet, [sourcePassengerId])) {
+      const ok = window.confirm("El intercambio genera diferencia horaria mayor a 30 minutos en el móvil destino. ¿Querés continuar?");
+      if (!ok) return;
+    }
+  }
+
+  await persistSwapPassengers(sourcePassengerId, sourceDriverId, targetPassengerId, targetDriverId);
+  await reloadAndRender("Pasajeros intercambiados");
+}
+
 async function persistMovePassenger(passengerId, sourceDriverId, targetDriverId){
   if (UI.saving) return;
   UI.saving = true;
@@ -413,6 +471,32 @@ async function persistMovePassenger(passengerId, sourceDriverId, targetDriverId)
       const current = Array.from(getAssignmentsByDriver().get(targetDriverId) || []);
       if (!current.includes(passengerId)) current.push(passengerId);
       await persistDriverPassengers(targetDriverId, phaseId, current);
+    }
+  } finally {
+    UI.saving = false;
+  }
+}
+
+async function persistSwapPassengers(sourcePassengerId, sourceDriverId, targetPassengerId, targetDriverId){
+  if (UI.saving) return;
+  UI.saving = true;
+  try {
+    const phaseId = getActivePhaseId();
+    const byDriver = getAssignmentsByDriver();
+    const touched = new Set([sourceDriverId, targetDriverId].filter(Boolean));
+
+    for (const driverId of touched){
+      let arr = Array.from(byDriver.get(driverId) || []);
+      if (driverId === sourceDriverId) {
+        arr = arr.filter(id => id !== sourcePassengerId);
+        if (targetPassengerId) arr.push(targetPassengerId);
+      }
+      if (driverId === targetDriverId) {
+        arr = arr.filter(id => id !== targetPassengerId);
+        if (sourcePassengerId) arr.push(sourcePassengerId);
+      }
+      arr = Array.from(new Set(arr.filter(Boolean)));
+      await persistDriverPassengers(driverId, phaseId, arr);
     }
   } finally {
     UI.saving = false;
@@ -506,14 +590,16 @@ function parseClockToMinutes(value){
   return (hh * 60) + mm;
 }
 
-function shouldConfirmScheduleDifference(passengerId, targetSet){
+function shouldConfirmScheduleDifference(passengerId, targetSet, ignorePassengerIds = []){
   const phaseId = getActivePhaseId();
   const incomingMeta = STATE.event?.passengersMeta?.get(passengerId) || {};
   const incomingMin = parseClockToMinutes(passengerTimeForPhase(incomingMeta, phaseId));
   if (!Number.isFinite(incomingMin)) return false;
+  const ignore = new Set((ignorePassengerIds || []).filter(Boolean));
 
   for (const pid of targetSet) {
     if (pid === passengerId) continue;
+    if (ignore.has(pid)) continue;
     const meta = STATE.event?.passengersMeta?.get(pid) || {};
     const targetMin = parseClockToMinutes(passengerTimeForPhase(meta, phaseId));
     if (!Number.isFinite(targetMin)) continue;
