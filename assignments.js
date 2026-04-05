@@ -518,8 +518,8 @@ function getExportRowsAllPhases(){
   }
 
   rows.sort((a, b) => {
-    const byTime = parseClockToMinutes(a.time) - parseClockToMinutes(b.time);
-    if (byTime !== 0) return byTime;
+    const byPhaseDateTime = Number(a.phaseSortTs ?? Number.MAX_SAFE_INTEGER) - Number(b.phaseSortTs ?? Number.MAX_SAFE_INTEGER);
+    if (byPhaseDateTime !== 0) return byPhaseDateTime;
 
     const byPhaseDateTime = Number(a.phaseSortTs ?? Number.MAX_SAFE_INTEGER) - Number(b.phaseSortTs ?? Number.MAX_SAFE_INTEGER);
     if (byPhaseDateTime !== 0) return byPhaseDateTime;
