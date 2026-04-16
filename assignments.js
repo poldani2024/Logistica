@@ -77,9 +77,43 @@ function wireOnce(){
       toast(e?.message || String(e));
     }
   });
-  $("btnWhatsSelected")?.addEventListener("click", ()=>{
+  $("btnSelectedPdf")?.addEventListener("click", ()=>{
     try{
-      openWhatsAppForSelectedDrivers();
+      runForSelectedDrivers((driverId)=>{
+        generateDriverPdfDownload(driverId);
+      }, "PDF generado");
+    }catch(e){
+      console.error(e);
+      toast(e?.message || String(e));
+    }
+  });
+  $("btnSelectedVcf")?.addEventListener("click", ()=>{
+    try{
+      runForSelectedDrivers((driverId)=>{
+        generateDriverVcfDownload(driverId);
+      }, "VCF generado");
+    }catch(e){
+      console.error(e);
+      toast(e?.message || String(e));
+    }
+  });
+  $("btnSelectedWhatsApp")?.addEventListener("click", ()=>{
+    try{
+      runForSelectedDrivers((driverId, idx)=>{
+        setTimeout(() => openDriverWhatsApp(driverId), idx * 180);
+      });
+    }catch(e){
+      console.error(e);
+      toast(e?.message || String(e));
+    }
+  });
+  $("btnSelectedAll")?.addEventListener("click", ()=>{
+    try{
+      runForSelectedDrivers((driverId, idx)=>{
+        generateDriverPdfDownload(driverId);
+        generateDriverVcfDownload(driverId);
+        setTimeout(() => openDriverWhatsApp(driverId), idx * 180);
+      });
     }catch(e){
       console.error(e);
       toast(e?.message || String(e));
@@ -99,7 +133,7 @@ function wireOnce(){
       return;
     }
 
-    const el = ev.target.closest("[data-passenger],[data-driver],[data-driver-select],[data-driver-pdf],[data-driver-vcf],[data-driver-wa],[data-driver-all],[data-phase],button");
+    const el = ev.target.closest("[data-passenger],[data-driver],[data-driver-check],[data-driver-pdf],[data-driver-vcf],[data-driver-wa],[data-driver-all],[data-phase],button");
     if (!el) return;
 
     // 2) ✅ Asignar / Quitar pasajero (PRIMERO para que no lo “robe” data-driver)
@@ -130,9 +164,9 @@ function wireOnce(){
       return;
     }
 
-    const selectBtn = el.closest("[data-driver-select]");
+    const selectBtn = el.closest("[data-driver-check]");
     if (selectBtn){
-      const driverId = selectBtn.dataset.driverSelect || "";
+      const driverId = selectBtn.dataset.driverCheck || "";
       if (!driverId) return;
       toggleDriverSelection(driverId);
       renderDrivers();
@@ -342,15 +376,19 @@ function renderDrivers(){
     return `
       <div class="row" style="justify-content:space-between; gap:10px; padding:12px; border:1px solid rgba(255,255,255,.08); border-radius:16px;">
         <div>
-          <div style="font-weight:800">${escapeHtml(driverLabel(d))} <span class="hint" style="font-weight:600; margin-left:6px;">${escapeHtml(`${assigned}/${capacity}`)}</span></div>
+          <div style="font-weight:800; display:flex; align-items:center; gap:8px;">
+            <button
+              type="button"
+              data-driver-check="${escapeHtml(d.id)}"
+              title="Seleccionar chofer"
+              aria-label="Seleccionar chofer"
+              style="width:18px; height:18px; border-radius:4px; border:1px solid rgba(255,255,255,.35); background:${isSelected ? "rgba(59,130,246,.9)" : "transparent"}; color:white; font-size:12px; line-height:1; padding:0; cursor:pointer;"
+            >${isSelected ? "✓" : ""}</button>
+            <span>${escapeHtml(driverLabel(d))} <span class="hint" style="font-weight:600; margin-left:6px;">${escapeHtml(`${assigned}/${capacity}`)}</span></span>
+          </div>
           <div class="hint">${escapeHtml(d.email || "")} · Disponible: ${escapeHtml(String(free))}</div>
         </div>
         <div class="row" style="gap:8px; flex-shrink:0;">
-          <button class="btn ${isSelected ? "primary" : ""}" data-driver-select="${escapeHtml(d.id)}" type="button" title="Seleccionar chofer para envío por WhatsApp">${isSelected ? "Seleccionado" : "Seleccionar"}</button>
-          <button class="btn" data-driver-pdf="${escapeHtml(d.id)}" type="button" title="Generar PDF para este chofer en la fase activa">PDF</button>
-          <button class="btn" data-driver-vcf="${escapeHtml(d.id)}" type="button" title="Generar VCF con pasajeros asignados">VCF</button>
-          <button class="btn" data-driver-wa="${escapeHtml(d.id)}" type="button" title="Abrir WhatsApp del chofer con mensaje precargado">WhatsApp</button>
-          <button class="btn" data-driver-all="${escapeHtml(d.id)}" type="button" title="Generar PDF + VCF y abrir WhatsApp">Todo</button>
           <button class="btn ${isActive ? "primary" : ""}" data-driver="${escapeHtml(d.id)}" type="button" style="min-width:84px;">${isActive ? "Activo" : "Ver"}</button>
         </div>
       </div>
@@ -1136,22 +1174,22 @@ function toggleDriverSelection(driverId){
 }
 
 function selectedDriversInActivePhase(){
+  ensureEventAndPhaseSelected();
   const phaseId = getActivePhaseId();
   const selected = STATE.ui?.selectedDriverIds instanceof Set ? Array.from(STATE.ui.selectedDriverIds) : [];
   const phaseDrivers = new Set((driversForPhase(phaseId) || []).map(d => d.id));
   return selected.filter(id => phaseDrivers.has(id));
 }
 
-function openWhatsAppForSelectedDrivers(){
-  ensureEventAndPhaseSelected();
+function runForSelectedDrivers(action, successMessage = ""){
+  if (typeof action !== "function") return;
   const ids = selectedDriversInActivePhase();
   if (!ids.length){
     toast("Seleccioná al menos un chofer");
     return;
   }
-  ids.forEach((id, idx) => {
-    setTimeout(() => openDriverWhatsApp(id), idx * 180);
-  });
+  ids.forEach((id, idx) => action(id, idx));
+  if (successMessage) toast(successMessage);
 }
 
 async function toggleAssign(driverId, passengerId, phaseId){
