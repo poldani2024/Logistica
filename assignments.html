@@ -82,6 +82,8 @@
         <button class="btn" id="btnRefresh">↻ Actualizar</button>
         <button class="btn" id="btnCopyIdaVuelta" title="Copiar asignaciones de Ida a Vuelta (solo donde Vuelta está vacía)">⇢ Copiar Ida→Vuelta</button>
         <button class="btn" id="btnExportList" title="Exportar listado a Excel con todas las fases">📄 Exportar listado</button>
+        <button class="btn" id="btnWhatsSelected" title="Abrir WhatsApp para choferes seleccionados en la fase activa">📲 WhatsApp seleccionados</button>
+        <button class="btn" id="btnPrepareWhatsAll" title="Generar PDF/VCF de todos los choferes con asignaciones en la fase actual">💬 Preparar WhatsApp de todos los choferes</button>
         <button class="btn" id="btnManagePhases" title="Editar fases del evento (Admin)">⚙ Fases</button>
       </div>
     </div>
@@ -98,6 +100,7 @@
           <div class="badge" id="activeDriverBadge">Chofer activo: —</div>
         </div>
         <div class="list" id="driversList" style="margin-top:12px;"></div>
+        <div id="whatsappPrepSummary" class="emptyBox" style="margin-top:12px; display:none;"></div>
       </div>
 
       <div class="card" style="padding:14px;">
@@ -146,5 +149,6 @@
 </div>
 
 <script type="module" src="./assignments.js?v=phase2"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 </body>
 </html>
