@@ -69,14 +69,6 @@ function wireOnce(){
     }
   });
 
-  $("btnPrepareWhatsAll")?.addEventListener("click", ()=>{
-    try{
-      prepareWhatsAppForAllDrivers();
-    }catch(e){
-      console.error(e);
-      toast(e?.message || String(e));
-    }
-  });
   $("btnSelectedPdf")?.addEventListener("click", ()=>{
     try{
       runForSelectedDrivers((driverId)=>{
@@ -99,20 +91,9 @@ function wireOnce(){
   });
   $("btnSelectedWhatsApp")?.addEventListener("click", ()=>{
     try{
+      const plainTextMode = window.confirm("¿Querés enviar WhatsApp en modo TEXTO PLANO?\n\nAceptar: Texto plano\nCancelar: Mensaje corto (archivos)");
       runForSelectedDrivers((driverId, idx)=>{
-        setTimeout(() => openDriverWhatsApp(driverId), idx * 180);
-      });
-    }catch(e){
-      console.error(e);
-      toast(e?.message || String(e));
-    }
-  });
-  $("btnSelectedAll")?.addEventListener("click", ()=>{
-    try{
-      runForSelectedDrivers((driverId, idx)=>{
-        generateDriverPdfDownload(driverId);
-        generateDriverVcfDownload(driverId);
-        setTimeout(() => openDriverWhatsApp(driverId), idx * 180);
+        setTimeout(() => openDriverWhatsApp(driverId, { plainText: plainTextMode }), idx * 180);
       });
     }catch(e){
       console.error(e);
@@ -133,7 +114,7 @@ function wireOnce(){
       return;
     }
 
-    const el = ev.target.closest("[data-passenger],[data-driver],[data-driver-check],[data-driver-pdf],[data-driver-vcf],[data-driver-wa],[data-driver-all],[data-phase],button");
+    const el = ev.target.closest("[data-passenger],[data-driver],[data-driver-check],[data-phase],button");
     if (!el) return;
 
     // 2) ✅ Asignar / Quitar pasajero (PRIMERO para que no lo “robe” data-driver)
@@ -173,64 +154,7 @@ function wireOnce(){
       return;
     }
 
-    // 3) PDF por chofer (fase activa)
-    const pdfBtn = el.closest("[data-driver-pdf]");
-    if (pdfBtn){
-      const driverId = pdfBtn.dataset.driverPdf || "";
-      if (!driverId) return;
-      try{
-        generateDriverPdfDownload(driverId);
-        toast("PDF generado");
-      }catch(err){
-        console.error("PDF ERROR", err);
-        toast(err?.message || String(err));
-      }
-      return;
-    }
-
-    const vcfBtn = el.closest("[data-driver-vcf]");
-    if (vcfBtn){
-      const driverId = vcfBtn.dataset.driverVcf || "";
-      if (!driverId) return;
-      try{
-        generateDriverVcfDownload(driverId);
-        toast("VCF generado");
-      }catch(err){
-        console.error("VCF ERROR", err);
-        toast(err?.message || String(err));
-      }
-      return;
-    }
-
-    const waBtn = el.closest("[data-driver-wa]");
-    if (waBtn){
-      const driverId = waBtn.dataset.driverWa || "";
-      if (!driverId) return;
-      try{
-        openDriverWhatsApp(driverId);
-      }catch(err){
-        console.error("WA ERROR", err);
-        toast(err?.message || String(err));
-      }
-      return;
-    }
-
-    const allBtn = el.closest("[data-driver-all]");
-    if (allBtn){
-      const driverId = allBtn.dataset.driverAll || "";
-      if (!driverId) return;
-      try{
-        generateDriverPdfDownload(driverId);
-        generateDriverVcfDownload(driverId);
-        openDriverWhatsApp(driverId);
-      }catch(err){
-        console.error("ALL ERROR", err);
-        toast(err?.message || String(err));
-      }
-      return;
-    }
-
-    // 4) Selección de chofer
+    // 3) Selección de chofer
     const drvBtn = el.closest("[data-driver]");
     if (drvBtn) {
       STATE.ui.activeDriverId = drvBtn.dataset.driver || null;
@@ -241,7 +165,7 @@ function wireOnce(){
       return;
     }
 
-    // 5) Cambio de fase
+    // 4) Cambio de fase
     const phaseBtn = el.closest("[data-phase]");
     if (phaseBtn) {
       STATE.ui.activePhase = phaseBtn.dataset.phase || null;
@@ -1101,11 +1025,41 @@ function generateDriverVcfDownload(driverId){
   triggerDownloadBlob(blob, filename);
 }
 
-function buildWhatsAppMessage(driverName, eventName, phaseName){
+function buildWhatsAppShortMessage(driverName, eventName, phaseName){
   return `Hola ${driverName}, te comparto la información de tu viaje para ${eventName} - ${phaseName}.\n\nYa tenés preparado:\n- el PDF con el detalle de pasajeros\n- el archivo de contactos\n\nPor favor adjuntalos manualmente en este chat una vez descargados.\nGracias.`;
 }
 
-function openDriverWhatsApp(driverId){
+function buildDriverPlainTextWhatsAppMessage(driver, phaseId, eventName, phaseName){
+  const driverName = driverLabel(driver);
+  const passengers = getDriverAssignedPassengers(driver.id, phaseId);
+  const contactsText = passengers.map((p, idx) => {
+    const normalized = normalizeWhatsAppPhone(p.phone, {
+      defaultCountryCode: "54",
+      defaultAreaCode: STATE.settings?.defaultAreaCode || ""
+    });
+    const phoneText = p.phone || "sin teléfono";
+    const waLink = normalized ? `https://wa.me/${normalized}` : "sin link";
+    return `${idx + 1}) ${p.name} - ${phoneText}\n   ${waLink}`;
+  }).join("\n");
+
+  return [
+    `Asignación de transporte`,
+    `Evento: ${eventName}`,
+    `Fase: ${phaseName}`,
+    `Chofer: ${driverName}`,
+    `Teléfono: ${toText(driver.phone) || "—"}`,
+    `Vehículo: ${toText(driver.vehicle) || "—"}`,
+    `Capacidad: ${toText(driver.capacity) || "—"}`,
+    "",
+    "Pasajeros",
+    contactsText || "Sin pasajeros asignados en esta fase.",
+    "",
+    `Cantidad total de pasajeros: ${passengers.length}`,
+    toText(driver.notes || driver.observations) ? `Observaciones: ${toText(driver.notes || driver.observations)}` : ""
+  ].filter(Boolean).join("\n");
+}
+
+function openDriverWhatsApp(driverId, opts = {}){
   const { phaseId } = ensureEventAndPhaseSelected();
   const driver = (STATE.master?.drivers || []).find(d => d.id === driverId) || { id: driverId };
   const normalized = normalizeWhatsAppPhone(driver.phone, {
@@ -1118,53 +1072,12 @@ function openDriverWhatsApp(driverId){
   }
   const eventName = getCurrentEventLabel();
   const phaseName = phaseLabelById(phaseId);
-  const message = buildWhatsAppMessage(driverLabel(driver), eventName, phaseName);
+  const message = opts.plainText
+    ? buildDriverPlainTextWhatsAppMessage(driver, phaseId, eventName, phaseName)
+    : buildWhatsAppShortMessage(driverLabel(driver), eventName, phaseName);
   const url = `https://wa.me/${normalized}?text=${encodeURIComponent(message)}`;
   window.open(url, "_blank", "noopener,noreferrer");
   toast("Abriendo WhatsApp");
-}
-
-function prepareWhatsAppForAllDrivers(){
-  const { phaseId } = ensureEventAndPhaseSelected();
-  const host = $("whatsappPrepSummary");
-  const drivers = (driversForPhase(phaseId) || []);
-  const { byDriver } = getPhaseAssignments();
-  const withAssignments = drivers.filter(d => (byDriver.get(d.id) || new Set()).size > 0);
-
-  if (!withAssignments.length){
-    if (host){
-      host.style.display = "block";
-      host.innerHTML = "No hay choferes con asignaciones para la fase actual.";
-    }
-    toast("No hay pasajeros asignados");
-    return;
-  }
-
-  withAssignments.forEach(d => {
-    generateDriverPdfDownload(d.id);
-    generateDriverVcfDownload(d.id);
-  });
-
-  if (host){
-    host.style.display = "block";
-    host.innerHTML = `
-      <div style="font-weight:800; margin-bottom:8px;">Resumen WhatsApp por chofer</div>
-      <div class="list">
-        ${withAssignments.map(d => `
-          <div class="row" style="justify-content:space-between; gap:10px; padding:10px; border:1px solid rgba(255,255,255,.08); border-radius:12px;">
-            <div>${escapeHtml(driverLabel(d))}</div>
-            <div class="row" style="gap:8px; flex-wrap:wrap;">
-              <button class="btn" data-driver-pdf="${escapeHtml(d.id)}" type="button">PDF</button>
-              <button class="btn" data-driver-vcf="${escapeHtml(d.id)}" type="button">VCF</button>
-              <button class="btn" data-driver-wa="${escapeHtml(d.id)}" type="button">WhatsApp</button>
-            </div>
-          </div>
-        `).join("")}
-      </div>
-    `;
-  }
-
-  toast("PDF y VCF preparados para todos los choferes");
 }
 
 function toggleDriverSelection(driverId){
