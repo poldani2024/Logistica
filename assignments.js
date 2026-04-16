@@ -861,6 +861,7 @@ function getDriverAssignedPassengers(driverId, phaseId){
   const byPassengerMaster = new Map((STATE.master?.passengers || []).map(p => [p.id, p]));
   const metaByPassenger = STATE.event?.passengersMeta || new Map();
   const { byDriver } = getPhaseAssignments();
+  const phase = (STATE.event?.phases || []).find(p => p.id === phaseId) || {};
   const ids = Array.from(byDriver.get(driverId) || [])
     .filter(pid => passengerRequiresTransportForPhase(pid, phaseId));
 
@@ -872,6 +873,12 @@ function getDriverAssignedPassengers(driverId, phaseId){
       name: passengerLabel(base),
       phone: toText(base.phone),
       address: toText(meta.address || base.address),
+      locality: toText(meta.localidad || base.localidad),
+      time: toText((meta.timeByPhase && meta.timeByPhase[phaseId]) || meta.time || ""),
+      transportType: toText(transportTypeForPhase(meta, phaseId)),
+      transportCompany: toText(transportCompanyForPhase(meta, phaseId)),
+      destinationAddress: toText(phase.destinationAddress || phase.address || STATE.event?.address || ""),
+      destinationLocalidad: toText(phase.localidad || STATE.event?.localidad || ""),
       notes: toText((meta.notesByPhase && meta.notesByPhase[phaseId]) || meta.notes || "")
     };
   });
@@ -937,7 +944,11 @@ function generateDriverPdfDownload(driverId){
     writeLine("Sin pasajeros asignados para esta fase.");
   } else {
     passengers.forEach((p, idx) => {
-      writeLine(`${idx + 1}. ${p.name} - ${p.phone || "—"} - ${p.address || "—"}`);
+      writeLine(`${idx + 1}. ${p.name} - ${p.phone || "—"}`, { bold: true });
+      writeLine(`   Domicilio origen: ${p.address || "—"}${p.locality ? ` (${p.locality})` : ""}`);
+      writeLine(`   Horario: ${p.time || "—"} · Tipo transporte: ${p.transportType || "—"} · Empresa: ${p.transportCompany || "—"}`);
+      writeLine(`   Domicilio destino: ${p.destinationAddress || "—"}${p.destinationLocalidad ? ` (${p.destinationLocalidad})` : ""}`);
+      if (p.notes) writeLine(`   Observaciones: ${p.notes}`);
     });
   }
 
@@ -1039,7 +1050,11 @@ function buildDriverPlainTextWhatsAppMessage(driver, phaseId, eventName, phaseNa
     });
     const phoneText = p.phone || "sin teléfono";
     const waLink = normalized ? `https://wa.me/${normalized}` : "sin link";
-    return `${idx + 1}) ${p.name} - ${phoneText}\n   ${waLink}`;
+    return `${idx + 1}) ${p.name} - ${phoneText}
+   Domicilio origen: ${p.address || "—"}${p.locality ? ` (${p.locality})` : ""}
+   Horario: ${p.time || "—"} · Tipo transporte: ${p.transportType || "—"} · Empresa: ${p.transportCompany || "—"}
+   Domicilio destino: ${p.destinationAddress || "—"}${p.destinationLocalidad ? ` (${p.destinationLocalidad})` : ""}
+   ${waLink}${p.notes ? `\n   Observaciones: ${p.notes}` : ""}`;
   }).join("\n");
 
   return [
