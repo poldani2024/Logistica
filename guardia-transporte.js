@@ -305,8 +305,9 @@ function sendWhatsAppInvites(){
 
   const eventName = activeEventName();
   const dates = `${$("guardFrom")?.value || ""} al ${$("guardTo")?.value || ""}`;
-  const shiftText = selectedShiftIds().map((id) => SHIFT_DEFS.find((x) => x.id === id)?.label).filter(Boolean).join(", ");
+  const shiftText = buildShiftWhatsappText(selectedShiftIds());
   const template = $("waTemplate")?.value || "";
+  const icons = buildWhatsAppIcons();
 
   selected.forEach((driverId, idx) => {
     const driver = (STATE.master?.drivers || []).find((d) => d.id === driverId) || { id: driverId };
@@ -314,10 +315,14 @@ function sendWhatsAppInvites(){
     if (!phone) return;
 
     const message = template
-      .replaceAll("{{chofer}}", driverLabel(driver))
+      .replaceAll("{{chofer}}", driverFirstName(driver))
       .replaceAll("{{evento}}", eventName)
       .replaceAll("{{fechas}}", dates)
-      .replaceAll("{{turnos}}", shiftText || "Mañana, Mediodía, Tarde");
+      .replaceAll("{{turnos}}", shiftText)
+      .replaceAll("{{iconos_autos}}", icons.cars)
+      .replaceAll("{{icono_fechas}}", icons.dates)
+      .replaceAll("{{icono_turnos}}", icons.turns)
+      .replaceAll("{{icono_loto}}", icons.lotus);
 
     setTimeout(() => {
       window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, "_blank", "noopener");
@@ -374,6 +379,17 @@ function driverLabel(d){
   return `${d.lastName || ""} ${d.firstName || ""}`.trim() || d.name || d.email || d.id;
 }
 
+function driverFirstName(d){
+  const firstName = String(d?.firstName || "").trim();
+  if (firstName) return firstName;
+
+  const fullName = String(d?.name || "").trim();
+  if (fullName) return fullName.split(/\s+/)[0] || fullName;
+
+  const fallback = driverLabel(d);
+  return String(fallback).split(/\s+/)[0] || fallback;
+}
+
 function activeEventName(){
   const id = STATE.event?.id || "";
   const ev = (STATE.events || []).find((x) => x.id === id) || {};
@@ -386,4 +402,28 @@ function normalizeWhatsAppPhone(raw){
   if (digits.startsWith("0")) digits = digits.slice(1);
   if (!digits.startsWith("54")) digits = `54${digits}`;
   return digits;
+}
+
+function buildShiftWhatsappText(shiftIds){
+  const enabled = Array.isArray(shiftIds) ? shiftIds : [];
+  const defaults = {
+    morning: "• Mañana: 8 a 12",
+    noon: "• Mediodía: 14 a 18",
+    afternoon: "• Tarde: 18 a 20"
+  };
+  const lines = enabled
+    .map((id) => defaults[id])
+    .filter(Boolean);
+
+  if (lines.length) return lines.join("\n");
+  return Object.values(defaults).join("\n");
+}
+
+function buildWhatsAppIcons(){
+  return {
+    cars: String.fromCodePoint(0x1F697, 0x1F695, 0x1F699),
+    dates: String.fromCodePoint(0x1F4C6),
+    turns: String.fromCodePoint(0x1F55C),
+    lotus: String.fromCodePoint(0x1FAB7)
+  };
 }
