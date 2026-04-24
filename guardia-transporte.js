@@ -307,6 +307,7 @@ function sendWhatsAppInvites(){
   const dates = `${$("guardFrom")?.value || ""} al ${$("guardTo")?.value || ""}`;
   const shiftText = buildShiftWhatsappText(selectedShiftIds());
   const template = $("waTemplate")?.value || "";
+  const icons = buildWhatsAppIcons();
 
   selected.forEach((driverId, idx) => {
     const driver = (STATE.master?.drivers || []).find((d) => d.id === driverId) || { id: driverId };
@@ -317,7 +318,11 @@ function sendWhatsAppInvites(){
       .replaceAll("{{chofer}}", driverFirstName(driver))
       .replaceAll("{{evento}}", eventName)
       .replaceAll("{{fechas}}", dates)
-      .replaceAll("{{turnos}}", shiftText);
+      .replaceAll("{{turnos}}", shiftText)
+      .replaceAll("{{iconos_autos}}", icons.cars)
+      .replaceAll("{{icono_fechas}}", icons.dates)
+      .replaceAll("{{icono_turnos}}", icons.turns)
+      .replaceAll("{{icono_loto}}", icons.lotus);
 
     setTimeout(() => {
       window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, "_blank", "noopener");
@@ -412,4 +417,13 @@ function buildShiftWhatsappText(shiftIds){
 
   if (lines.length) return lines.join("\n");
   return Object.values(defaults).join("\n");
+}
+
+function buildWhatsAppIcons(){
+  return {
+    cars: String.fromCodePoint(0x1F697, 0x1F695, 0x1F699),
+    dates: String.fromCodePoint(0x1F4C6),
+    turns: String.fromCodePoint(0x1F55C),
+    lotus: String.fromCodePoint(0x1FAB7)
+  };
 }
