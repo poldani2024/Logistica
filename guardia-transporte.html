@@ -89,11 +89,19 @@
 
         <hr style="border-color:rgba(255,255,255,.12); width:100%;"/>
         <div style="font-weight:900;">3) WhatsApp</div>
-        <textarea id="waTemplate" rows="5">Hola {{chofer}},
-Te invitamos a participar de la Guardia de Transporte del evento {{evento}}.
-Fechas: {{fechas}}.
-Turnos: {{turnos}}.
-¿Podés confirmar disponibilidad? ¡Gracias!</textarea>
+        <textarea id="waTemplate" rows="12">Hola {{chofer}}, ¿cómo estás?
+
+Te invitamos a sumarte a la Guardia de Transporte &#x1F697;
+
+&#x1F4C5; Fechas: {{fechas}}
+&#x1F550; Turnos disponibles:
+{{turnos}}
+
+Es una linda oportunidad para impulsar el Kosen-Rufu &#x1F64C;
+
+¿Te gustaría participar? Decime qué día y turno te queda mejor.
+
+¡Gracias!</textarea>
         <button class="btnPrimary primary" id="btnSendWhatsApp" type="button">Enviar invitación WhatsApp</button>
       </aside>
 
