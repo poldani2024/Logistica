@@ -11,6 +11,7 @@ const SHIFT_DEFS = [
 
 const UI = {
   guards: new Map(),
+  guardPeriods: [],
   search: ""
 };
 
@@ -18,13 +19,21 @@ const UI = {
   await initCorePage({ page: "assignments" });
   wire();
   seedDates();
-  if (STATE.event?.id) await loadGuards(STATE.event.id);
+  if (STATE.event?.id) {
+    await Promise.all([
+      loadGuards(STATE.event.id),
+      loadGuardPeriods(STATE.event.id)
+    ]);
+  }
   renderAll();
 
   document.addEventListener("eventChanged", async (ev) => {
     const id = ev?.detail?.eventId;
     if (!id) return;
-    await loadGuards(id);
+    await Promise.all([
+      loadGuards(id),
+      loadGuardPeriods(id)
+    ]);
     renderAll();
   });
 })().catch((e) => {
@@ -43,9 +52,24 @@ function wire(){
   $("btnApplyTemplate")?.addEventListener("click", async () => {
     try {
       await applyTemplateRange();
-      await loadGuards(STATE.event.id);
+      await Promise.all([
+        loadGuards(STATE.event.id),
+        loadGuardPeriods(STATE.event.id)
+      ]);
+      renderGuardPeriods();
       renderCalendar();
       toast("Turnos creados en calendario");
+    } catch (e) {
+      toast(e?.message || String(e));
+    }
+  });
+
+  $("btnSavePeriod")?.addEventListener("click", async () => {
+    try {
+      await saveCurrentGuardPeriod();
+      await loadGuardPeriods(STATE.event.id);
+      renderGuardPeriods();
+      toast("Período guardado");
     } catch (e) {
       toast(e?.message || String(e));
     }
@@ -75,6 +99,14 @@ function wire(){
     await removeDriverFromSlot(date, hour, driverId);
     await loadGuards(STATE.event.id);
     renderCalendar();
+  });
+
+  document.addEventListener("click", (ev) => {
+    const useBtn = ev.target.closest("[data-use-guard-period]");
+    if (!useBtn) return;
+    const periodId = String(useBtn.dataset.useGuardPeriod || "");
+    if (!periodId) return;
+    applyGuardPeriodSelection(periodId);
   });
 }
 
@@ -112,9 +144,59 @@ async function loadGuards(eventId){
   });
 }
 
+async function loadGuardPeriods(eventId){
+  UI.guardPeriods = [];
+  if (!eventId) return;
+
+  const snap = await getDocs(collection(db, "events", eventId, "transportGuardPeriods"));
+  const rows = [];
+  snap.forEach((row) => {
+    const data = row.data() || {};
+    const from = String(data.from || "");
+    const to = String(data.to || "");
+    if (!from || !to) return;
+    const shiftIds = Array.isArray(data.shiftIds) ? data.shiftIds.filter(Boolean) : [];
+    rows.push({
+      id: row.id,
+      from,
+      to,
+      shiftIds,
+      createdAtMs: Number(data.createdAtMs || 0)
+    });
+  });
+
+  UI.guardPeriods = rows.sort((a, b) => {
+    const byCreated = (b.createdAtMs || 0) - (a.createdAtMs || 0);
+    if (byCreated !== 0) return byCreated;
+    if (a.from !== b.from) return String(b.from).localeCompare(String(a.from));
+    return String(b.to).localeCompare(String(a.to));
+  });
+}
+
 function renderAll(){
   renderDriversPool();
+  renderGuardPeriods();
   renderCalendar();
+}
+
+function renderGuardPeriods(){
+  const host = $("guardPeriodsList");
+  if (!host) return;
+
+  if (!UI.guardPeriods.length){
+    host.innerHTML = '<div class="periodRow"><span class="periodMeta">Sin períodos guardados.</span></div>';
+    return;
+  }
+
+  host.innerHTML = UI.guardPeriods.map((p) => `
+    <div class="periodRow">
+      <div>
+        <div><strong>${escapeHtml(p.from)} → ${escapeHtml(p.to)}</strong></div>
+        <div class="periodMeta">${escapeHtml(periodShiftLabels(p.shiftIds))}</div>
+      </div>
+      <button class="btn" type="button" data-use-guard-period="${escapeHtml(p.id)}">Usar</button>
+    </div>
+  `).join("");
 }
 
 function renderDriversPool(){
@@ -241,6 +323,7 @@ async function applyTemplateRange(){
 
   const shifts = selectedShiftIds();
   if (!shifts.length) throw new Error("Seleccioná al menos un turno.");
+  await saveCurrentGuardPeriod({ from, to, shiftIds: shifts });
 
   const promises = [];
   dates.forEach((date) => {
@@ -259,6 +342,29 @@ async function applyTemplateRange(){
     });
   });
   await Promise.all(promises);
+}
+
+async function saveCurrentGuardPeriod(opts = {}){
+  if (!STATE.event?.id) throw new Error("Seleccioná un evento.");
+  const from = String(opts.from || $("guardFrom")?.value || "");
+  const to = String(opts.to || $("guardTo")?.value || "");
+  const shiftIds = Array.isArray(opts.shiftIds) && opts.shiftIds.length
+    ? opts.shiftIds
+    : selectedShiftIds();
+
+  const dates = buildDateRange(from, to);
+  if (!dates.length) throw new Error("Rango de fechas inválido.");
+  if (!shiftIds.length) throw new Error("Seleccioná al menos un turno.");
+
+  const periodId = `p_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  await setDoc(doc(db, "events", STATE.event.id, "transportGuardPeriods", periodId), {
+    from,
+    to,
+    shiftIds,
+    createdAtMs: Date.now(),
+    createdAt: serverTimestamp(),
+    createdBy: STATE.auth?.user?.email || ""
+  });
 }
 
 async function addDriverToSlot(date, hour, driverId){
@@ -426,4 +532,25 @@ function buildWhatsAppIcons(){
     turns: String.fromCodePoint(0x1F55C),
     lotus: String.fromCodePoint(0x1FAB7)
   };
+}
+
+function applyGuardPeriodSelection(periodId){
+  const period = UI.guardPeriods.find((x) => x.id === periodId);
+  if (!period) return;
+
+  $("guardFrom").value = period.from || "";
+  $("guardTo").value = period.to || "";
+
+  const set = new Set(Array.isArray(period.shiftIds) ? period.shiftIds : []);
+  $("shiftMorning").checked = set.has("morning");
+  $("shiftNoon").checked = set.has("noon");
+  $("shiftAfternoon").checked = set.has("afternoon");
+  renderCalendar();
+}
+
+function periodShiftLabels(shiftIds){
+  const labels = (Array.isArray(shiftIds) ? shiftIds : [])
+    .map((id) => SHIFT_DEFS.find((x) => x.id === id)?.label)
+    .filter(Boolean);
+  return labels.length ? labels.join(", ") : "Sin turnos";
 }

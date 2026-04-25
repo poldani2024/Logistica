@@ -23,6 +23,11 @@
     .pillShift{ display:inline-block; font-size:10px; border-radius:999px; padding:2px 6px; border:1px solid rgba(255,255,255,.2); margin-bottom:4px; }
     .tag{ display:flex; align-items:center; justify-content:space-between; gap:6px; padding:4px 6px; border-radius:8px; background:rgba(59,130,246,.3); margin-top:4px; font-size:11px; }
     .tag button{ border:none; background:transparent; color:#fff; font-weight:900; cursor:pointer; }
+    .periodActions{ display:flex; gap:8px; flex-wrap:wrap; }
+    .periodsGrid{ border:1px solid rgba(255,255,255,.12); border-radius:10px; overflow:auto; max-height:138px; }
+    .periodRow{ display:grid; grid-template-columns: 1fr auto; gap:8px; align-items:center; min-height:44px; padding:8px; border-bottom:1px solid rgba(255,255,255,.1); }
+    .periodRow:last-child{ border-bottom:none; }
+    .periodMeta{ font-size:12px; opacity:.88; }
   </style>
 </head>
 <body>
@@ -79,7 +84,16 @@
             <label><input type="checkbox" id="shiftAfternoon" checked /> Tarde</label>
           </div>
         </div>
-        <button class="btn" id="btnApplyTemplate" type="button">Aplicar turnos al calendario</button>
+        <div class="periodActions">
+          <button class="btn" id="btnSavePeriod" type="button">Guardar período</button>
+          <button class="btn" id="btnApplyTemplate" type="button">Aplicar turnos al calendario</button>
+        </div>
+        <div class="field">
+          <label>Períodos guardados (nuevo → viejo)</label>
+          <div id="guardPeriodsList" class="periodsGrid">
+            <div class="periodRow"><span class="periodMeta">Sin períodos guardados.</span></div>
+          </div>
+        </div>
 
         <hr style="border-color:rgba(255,255,255,.12); width:100%;"/>
 
