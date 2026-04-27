@@ -42,6 +42,9 @@
   --danger:#EF4444;
   --shadow: 0 14px 40px rgba(0,0,0,.35);
   --radius: 18px;
+  --checkbox-size: 20px;
+  --checkbox-size-mobile: 22px;
+  --checkbox-border: rgba(234,241,255,.42);
 }
 .permsGrid{
   display: grid;
@@ -55,10 +58,54 @@
   gap: 10px;
 }
 
-.permItem input[type="checkbox"]{
-  width: 18px;
-  height: 18px;
+input[type="checkbox"]{
+  appearance: none;
+  -webkit-appearance: none;
+  width: var(--checkbox-size);
+  height: var(--checkbox-size);
   margin: 0;
+  border-radius: 6px;
+  border: 1px solid var(--checkbox-border);
+  background: rgba(255,255,255,.04);
+  display: inline-grid;
+  place-content: center;
+  cursor: pointer;
+  transition: border-color .16s ease, background-color .16s ease, box-shadow .16s ease, transform .08s ease;
+}
+
+input[type="checkbox"]::before{
+  content: "";
+  width: 11px;
+  height: 11px;
+  transform: scale(0);
+  clip-path: polygon(14% 52%, 0 66%, 41% 100%, 100% 26%, 86% 14%, 40% 74%);
+  background: #fff;
+  transition: transform .12s ease;
+}
+
+input[type="checkbox"]:checked{
+  border-color: var(--accent2);
+  background: linear-gradient(180deg, var(--accent2), var(--accent));
+}
+
+input[type="checkbox"]:checked::before{
+  transform: scale(1);
+}
+
+input[type="checkbox"]:focus-visible{
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(96,165,250,.3);
+}
+
+input[type="checkbox"]:active{
+  transform: scale(.96);
+}
+
+@media (max-width: 900px){
+  input[type="checkbox"]{
+    width: var(--checkbox-size-mobile);
+    height: var(--checkbox-size-mobile);
+  }
 }
 
 *{ box-sizing:border-box; }

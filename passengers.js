@@ -299,7 +299,9 @@ async function getEventPhases(eventId){
   const phases = (Array.isArray(raw.phases) ? raw.phases : [])
     .map(ph => ({
       id: String(ph?.id || "").trim(),
-      name: String(ph?.name || ph?.id || "").trim()
+      name: String(ph?.name || ph?.id || "").trim(),
+      date: String(ph?.date || "").trim(),
+      time: String(ph?.time || "").trim()
     }))
     .filter(ph => ph.id);
 
@@ -334,10 +336,12 @@ function renderPhaseTimeControls(phases, meta){
   }
 
   const byPhase = (meta?.timeByPhase && typeof meta.timeByPhase === "object") ? meta.timeByPhase : {};
-  const fallback = String(meta?.time || "");
+  const fallback = String(meta?.time || "").trim();
 
   host.innerHTML = phases.map(ph => {
-    const v = String(byPhase[ph.id] ?? fallback ?? "");
+    const phaseDefaultTime = String(ph?.time || "").trim();
+    const specific = String(byPhase[ph.id] || "").trim();
+    const v = specific || fallback || phaseDefaultTime;
     return `<div class="field"><label>${escapeHtml(ph.name || ph.id)}</label><input data-phase-time="${escapeHtml(ph.id)}" placeholder="Ej: 18:30" value="${escapeHtml(v)}"></div>`;
   }).join("");
 }
