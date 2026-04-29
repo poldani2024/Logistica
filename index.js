@@ -21,24 +21,28 @@ function applyFontScale(scale){
 }
 
 function setupAppearanceControls(){
-  const themeSelect = document.getElementById("themeModeSelect");
+  const themeDark = document.getElementById("themeModeDark");
+  const themeLight = document.getElementById("themeModeLight");
   const fontScaleSelect = document.getElementById("fontScaleSelect");
-  if (!themeSelect || !fontScaleSelect) return;
+  if (!themeDark || !themeLight || !fontScaleSelect) return;
 
   const savedTheme = localStorage.getItem(preferenceKey(PREF_KEYS.theme)) || "dark";
   const savedFontScale = localStorage.getItem(preferenceKey(PREF_KEYS.fontScale)) || "1";
 
-  themeSelect.value = savedTheme === "light" ? "light" : "dark";
+  const selectedTheme = savedTheme === "light" ? "light" : "dark";
+  themeDark.checked = selectedTheme === "dark";
+  themeLight.checked = selectedTheme === "light";
   fontScaleSelect.value = ["0.9", "1", "1.1", "1.2"].includes(savedFontScale) ? savedFontScale : "1";
 
-  applyTheme(themeSelect.value);
+  applyTheme(selectedTheme);
   applyFontScale(fontScaleSelect.value);
 
-  themeSelect.addEventListener("change", () => {
-    const value = themeSelect.value === "light" ? "light" : "dark";
+  [themeDark, themeLight].forEach(input => input.addEventListener("change", () => {
+    if (!input.checked) return;
+    const value = input.value === "light" ? "light" : "dark";
     localStorage.setItem(preferenceKey(PREF_KEYS.theme), value);
     applyTheme(value);
-  });
+  }));
 
   fontScaleSelect.addEventListener("change", () => {
     const value = ["0.9", "1", "1.1", "1.2"].includes(fontScaleSelect.value) ? fontScaleSelect.value : "1";
