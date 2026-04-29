@@ -63,6 +63,29 @@
   <h2>Inicio</h2>
   <p>Seleccioná una sección:</p>
 
+  <div class="card accessibilityCard">
+    <div class="cardTitle">Preferencias de visualización</div>
+    <div class="grid2">
+      <div class="field">
+        <label for="themeModeSelect">Modo de color</label>
+        <select id="themeModeSelect">
+          <option value="dark">Oscuro</option>
+          <option value="light">Claro</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="fontScaleSelect">Tamaño de letra</label>
+        <select id="fontScaleSelect">
+          <option value="0.9">Pequeña</option>
+          <option value="1" selected>Normal</option>
+          <option value="1.1">Grande</option>
+          <option value="1.2">Muy grande</option>
+        </select>
+      </div>
+    </div>
+    <div class="small muted" style="margin-top:10px;">Estos cambios se guardan por usuario.</div>
+  </div>
+
   <div class="menu" id="homeMenu">
     <a href="events.html" data-perm="Eventos">Eventos</a>
     <a href="requests.html" data-perm="Solicitudes">Solicitudes</a>
