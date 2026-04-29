@@ -40,6 +40,10 @@ import {
 export const $ = (id) => document.getElementById(id);
 
 export const ADMIN_EMAIL = "pedro.l.oldani@gmail.com";
+const PREF_KEYS = {
+  theme: "uiThemeMode",
+  fontScale: "uiFontScale"
+};
 
 function isAdmin(){
   const email = (STATE.auth.user?.email || "").trim().toLowerCase();
@@ -977,6 +981,64 @@ function refreshAuthUi(){
   if (btnLogout) btnLogout.style.display = u ? "" : "none";
 }
 
+function preferenceKey(baseKey){
+  const uid = STATE.auth?.user?.uid || "anon";
+  return `${baseKey}:${uid}`;
+}
+
+function applyTheme(theme){
+  document.body.classList.toggle("theme-light", theme === "light");
+}
+
+function applyFontScale(scale){
+  const valid = Number(scale);
+  const finalScale = Number.isFinite(valid) && valid > 0 ? valid : 1;
+  document.documentElement.style.setProperty("--font-scale", String(finalScale));
+}
+
+function ensureAppearanceControls(){
+  const actions = document.querySelector(".topbar-actions");
+  if (!actions || document.getElementById("themeModeDark")) return;
+  const wrap = document.createElement("div");
+  wrap.className = "appearanceInline";
+  wrap.innerHTML = `
+    <div class="themeOptions" role="group" aria-label="Preferencias visuales">
+      <div class="themeSwitch" role="radiogroup" aria-label="Modo de color">
+        <label class="themeOption"><input type="radio" name="themeMode" value="dark" id="themeModeDark"><span>Oscuro</span></label>
+        <label class="themeOption"><input type="radio" name="themeMode" value="light" id="themeModeLight"><span>Claro</span></label>
+      </div>
+      <select id="fontScaleSelect" aria-label="Tamaño de letra" class="fontSizeInline">
+        <option value="0.9">Pequeña</option><option value="1">Normal</option><option value="1.1">Grande</option><option value="1.2">Muy grande</option>
+      </select>
+    </div>`;
+  actions.appendChild(wrap);
+}
+
+function setupAppearanceControls(){
+  const themeDark = $("themeModeDark");
+  const themeLight = $("themeModeLight");
+  const fontScaleSelect = $("fontScaleSelect");
+  if (!themeDark || !themeLight || !fontScaleSelect) return;
+  const savedTheme = localStorage.getItem(preferenceKey(PREF_KEYS.theme)) || "dark";
+  const savedScale = localStorage.getItem(preferenceKey(PREF_KEYS.fontScale)) || "1";
+  const selectedTheme = savedTheme === "light" ? "light" : "dark";
+  themeDark.checked = selectedTheme === "dark";
+  themeLight.checked = selectedTheme === "light";
+  fontScaleSelect.value = ["0.9","1","1.1","1.2"].includes(savedScale) ? savedScale : "1";
+  applyTheme(selectedTheme);
+  applyFontScale(fontScaleSelect.value);
+  [themeDark, themeLight].forEach(input => input.addEventListener("change", () => {
+    if (!input.checked) return;
+    localStorage.setItem(preferenceKey(PREF_KEYS.theme), input.value);
+    applyTheme(input.value);
+  }));
+  fontScaleSelect.addEventListener("change", () => {
+    const v = ["0.9","1","1.1","1.2"].includes(fontScaleSelect.value) ? fontScaleSelect.value : "1";
+    localStorage.setItem(preferenceKey(PREF_KEYS.fontScale), v);
+    applyFontScale(v);
+  });
+}
+
 /* -------------------------
  * Inicialización por página
  * ------------------------- */
@@ -992,6 +1054,7 @@ function refreshAuthUi(){
  * page: "home" | "events" | "drivers" | "passengers" | "assignments" | "tracking"
  */
 export async function initCorePage({ page }) {
+  ensureAppearanceControls();
   refreshAuthUi();
 
   // Botones auth (si existen)
@@ -1013,6 +1076,7 @@ export async function initCorePage({ page }) {
 
   // UI status
   refreshAuthUi();
+  setupAppearanceControls();
 
   if (!STATE.auth.user) {
     toast("Necesitás ingresar con Google para usar la app");

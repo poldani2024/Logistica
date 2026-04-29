@@ -210,6 +210,28 @@ body.theme-light{
   --muted2:rgba(15,29,53,.62);
   --shadow: 0 14px 40px rgba(17, 40, 80, .12);
 }
+body.theme-light .topbar{
+  background: linear-gradient(180deg, rgba(244,247,255,.95), rgba(234,240,255,.92));
+}
+body.theme-light .card,
+body.theme-light .authCard{
+  background: linear-gradient(180deg, rgba(255,255,255,.96), rgba(248,250,255,.96));
+}
+body.theme-light .pill,
+body.theme-light .btn,
+body.theme-light .navbtn,
+body.theme-light button,
+body.theme-light .iconbtn,
+body.theme-light .menu a{
+  background: rgba(255,255,255,.75);
+  color: var(--text);
+}
+body.theme-light input,
+body.theme-light select,
+body.theme-light textarea{
+  background: rgba(255,255,255,.8);
+  color: var(--text);
+}
 
 /* Layout */
 .container{
