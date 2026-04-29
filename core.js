@@ -1015,6 +1015,8 @@ function ensureAppearanceControls(){
 }
 
 function setupAppearanceControls(){
+  applyStoredAppearancePreferences();
+
   const themeDark = $("themeModeDark");
   const themeLight = $("themeModeLight");
   const fontScaleSelect = $("fontScaleSelect");
@@ -1037,6 +1039,13 @@ function setupAppearanceControls(){
     localStorage.setItem(preferenceKey(PREF_KEYS.fontScale), v);
     applyFontScale(v);
   });
+}
+
+function applyStoredAppearancePreferences(){
+  const savedTheme = localStorage.getItem(preferenceKey(PREF_KEYS.theme)) || "dark";
+  const savedScale = localStorage.getItem(preferenceKey(PREF_KEYS.fontScale)) || "1";
+  applyTheme(savedTheme === "light" ? "light" : "dark");
+  applyFontScale(["0.9","1","1.1","1.2"].includes(savedScale) ? savedScale : "1");
 }
 
 /* -------------------------
