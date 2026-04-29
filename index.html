@@ -13,56 +13,49 @@
 
 <header class="topbar">
   <div class="topbar-inner">
-    <Table>
-    <tr>
-      <th>
-        <div class="brand">
-          <div class="title">Gestión de Transporte Soka Gakkai</div>
-          <div class="sub">Rosario / Gran Rosario</div>
+    <div class="brand">
+      <div class="title">Gestión de Transporte Soka Gakkai</div>
+      <div class="sub">Rosario / Gran Rosario</div>
+    </div>
+
+    <div class="topbar-center">
+      <div class="field topbar-event-field">
+        <label>Evento activo</label>
+        <select id="eventSelect"></select>
+        <div class="subtitle" id="eventHint">No hay evento seleccionado</div>
+      </div>
+    </div>
+
+    <div class="topbar-actions">
+      <div class="row topbar-actions-main">
+        <a href="index.html" class="iconbtn primary" title="Inicio">🏠</a>
+        <div class="pill">
+          <span id="authStatus">No ingresado</span>
+          <button id="btnLogin" type="button" style="display:none">Ingresar</button>
+          <button id="btnLogout" type="button">Salir</button>
         </div>
-      </th>
-      <th>
-        <div class="topbar-center">
-          <div class="field topbar-event-field">
-            <label>Evento activo</label>
-            <select id="eventSelect"></select>
-            <div class="subtitle" id="eventHint">No hay evento seleccionado</div>
+      </div>
+      <div class="appearanceInline">
+        <div class="themeOptions" role="group" aria-label="Preferencias visuales">
+          <div class="themeSwitch" role="radiogroup" aria-label="Modo de color">
+            <label class="themeOption">
+              <input type="radio" name="themeMode" value="dark" id="themeModeDark">
+              <span>Oscuro</span>
+            </label>
+            <label class="themeOption">
+              <input type="radio" name="themeMode" value="light" id="themeModeLight">
+              <span>Claro</span>
+            </label>
           </div>
+          <select id="fontScaleSelect" aria-label="Tamaño de letra" class="fontSizeInline">
+            <option value="0.9">Pequeña</option>
+            <option value="1" selected>Normal</option>
+            <option value="1.1">Grande</option>
+            <option value="1.2">Muy grande</option>
+          </select>
         </div>
-      </th>
-      <th>
-        <div class="row topbar-actions">
-          <a href="index.html" class="iconbtn primary" title="Inicio">🏠</a>
-          <div class="appearanceInline">
-            <div class="themeOptions" role="group" aria-label="Preferencias visuales">
-              <div class="themeSwitch" role="radiogroup" aria-label="Modo de color">
-              <label class="themeOption">
-                <input type="radio" name="themeMode" value="dark" id="themeModeDark">
-                <span>Oscuro</span>
-              </label>
-              <label class="themeOption">
-                <input type="radio" name="themeMode" value="light" id="themeModeLight">
-                <span>Claro</span>
-              </label>
-              </div>
-              <select id="fontScaleSelect" aria-label="Tamaño de letra" class="fontSizeInline">
-                <option value="0.9">Pequeña</option>
-                <option value="1" selected>Normal</option>
-                <option value="1.1">Grande</option>
-                <option value="1.2">Muy grande</option>
-              </select>
-            </div>
-          </div>
-    
-          <div class="pill">
-            <span id="authStatus">No ingresado</span>
-            <button id="btnLogin" type="button" style="display:none">Ingresar</button>
-            <button id="btnLogout" type="button">Salir</button>
-          </div>
-        </div>
-      </th>
-    </tr>
-    </Table>
+      </div>
+    </div>
   </div>
 </header>
 
