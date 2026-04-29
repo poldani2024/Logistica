@@ -1,5 +1,56 @@
 import { initCorePage, STATE, can, loadEventContext, escapeHtml } from "./core.js";
 
+const PREF_KEYS = {
+  theme: "uiThemeMode",
+  fontScale: "uiFontScale"
+};
+
+function preferenceKey(baseKey){
+  const uid = STATE.auth?.user?.uid || "anon";
+  return `${baseKey}:${uid}`;
+}
+
+function applyTheme(theme){
+  document.body.classList.toggle("theme-light", theme === "light");
+}
+
+function applyFontScale(scale){
+  const valid = Number(scale);
+  const finalScale = Number.isFinite(valid) && valid > 0 ? valid : 1;
+  document.documentElement.style.setProperty("--font-scale", String(finalScale));
+}
+
+function setupAppearanceControls(){
+  const themeDark = document.getElementById("themeModeDark");
+  const themeLight = document.getElementById("themeModeLight");
+  const fontScaleSelect = document.getElementById("fontScaleSelect");
+  if (!themeDark || !themeLight || !fontScaleSelect) return;
+
+  const savedTheme = localStorage.getItem(preferenceKey(PREF_KEYS.theme)) || "dark";
+  const savedFontScale = localStorage.getItem(preferenceKey(PREF_KEYS.fontScale)) || "1";
+
+  const selectedTheme = savedTheme === "light" ? "light" : "dark";
+  themeDark.checked = selectedTheme === "dark";
+  themeLight.checked = selectedTheme === "light";
+  fontScaleSelect.value = ["0.9", "1", "1.1", "1.2"].includes(savedFontScale) ? savedFontScale : "1";
+
+  applyTheme(selectedTheme);
+  applyFontScale(fontScaleSelect.value);
+
+  [themeDark, themeLight].forEach(input => input.addEventListener("change", () => {
+    if (!input.checked) return;
+    const value = input.value === "light" ? "light" : "dark";
+    localStorage.setItem(preferenceKey(PREF_KEYS.theme), value);
+    applyTheme(value);
+  }));
+
+  fontScaleSelect.addEventListener("change", () => {
+    const value = ["0.9", "1", "1.1", "1.2"].includes(fontScaleSelect.value) ? fontScaleSelect.value : "1";
+    localStorage.setItem(preferenceKey(PREF_KEYS.fontScale), value);
+    applyFontScale(value);
+  });
+}
+
 function applyPermissions(){
   document.querySelectorAll("[data-perm]").forEach(el => {
     const key = el.dataset.perm;
@@ -144,6 +195,7 @@ function renderDashboard(){
   if (!STATE.auth?.user) return;
 
   applyPermissions();
+  setupAppearanceControls();
   renderDashboard();
 
   document.addEventListener("eventChanged", async (ev) => {
