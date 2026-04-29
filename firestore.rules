@@ -1,0 +1,113 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isSuperAdmin() {
+      return isSignedIn() &&
+        get(/databases/$(database)/documents/config/superAdmins).data.emails.hasAny([request.auth.token.email]);
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        isSuperAdmin() ||
+        userDoc().get('perms', {}).get('Admin', false) == true
+      );
+    }
+
+    function isActive() {
+      return isSignedIn() && userDoc().get('active', true) != false;
+    }
+
+    function hasPerm(perm) {
+      return isSignedIn() && (
+        isAdmin() ||
+        (isActive() && userDoc().get('perms', {}).get(perm, false) == true)
+      );
+    }
+
+    // ── Usuarios ──────────────────────────────────────────────
+    match /users/{uid} {
+      allow read: if isSignedIn() && (request.auth.uid == uid || hasPerm('Permisos'));
+      allow create: if isSignedIn() && request.auth.uid == uid;
+      allow update: if isSignedIn() && (request.auth.uid == uid || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    // ── Invitaciones ──────────────────────────────────────────
+    match /invites/{email} {
+      allow read: if isSignedIn();
+      allow write: if hasPerm('AceptInv') || isAdmin();
+    }
+
+    // ── Configuración global (solo lectura para usuarios) ─────
+    match /config/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // ── Eventos y subcolecciones ──────────────────────────────
+    match /events/{eventId} {
+      allow read: if isSignedIn();
+      allow write: if hasPerm('Eventos') || isAdmin();
+
+      match /eventDrivers/{driverId} {
+        allow read: if isSignedIn();
+        allow write: if hasPerm('ChoferesXFase') || hasPerm('Asignaciones') || isAdmin();
+      }
+
+      match /eventPassengers/{passengerId} {
+        allow read: if isSignedIn();
+        allow write: if hasPerm('Pasajeros') || hasPerm('Asignaciones') || isAdmin();
+      }
+
+      match /assignments/{driverId} {
+        allow read: if isSignedIn();
+        allow write: if hasPerm('Asignaciones') || isAdmin();
+      }
+
+      match /history/{entryId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn() && isActive();
+        allow update, delete: if isAdmin();
+      }
+    }
+
+    // ── Master data: choferes ─────────────────────────────────
+    match /drivers/{driverId} {
+      allow read: if isSignedIn();
+      allow write: if hasPerm('Choferes') || isAdmin();
+    }
+
+    // ── Master data: pasajeros ────────────────────────────────
+    match /passengers/{passengerId} {
+      allow read: if isSignedIn();
+      allow write: if hasPerm('Pasajeros') || isAdmin();
+    }
+
+    // ── Solicitudes ───────────────────────────────────────────
+    match /requests/{requestId} {
+      allow read: if isSignedIn() && (
+        resource.data.creatorUid == request.auth.uid ||
+        hasPerm('Admin.Solicitudes') ||
+        isAdmin()
+      );
+      allow create: if hasPerm('Solicitudes') || isAdmin();
+      allow update: if hasPerm('Admin.Solicitudes') || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ── Tokens FCM (push notifications) ──────────────────────
+    match /fcmTokens/{uid} {
+      allow read, write: if isSignedIn() && request.auth.uid == uid;
+      allow read: if isAdmin();
+    }
+  }
+}

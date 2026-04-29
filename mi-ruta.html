@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Mi Ruta | Gestión de Transporte Soka Gakkai</title>
+  <link rel="stylesheet" href="styles.css"/>
+  <link rel="manifest" href="manifest.json"/>
+  <meta name="theme-color" content="#2563eb"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <style>
+    .ruta-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+    .ruta-card .pasajero-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--primary);
+      color: #fff;
+      font-weight: 700;
+      font-size: 14px;
+      margin-right: 10px;
+      flex-shrink: 0;
+    }
+    .ruta-card .pasajero-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+    }
+    .ruta-card .pasajero-info { flex: 1; }
+    .ruta-card .pasajero-nombre { font-weight: 700; font-size: 16px; }
+    .ruta-card .pasajero-dir { color: var(--muted); font-size: 13px; margin-top: 2px; }
+    .ruta-card .pasajero-tel { font-size: 14px; margin-top: 4px; }
+    .ruta-card .pasajero-tel a { color: var(--primary); }
+    .ruta-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+
+    .status-badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .status-Pendiente { background: #fef3c7; color: #92400e; }
+    .status-EnCamino  { background: #dbeafe; color: #1e40af; }
+    .status-Recogido  { background: #d1fae5; color: #065f46; }
+    .status-Ausente   { background: #fee2e2; color: #991b1b; }
+    .theme-light .status-Pendiente { background: #fef3c7; color: #92400e; }
+    .theme-light .status-EnCamino  { background: #dbeafe; color: #1e40af; }
+    .theme-light .status-Recogido  { background: #d1fae5; color: #065f46; }
+    .theme-light .status-Ausente   { background: #fee2e2; color: #991b1b; }
+
+    .fase-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+
+    .resumen-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 16px;
+      margin-bottom: 16px;
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+    .resumen-stat { text-align: center; }
+    .resumen-stat .val { font-size: 28px; font-weight: 800; color: var(--primary); }
+    .resumen-stat .lbl { font-size: 12px; color: var(--muted); }
+
+    #mapPreview {
+      width: 100%;
+      height: 200px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      margin-bottom: 16px;
+      background: var(--card-bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <div class="title">Mi Ruta del Día</div>
+      <div class="sub">Mis pasajeros asignados</div>
+    </div>
+    <div class="topbar-actions">
+      <div class="row topbar-actions-main">
+        <a href="index.html" class="iconbtn primary" title="Inicio">🏠</a>
+        <div class="pill">
+          <span id="authStatus">No ingresado</span>
+          <button id="btnLogin" type="button" style="display:none">Ingresar</button>
+          <button id="btnLogout" type="button">Salir</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="container" style="max-width:640px; margin:0 auto;">
+
+  <div id="noDriverMsg" style="display:none;" class="card">
+    <p class="muted" style="padding:16px;">
+      No estás registrado como chofer en el sistema o no tenés pasajeros asignados para el evento activo.<br><br>
+      Contactá al coordinador si creés que es un error.
+    </p>
+  </div>
+
+  <div id="rutaContent" style="display:none;">
+
+    <div class="resumen-card" id="resumenCard">
+      <div class="resumen-stat">
+        <div class="val" id="statTotal">0</div>
+        <div class="lbl">Pasajeros</div>
+      </div>
+      <div class="resumen-stat">
+        <div class="val" id="statRecogidos">0</div>
+        <div class="lbl">Recogidos</div>
+      </div>
+      <div class="resumen-stat">
+        <div class="val" id="statPendientes">0</div>
+        <div class="lbl">Pendientes</div>
+      </div>
+      <div class="resumen-stat">
+        <div class="val" id="statAusentes">0</div>
+        <div class="lbl">Ausentes</div>
+      </div>
+    </div>
+
+    <div id="eventInfoBar" class="subtitle" style="margin-bottom:12px;"></div>
+
+    <div class="fase-tabs" id="faseTabs"></div>
+
+    <div id="mapPreview">Mapa de ruta disponible cuando los pasajeros tienen geolocalización</div>
+
+    <div id="rutaLista"></div>
+
+    <div class="row" style="margin-top:16px; gap:8px; flex-wrap:wrap;">
+      <button class="btn primary" id="btnWhatsAppRuta" type="button">
+        Enviar mi ruta por WhatsApp
+      </button>
+      <button class="btn" id="btnRefreshRuta" type="button">
+        Actualizar
+      </button>
+    </div>
+
+  </div>
+
+  <div id="loadingMsg" class="muted" style="padding:20px;">Cargando tu ruta…</div>
+
+</main>
+
+<div id="toast" class="toast"></div>
+
+<script>
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("./sw.js").catch(console.warn);
+  }
+</script>
+<script type="module" src="./mi-ruta.js"></script>
+
+</body>
+</html>
