@@ -26,8 +26,28 @@
       </div>
     </div>
 
-    <div class="row">
+    <div class="row topbar-actions">
       <a href="index.html" class="iconbtn primary" title="Inicio">🏠</a>
+      <div class="appearanceInline">
+        <div class="themeOptions" role="group" aria-label="Preferencias visuales">
+          <div class="themeSwitch" role="radiogroup" aria-label="Modo de color">
+          <label class="themeOption">
+            <input type="radio" name="themeMode" value="dark" id="themeModeDark">
+            <span>Oscuro</span>
+          </label>
+          <label class="themeOption">
+            <input type="radio" name="themeMode" value="light" id="themeModeLight">
+            <span>Claro</span>
+          </label>
+          </div>
+          <select id="fontScaleSelect" aria-label="Tamaño de letra" class="fontSizeInline">
+            <option value="0.9">Pequeña</option>
+            <option value="1" selected>Normal</option>
+            <option value="1.1">Grande</option>
+            <option value="1.2">Muy grande</option>
+          </select>
+        </div>
+      </div>
 
       <div class="pill">
         <span id="authStatus">No ingresado</span>
