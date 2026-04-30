@@ -1,0 +1,42 @@
+{
+  "name": "Gestión de Transporte Soka Gakkai",
+  "short_name": "Logística SGI",
+  "description": "Sistema de gestión de transporte para eventos de la Soka Gakkai Rosario",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#1a1a2e",
+  "theme_color": "#2563eb",
+  "orientation": "portrait-primary",
+  "lang": "es",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Mi Ruta",
+      "short_name": "Mi Ruta",
+      "description": "Ver mis pasajeros asignados",
+      "url": "./mi-ruta.html",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Tracking",
+      "short_name": "Tracking",
+      "description": "Seguimiento en tiempo real",
+      "url": "./tracking.html",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ],
+  "categories": ["productivity", "utilities"]
+}

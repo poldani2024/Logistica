@@ -39,7 +39,6 @@ import {
 
 export const $ = (id) => document.getElementById(id);
 
-export const ADMIN_EMAIL = "pedro.l.oldani@gmail.com";
 const PREF_KEYS = {
   theme: "uiThemeMode",
   fontScale: "uiFontScale"
@@ -47,7 +46,10 @@ const PREF_KEYS = {
 
 function isAdmin(){
   const email = (STATE.auth.user?.email || "").trim().toLowerCase();
-  return email === ADMIN_EMAIL.toLowerCase();
+  if (!email) return false;
+  const superAdmins = STATE.config?.superAdmins || [];
+  if (superAdmins.some(e => e.trim().toLowerCase() === email)) return true;
+  return false;
 }
 
 /* -------------------------
@@ -210,6 +212,9 @@ export const STATE = {
     perms: {},
     driver: null // objeto driver master si matchea email
   },
+  config: {
+    superAdmins: [] // emails cargados desde config/superAdmins en Firestore
+  },
   events: [],
   master: {
     drivers: [],
@@ -217,15 +222,53 @@ export const STATE = {
   },
   event: {
     id: null,
-    
     driverPhases: new Map(), // driverId -> {phaseId:true}
     phases: [],
-driversIds: new Set(),
+    driversIds: new Set(),
     passengersIds: new Set(),
     passengersMeta: new Map(), // passengerId -> meta (status/tracking/assignedDriverId/etc)
     assignments: new Map()     // driverId -> { driverId, passengerIds: [] }
   }
 };
+
+/* -------------------------
+ * Red: retry + config
+ * ------------------------- */
+
+export async function withRetry(fn, maxAttempts = 3, baseDelayMs = 1000) {
+  let lastErr;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (e) {
+      lastErr = e;
+      const isNetworkErr = (
+        String(e?.code || "").includes("unavailable") ||
+        String(e?.code || "").includes("network") ||
+        String(e?.message || "").toLowerCase().includes("network") ||
+        String(e?.message || "").toLowerCase().includes("fetch")
+      );
+      if (!isNetworkErr || attempt === maxAttempts) throw e;
+      const delay = baseDelayMs * Math.pow(2, attempt - 1);
+      console.warn(`withRetry: intento ${attempt}/${maxAttempts} fallido, reintentando en ${delay}ms…`, e);
+      await new Promise(r => setTimeout(r, delay));
+    }
+  }
+  throw lastErr;
+}
+
+export async function loadAppConfig() {
+  try {
+    const snap = await withRetry(() => getDoc(doc(db, "config", "superAdmins")));
+    if (snap.exists()) {
+      const data = snap.data() || {};
+      STATE.config.superAdmins = Array.isArray(data.emails) ? data.emails : [];
+    }
+  } catch (e) {
+    console.warn("loadAppConfig: no se pudo cargar config/superAdmins", e);
+    STATE.config.superAdmins = [];
+  }
+}
 
 export async function addPassengerToEvent(eventId, passengerId, extra = {}) {
   if (!eventId) throw new Error("No hay eventId");
@@ -371,8 +414,7 @@ export async function ensureAuth() {
 
       onAuthStateChanged(auth, (user) => {
         STATE.auth.user = user || null;
-        const email = (user?.email || "").trim().toLowerCase();
-        STATE.auth.isAdmin = email === ADMIN_EMAIL.toLowerCase();
+        STATE.auth.isAdmin = isAdmin();
 
         if (typeof refreshAuthUi === "function") refreshAuthUi();
 
@@ -423,9 +465,9 @@ export async function logout() {
  * ------------------------- */
 
 export async function loadMasterDrivers() {
-  // Si no tenés lastName en todos, el orderBy podría fallar.
-  // Asumimos que existe. Si no, sacá orderBy y ordená en JS.
-  const snap = await getDocs(query(collection(db, "drivers"), orderBy("lastName")));
+  const snap = await withRetry(() =>
+    getDocs(query(collection(db, "drivers"), orderBy("lastName")))
+  );
   const arr = snap.docs.map(d => ({ id: d.id, ...d.data() }));
   arr.sort((a, b) =>
     `${a.lastName || ""} ${a.firstName || ""}`.localeCompare(`${b.lastName || ""} ${b.firstName || ""}`)
@@ -435,7 +477,9 @@ export async function loadMasterDrivers() {
 }
 
 export async function loadMasterPassengers() {
-  const snap = await getDocs(query(collection(db, "passengers"), orderBy("lastName")));
+  const snap = await withRetry(() =>
+    getDocs(query(collection(db, "passengers"), orderBy("lastName")))
+  );
   const arr = snap.docs.map(d => ({ id: d.id, ...d.data() }));
   arr.sort((a, b) =>
     `${a.lastName || ""} ${a.firstName || ""}`.localeCompare(`${b.lastName || ""} ${b.firstName || ""}`)
@@ -464,8 +508,9 @@ export function resolveDriverRoleFromMaster() {
  * ------------------------- */
 
 export async function loadEvents() {
-  // Si dateStart es ISO string, orderBy funciona si todos tienen ese campo.
-  const snap = await getDocs(query(collection(db, "events"), orderBy("dateStart")));
+  const snap = await withRetry(() =>
+    getDocs(query(collection(db, "events"), orderBy("dateStart")))
+  );
   const arr = snap.docs.map(d => ({ id: d.id, ...d.data() }));
   STATE.events = arr;
   return arr;
@@ -965,6 +1010,42 @@ export async function updateTrackingAsDriver({
 }
 
 
+/* -------------------------
+ * Historial de asignaciones
+ * ------------------------- */
+
+export async function addAssignmentHistory(eventId, action, details = {}) {
+  if (!eventId) return;
+  if (!STATE.auth?.user) return;
+  try {
+    const { addDoc, collection: col } = await import("https://www.gstatic.com/firebasejs/10.7.2/firebase-firestore.js");
+    await addDoc(col(db, "events", eventId, "history"), {
+      action,
+      ...details,
+      at: serverTimestamp(),
+      by: STATE.auth.user?.email || "",
+      byUid: STATE.auth.user?.uid || ""
+    });
+  } catch (e) {
+    console.warn("addAssignmentHistory error:", e);
+  }
+}
+
+export async function loadAssignmentHistory(eventId, limitCount = 50) {
+  if (!eventId) return [];
+  try {
+    const { query: q, collection: col, orderBy: ob, limit: lim, getDocs: gd } =
+      await import("https://www.gstatic.com/firebasejs/10.7.2/firebase-firestore.js");
+    const snap = await withRetry(() =>
+      gd(q(col(db, "events", eventId, "history"), ob("at", "desc"), lim(limitCount)))
+    );
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch (e) {
+    console.warn("loadAssignmentHistory error:", e);
+    return [];
+  }
+}
+
 function refreshAuthUi(){
   const st = $("authStatus");
   const btnLogin = $("btnLogin");
@@ -1091,6 +1172,14 @@ export async function initCorePage({ page }) {
     toast("Necesitás ingresar con Google para usar la app");
     return;
   }
+
+  // Config global (superAdmins desde Firestore)
+  await loadAppConfig();
+
+  // Recalcular isAdmin con config cargada
+  const email = (STATE.auth.user?.email || "").trim().toLowerCase();
+  STATE.auth.isAdmin = isAdmin() || !!(STATE.auth.profile?.perms?.Admin);
+  refreshAuthUi();
 
   // Perfil + permisos
   try {

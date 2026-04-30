@@ -3,6 +3,8 @@ import {
   loadMasterDrivers
 } from "./core.js";
 
+import { validateDriver } from "./validation.js";
+
 import { db } from "./firebase-init.js";
 
 import {
@@ -164,7 +166,12 @@ async function saveDriver(){
     if (!STATE.auth.isAdmin) throw new Error("Solo Admin");
 
     const payload = getPayloadFromForm();
-    if (!payload.firstName && !payload.lastName) throw new Error("Poné nombre o apellido");
+
+    const { valid, errors } = validateDriver(payload);
+    if (!valid) {
+      const first = Object.values(errors)[0];
+      throw new Error(first);
+    }
 
     if (!currentDriverId){
       const ref = await addDoc(collection(db, "drivers"), {

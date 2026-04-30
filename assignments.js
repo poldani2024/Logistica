@@ -9,6 +9,8 @@ import {
   loadEventContext,
   driversForPhase,
   getActivePhaseId,
+  withRetry,
+  addAssignmentHistory
 } from "./core.js";
 
 import { db } from "./firebase-init.js";
@@ -65,6 +67,15 @@ function wireOnce(){
       exportPhaseListToExcel();
     }catch(e){
       console.error(e);
+      toast(e?.message || String(e));
+    }
+  });
+
+  $("btnOptimizeRoute")?.addEventListener("click", async () => {
+    try {
+      await optimizeRouteForActiveDriver();
+    } catch (e) {
+      console.error("optimizeRoute error", e);
       toast(e?.message || String(e));
     }
   });
@@ -1152,4 +1163,99 @@ const arr = base || [];
 
   await setDoc(ref, data, { merge: true });
   console.log("Grabó ok");
+}
+
+/* ─── Optimización de Ruta por Proximidad Geográfica ───────────
+ * Nearest-neighbor algorithm sobre los pasajeros asignados al
+ * chofer activo en la fase activa, usando sus coordenadas lat/lng.
+ * Reordena el array en Firestore.
+ * ────────────────────────────────────────────────────────────── */
+
+function haversineKm(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function nearestNeighborSort(points) {
+  if (points.length <= 1) return points;
+  const remaining = [...points];
+  const ordered = [remaining.splice(0, 1)[0]];
+  while (remaining.length) {
+    const last = ordered[ordered.length - 1];
+    let minDist = Infinity;
+    let minIdx = 0;
+    for (let i = 0; i < remaining.length; i++) {
+      const d = haversineKm(last.lat, last.lng, remaining[i].lat, remaining[i].lng);
+      if (d < minDist) { minDist = d; minIdx = i; }
+    }
+    ordered.push(remaining.splice(minIdx, 1)[0]);
+  }
+  return ordered;
+}
+
+async function optimizeRouteForActiveDriver() {
+  const driverId = STATE.ui?.activeDriverId;
+  if (!driverId) return toast("Primero seleccioná un chofer.");
+
+  const phaseId = getActivePhaseId();
+  if (!phaseId) return toast("Seleccioná una fase.");
+
+  const eventId = STATE.event?.id;
+  if (!eventId) return toast("Seleccioná un evento.");
+
+  const ref = doc(db, "events", eventId, "assignments", driverId);
+  const snap = await withRetry(() => getDoc(ref));
+  if (!snap.exists()) return toast("El chofer no tiene asignaciones en este evento.");
+
+  const data = snap.data() || {};
+  const phases = (data.phases && typeof data.phases === "object") ? data.phases : {};
+  let ids = Array.isArray(phases[phaseId]) ? [...phases[phaseId]] : [];
+  if (!ids.length && phaseId === "ida" && Array.isArray(data.passengerIds)) {
+    ids = [...data.passengerIds];
+  }
+
+  if (ids.length < 2) return toast("Se necesitan al menos 2 pasajeros para optimizar la ruta.");
+
+  const masterMap = new Map((STATE.master.passengers || []).map(p => [p.id, p]));
+  const withCoords = ids.map(id => {
+    const p = masterMap.get(id);
+    return { id, lat: p?.lat, lng: p?.lng };
+  });
+
+  const withGeo = withCoords.filter(p => p.lat != null && p.lng != null);
+  const withoutGeo = withCoords.filter(p => p.lat == null || p.lng == null);
+
+  if (withGeo.length < 2) {
+    return toast(`Solo ${withGeo.length} pasajero(s) tienen coordenadas. Se necesitan al menos 2 para optimizar.`);
+  }
+
+  const sorted = nearestNeighborSort(withGeo);
+  const optimizedIds = [...sorted.map(p => p.id), ...withoutGeo.map(p => p.id)];
+
+  phases[phaseId] = optimizedIds;
+  if (phaseId === "ida") data.passengerIds = optimizedIds;
+
+  await withRetry(() =>
+    setDoc(ref, { ...data, phases, updatedAt: serverTimestamp() }, { merge: true })
+  );
+
+  await addAssignmentHistory(eventId, "optimizar_ruta", {
+    driverId,
+    phaseId,
+    passengerCount: optimizedIds.length,
+    withGeoCount: withGeo.length
+  });
+
+  await loadEventContext(eventId);
+  renderAll();
+
+  const d = (STATE.master.drivers || []).find(x => x.id === driverId);
+  const dName = d ? `${d.lastName || ""} ${d.firstName || ""}`.trim() : driverId;
+  toast(`Ruta optimizada para ${dName}: ${withGeo.length} pasajeros ordenados por proximidad.${withoutGeo.length ? ` (${withoutGeo.length} sin coordenadas al final)` : ""}`);
 }

@@ -1,5 +1,5 @@
 import { db } from "./firebase-init.js";
-import { initAuthAndEvents, STATE, toast, escapeHtml, loadEvents, renderEventSelect } from "./core-auth.js";
+import { initCorePage, STATE, toast, escapeHtml, loadEvents, renderEventSelect, getSelectedEventId } from "./core.js";
 
 import {
   collection, doc, getDocs, query, orderBy,
@@ -23,15 +23,19 @@ async function loadPassengersAll(){
   PASSENGERS = snap.docs.map(d=>({id:d.id, ...d.data()}));
 }
 
+function getEventId() {
+  return STATE.event?.id || getSelectedEventId() || "";
+}
+
 async function loadEventLinks(){
   LINKED_DRIVER_IDS = new Set();
   LINKED_PASSENGER_IDS = new Set();
-  if(!STATE.eventId) return;
+  if(!getEventId()) return;
 
-  const dSnap = await getDocs(collection(db,"events",STATE.eventId,"eventDrivers"));
+  const dSnap = await getDocs(collection(db,"events",getEventId(),"eventDrivers"));
   dSnap.forEach(x => LINKED_DRIVER_IDS.add(x.id));
 
-  const pSnap = await getDocs(collection(db,"events",STATE.eventId,"eventPassengers"));
+  const pSnap = await getDocs(collection(db,"events",getEventId(),"eventPassengers"));
   pSnap.forEach(x => LINKED_PASSENGER_IDS.add(x.id));
 }
 
@@ -122,18 +126,18 @@ function pickedIds(attr){
 }
 
 async function linkDrivers(ids, add){
-  if(!STATE.eventId) return alert("Seleccioná un evento");
+  if(!getEventId()) return alert("Seleccioná un evento");
   if(!ids.length) return toast("No hay seleccionados");
 
   const batch = writeBatch(db);
   for(const driverId of ids){
-    const ref = doc(db,"events",STATE.eventId,"eventDrivers",driverId);
+    const ref = doc(db,"events",getEventId(),"eventDrivers",driverId);
     if(add){
       batch.set(ref, { driverId, createdAt: serverTimestamp(), active:true }, { merge:true });
     } else {
       batch.delete(ref);
       // (opcional) también podrías borrar assignment del chofer en este evento
-      // batch.delete(doc(db,"events",STATE.eventId,"assignments",driverId));
+      // batch.delete(doc(db,"events",getEventId(),"assignments",driverId));
     }
   }
   await batch.commit();
@@ -143,12 +147,12 @@ async function linkDrivers(ids, add){
 }
 
 async function linkPassengers(ids, add){
-  if(!STATE.eventId) return alert("Seleccioná un evento");
+  if(!getEventId()) return alert("Seleccioná un evento");
   if(!ids.length) return toast("No hay seleccionados");
 
   const batch = writeBatch(db);
   for(const passengerId of ids){
-    const ref = doc(db,"events",STATE.eventId,"eventPassengers",passengerId);
+    const ref = doc(db,"events",getEventId(),"eventPassengers",passengerId);
     if(add){
       batch.set(ref, { passengerId, createdAt: serverTimestamp(), status:"unassigned", assignedDriverId:null }, { merge:true });
     } else {
@@ -172,7 +176,8 @@ async function refreshAll(){
 }
 
 (async function init(){
-  await initAuthAndEvents({ adminEmail: "pedro.l.oldani@gmail.com" });
+  await initCorePage({ page: "event-links" });
+  if (!STATE.auth.user) return;
 
   $("btnReloadEvents").addEventListener("click", refreshAll);
   $("btnReloadDrivers").addEventListener("click", async ()=>{ await loadDriversAll(); renderDrivers(); });
