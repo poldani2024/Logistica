@@ -509,9 +509,23 @@ a.navbtn:hover, .menu a:hover{
   overflow: auto;
   border-radius: 18px;
   border: 1px solid var(--line);
-  background: linear-gradient(180deg, rgba(13,32,65,.98), rgba(9,22,46,.98));
+  background: linear-gradient(180deg, var(--bg1), var(--bg0));
+  color: var(--text);
   box-shadow: var(--shadow);
   padding: 16px;
+}
+body.theme-light .eventPickerCard{
+  background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(244,247,255,.98));
+}
+body.theme-light thead th{
+  background: rgba(0,0,0,.04);
+  color: var(--muted);
+}
+body.theme-light tbody td{
+  border-bottom: 1px solid rgba(0,0,0,.07);
+}
+body.theme-light tbody tr:hover{
+  background: rgba(0,0,0,.03);
 }
 @media (max-width: 700px){
   .eventPickerCard{
