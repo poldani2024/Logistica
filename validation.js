@@ -52,6 +52,16 @@ export const rules = {
 
   match: (otherVal, msg = "Los valores no coinciden") =>
     (val) => val === otherVal ? null : msg,
+
+  optionalEmail: (msg = "Email inválido") =>
+    (val) => !val.trim() ? null : (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val.trim()) ? null : msg),
+
+  optionalPhone: (msg = "Teléfono inválido (solo números, 8-15 dígitos)") =>
+    (val) => {
+      if (!val.trim()) return null;
+      const digits = val.replace(/\D/g, "");
+      return digits.length >= 8 && digits.length <= 15 ? null : msg;
+    },
 };
 
 /* ── Función principal de validación ────────────────────────── */
@@ -128,8 +138,10 @@ export function validateDriver(data) {
   return validate(data, {
     firstName: [rules.required("El nombre es obligatorio"), rules.noHtml()],
     lastName:  [rules.required("El apellido es obligatorio"), rules.noHtml()],
-    email:     [rules.email()],
-    phone:     [rules.phone()],
+    phone:     [rules.required("El teléfono es obligatorio"), rules.optionalPhone()],
+    address:   [rules.required("La dirección es obligatoria"), rules.noHtml()],
+    localidad: [rules.required("La localidad es obligatoria"), rules.noHtml()],
+    email:     [rules.optionalEmail()],
     capacity:  [rules.positiveInt("La capacidad debe ser un número entero mayor a 0"), rules.range(1, 20)],
   });
 }

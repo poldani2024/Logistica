@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'BRANCH=$(git branch --show-current 2>/dev/null); [ -z \"$BRANCH\" ] || [ \"$BRANCH\" = \"main\" ] || [ \"$BRANCH\" = \"master\" ] && exit 0; git ls-remote --exit-code origin \"refs/heads/$BRANCH\" >/dev/null 2>&1 || exit 0; echo \"{\\\"systemMessage\\\": \\\"Branch $BRANCH está pusheado. Verificá si existe una PR y creá una si no hay.\\\"}\"'",
+            "asyncRewake": true
+          }
+        ]
+      }
+    ]
+  }
+}
