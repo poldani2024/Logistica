@@ -82,7 +82,7 @@
       </div>
       <div class="row" style="gap:10px; flex-wrap:wrap;">
         <button class="btn" id="btnRefresh">↻ Actualizar</button>
-        <button class="btn" id="btnCopyIdaVuelta" title="Copiar asignaciones de Ida a Vuelta (solo donde Vuelta está vacía)">⇢ Copiar Ida→Vuelta</button>
+        <button class="btn" id="btnCopyIdaVuelta" title="Copiar asignaciones de una fase a otra">⇢ Copiar entre fases</button>
         <button class="btn" id="btnExportList" title="Exportar listado a Excel con todas las fases">📄 Exportar listado</button>
         <button class="btn" id="btnSelectedPdf" title="Generar PDF para choferes seleccionados">Generar PDF</button>
         <button class="btn" id="btnSelectedVcf" title="Generar VCF para choferes seleccionados">Generar Contactos</button>
@@ -132,6 +132,39 @@
 </main>
 
 <div class="toast" id="toast"></div>
+
+<!-- Modal copiar entre fases -->
+<div class="modal" id="copyPhaseModal">
+  <div class="modalCard">
+    <div class="rowBetween">
+      <div>
+        <div style="font-weight:900; font-size:16px;">Copiar asignaciones entre fases</div>
+        <div class="muted2">Se respetan la capacidad de cada fase y los pasajeros que no van en la fase destino.</div>
+      </div>
+      <button class="btnDanger" id="btnCloseCopyPhase">✕</button>
+    </div>
+    <div class="modalGrid" style="margin-top:14px;">
+      <div class="field">
+        <label>Fase origen</label>
+        <select id="copySrcPhase" class="select" style="width:100%; padding:8px; border-radius:10px;"></select>
+      </div>
+      <div class="field">
+        <label>Fase destino</label>
+        <select id="copyDstPhase" class="select" style="width:100%; padding:8px; border-radius:10px;"></select>
+      </div>
+    </div>
+    <div class="muted2" style="margin-top:10px; line-height:1.5;">
+      • Solo se copian pasajeros que requieren transporte en la fase destino.<br>
+      • Si el chofer no está en la fase destino, no se copia y se informa.<br>
+      • Las asignaciones existentes en la fase destino se mantienen (se agrega, no se pisa).
+    </div>
+    <div id="copyPhaseResult" style="display:none; margin-top:12px; padding:10px; border-radius:10px; border:1px solid rgba(255,255,255,.12); white-space:pre-wrap; line-height:1.6; font-size:13px;"></div>
+    <div class="row" style="margin-top:16px; gap:10px; flex-wrap:wrap;">
+      <button class="btnPrimary primary" id="btnRunCopyPhase">Copiar</button>
+      <button class="btn" id="btnCloseCopyPhase2">Cancelar</button>
+    </div>
+  </div>
+</div>
 
 <!-- Modal fases -->
 <div class="modal" id="phasesModal">
