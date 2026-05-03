@@ -222,7 +222,8 @@ export const STATE = {
   },
   event: {
     id: null,
-    driverPhases: new Map(), // driverId -> {phaseId:true}
+    driverPhases: new Map(),          // driverId -> {phaseId:true}
+    driverCapacityByPhase: new Map(), // driverId -> {phaseId: number}
     phases: [],
     driversIds: new Set(),
     passengersIds: new Set(),
@@ -763,6 +764,7 @@ export async function loadEventContext(eventId) {
   // reset contexto en memoria
   STATE.event.phases = [];
   STATE.event.driverPhases = new Map();
+  STATE.event.driverCapacityByPhase = new Map();
   STATE.event.driversIds = new Set();
   STATE.event.passengersIds = new Set();
   STATE.event.passengersMeta = new Map();
@@ -795,6 +797,8 @@ export async function loadEventContext(eventId) {
     const data = x.data() || {};
     const phasesObj = (data.phases && typeof data.phases === "object") ? data.phases : {};
     STATE.event.driverPhases.set(x.id, phasesObj);
+    const capByPhase = (data.capacityByPhase && typeof data.capacityByPhase === "object") ? data.capacityByPhase : {};
+    STATE.event.driverCapacityByPhase.set(x.id, capByPhase);
   });
 
   // 3) passengers links + meta
@@ -821,23 +825,47 @@ export async function loadEventContext(eventId) {
     });
   });
 }
-export async function saveDriverPhase(driverId, phaseId, enabled){
+export async function saveDriverPhase(driverId, phaseId, enabled, capacityForPhase){
   if (!STATE.event?.id) throw new Error("No hay evento seleccionado");
   if (!driverId) throw new Error("Falta driverId");
   if (!phaseId) throw new Error("Falta phaseId");
 
   const ref = doc(db, "events", STATE.event.id, "eventDrivers", driverId);
 
-  await setDoc(ref, {
+  const update = {
     phases: { [phaseId]: !!enabled },
     updatedAt: serverTimestamp()
-  }, { merge: true });
+  };
+
+  const cap = Number(capacityForPhase);
+  if (Number.isFinite(cap) && cap > 0) {
+    update.capacityByPhase = { [phaseId]: cap };
+  }
+
+  await setDoc(ref, update, { merge: true });
 
   // mantener STATE sincronizado en memoria
   STATE.event.driverPhases = STATE.event.driverPhases || new Map();
   const current = STATE.event.driverPhases.get(driverId) || {};
   current[phaseId] = !!enabled;
   STATE.event.driverPhases.set(driverId, current);
+
+  if (Number.isFinite(cap) && cap > 0) {
+    STATE.event.driverCapacityByPhase = STATE.event.driverCapacityByPhase || new Map();
+    const capCurrent = STATE.event.driverCapacityByPhase.get(driverId) || {};
+    capCurrent[phaseId] = cap;
+    STATE.event.driverCapacityByPhase.set(driverId, capCurrent);
+  }
+}
+
+export function getDriverCapacityForPhase(driverId, phaseId){
+  const capByPhase = STATE.event?.driverCapacityByPhase?.get(driverId) || {};
+  const perPhase = capByPhase[phaseId];
+  if (perPhase != null) {
+    const n = Number(perPhase);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  return null; // sin override: usar la capacidad del master driver
 }
 
 export function driversInEvent() {
