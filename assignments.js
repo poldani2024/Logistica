@@ -552,6 +552,7 @@ function getExportRowsAllPhases(){
       rows.push({
         driverName: drv ? driverLabel(drv) : "Sin chofer asignado",
         driverPhone: drv?.phone || "",
+        driverZone: drv?.zone || "",
         phase: ph.name || phaseLabelById(phaseId),
         phaseSortTs: phaseDateTimeSortValue(ph),
         passenger: passengerLabel(base),
@@ -560,6 +561,7 @@ function getExportRowsAllPhases(){
         vip: !!base.vip,
         originAddress: meta.address || base.address || "",
         originLocalidad: meta.localidad || base.localidad || "",
+        passengerZone: base.zone || "",
         time: ((meta.timeByPhase && meta.timeByPhase[phaseId]) || meta.time || ph.time || ""),
         transportType: transportTypeForPhase(meta, phaseId),
         transportCompany: transportCompanyForPhase(meta, phaseId),
@@ -631,18 +633,20 @@ function buildCsvFromRows(rows){
     "#",
     "Fase",
     "Chofer",
-    "Teléfono",
+    "Teléfono Chofer",
+    "Zona Chofer",
     "Pasajero",
-    "Teléfono2",
+    "Teléfono Pasajero",
     "División",
     "VIP",
     "Domicilio Origen",
     "Localidad",
+    "Zona Pasajero",
     "Horario",
     "Tipo Transporte",
     "Empresa de transporte",
     "Domicilio Destino",
-    "Localidad2",
+    "Localidad Destino",
     "Observaciones"
   ];
 
@@ -651,12 +655,14 @@ function buildCsvFromRows(rows){
     r.phase || "",
     r.driverName || "",
     excelPhoneText(r.driverPhone || ""),
+    r.driverZone || "",
     r.passenger || "",
     excelPhoneText(r.passengerPhone || ""),
     r.division || "",
     r.vip ? "Sí" : "",
     r.originAddress || "",
     r.originLocalidad || "",
+    r.passengerZone || "",
     r.time || "",
     r.transportType || "",
     r.transportCompany || "",
@@ -704,12 +710,14 @@ function exportPhaseListToExcel(){
       <td>${escapeHtml(r.phase)}</td>
       <td>${escapeHtml(r.driverName)}</td>
       <td class="txt">${escapeHtml(excelPhoneText(r.driverPhone))}</td>
+      <td>${escapeHtml(r.driverZone || "")}</td>
       <td>${escapeHtml(r.passenger)}</td>
       <td class="txt">${escapeHtml(excelPhoneText(r.passengerPhone))}</td>
       <td>${escapeHtml(r.division || "")}</td>
       <td>${r.vip ? "Sí" : ""}</td>
       <td>${escapeHtml(r.originAddress)}</td>
       <td>${escapeHtml(r.originLocalidad)}</td>
+      <td>${escapeHtml(r.passengerZone || "")}</td>
       <td>${escapeHtml(r.time)}</td>
       <td>${escapeHtml(r.transportType || "")}</td>
       <td>${escapeHtml(r.transportCompany || "")}</td>
@@ -740,7 +748,7 @@ function exportPhaseListToExcel(){
   <table>
     <thead class="hdr">
       <tr>
-        <th>#</th><th>Fase</th><th>Chofer</th><th>Teléfono</th><th>Pasajero</th><th>Teléfono2</th><th>División</th><th>VIP</th><th>Domicilio Origen</th><th>Localidad</th><th>Horario</th><th>Tipo Transporte</th><th>Empresa de transporte</th><th>Domicilio Destino</th><th>Localidad2</th><th>Observaciones</th>
+        <th>#</th><th>Fase</th><th>Chofer</th><th>Teléfono Chofer</th><th>Zona Chofer</th><th>Pasajero</th><th>Teléfono Pasajero</th><th>División</th><th>VIP</th><th>Domicilio Origen</th><th>Localidad</th><th>Zona Pasajero</th><th>Horario</th><th>Tipo Transporte</th><th>Empresa de transporte</th><th>Domicilio Destino</th><th>Localidad Destino</th><th>Observaciones</th>
       </tr>
     </thead>
     <tbody class="body">${tableRows}</tbody>
