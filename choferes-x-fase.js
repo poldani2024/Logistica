@@ -1,4 +1,4 @@
-import { initCorePage, STATE, $, toast, escapeHtml, loadMasterDrivers, loadEventContext, saveDriverPhase } from "./core.js";
+import { initCorePage, STATE, $, toast, escapeHtml, loadMasterDrivers, loadEventContext, saveDriverPhase, getDriverCapacityForPhase } from "./core.js";
 
 (async function init(){
   await initCorePage({ page: "driversByPhase" });
@@ -93,14 +93,33 @@ function renderDrivers(){
   box.innerHTML = drivers.map(d=>{
     const phasesObj = dp.get(d.id) || {};
     const checked = !!phasesObj[phaseId];
+    // Capacidad: per-phase override primero, sino la del master driver
+    const perPhaseCap = getDriverCapacityForPhase(d.id, phaseId);
+    const displayCap = perPhaseCap !== null ? perPhaseCap : (d.capacity ?? "");
+    const masterCap = d.capacity ? ` (general: ${d.capacity})` : "";
     return `
-      <label class="row" style="justify-content:space-between; gap:10px; padding:10px 12px; border:1px solid rgba(255,255,255,.08); border-radius:14px;">
-        <div style="min-width:220px;">
-          <div style="font-weight:700">${escapeHtml(driverName(d))}</div>
-          <div class="hint">${escapeHtml(d.email || "")}</div>
+      <div class="row" style="justify-content:space-between; gap:10px; padding:10px 12px; border:1px solid rgba(255,255,255,.08); border-radius:14px; flex-wrap:wrap;">
+        <label class="row" style="gap:10px; flex:1; min-width:0; cursor:pointer;">
+          <input type="checkbox" class="box" data-driver="${escapeHtml(d.id)}" ${checked ? "checked" : ""} />
+          <div>
+            <div style="font-weight:700">${escapeHtml(driverName(d))}</div>
+            <div class="hint">${escapeHtml(d.email || d.localidad || "")}</div>
+          </div>
+        </label>
+        <div class="row" style="gap:6px; align-items:center; flex-shrink:0;">
+          <label style="font-size:12px; color:rgba(234,241,255,.7);">Cap. fase:</label>
+          <input
+            type="number"
+            min="1" max="99"
+            data-cap-driver="${escapeHtml(d.id)}"
+            value="${escapeHtml(String(displayCap))}"
+            placeholder="${escapeHtml(String(d.capacity || 4))}"
+            title="Capacidad para esta fase${masterCap}"
+            style="width:60px; padding:4px 6px; border-radius:8px; text-align:center;"
+          />
+          <span class="hint" style="font-size:11px;">${masterCap ? escapeHtml(masterCap) : ""}</span>
         </div>
-        <input type="checkbox" class="box" data-driver="${escapeHtml(d.id)}" ${checked ? "checked" : ""} />
-      </label>
+      </div>
     `;
   }).join("");
 
@@ -142,12 +161,17 @@ async function onSave(){
   const map = STATE.event.driverPhases;
   const drivers = (STATE.master?.drivers || []);
 
-  // Guardamos solo la fase activa, para hacerlo simple y rápido
   for (const d of drivers){
     const phasesObj = map.get(d.id) || {};
     const isAvailable = !!phasesObj[phaseId];
-    await saveDriverPhase(d.id, phaseId, isAvailable);
+
+    // Leer capacidad del input si existe
+    const capInput = document.querySelector(`input[data-cap-driver="${d.id}"]`);
+    const capVal = capInput ? Number(capInput.value) : NaN;
+    const capacity = Number.isFinite(capVal) && capVal > 0 ? capVal : null;
+
+    await saveDriverPhase(d.id, phaseId, isAvailable, capacity);
   }
 
-  toast("Disponibilidad guardada");
+  toast("Disponibilidad y capacidad guardadas");
 }

@@ -10,7 +10,8 @@ import {
   driversForPhase,
   getActivePhaseId,
   withRetry,
-  addAssignmentHistory
+  addAssignmentHistory,
+  getDriverCapacityForPhase
 } from "./core.js";
 
 import { db } from "./firebase-init.js";
@@ -284,7 +285,11 @@ function comparePassengersByTimeThenName(a, b){
   return passengerLabel(a).localeCompare(passengerLabel(b), "es", { sensitivity: "base" });
 }
 
-function driverCapacity(d){
+function driverCapacity(d, phaseId){
+  if (phaseId) {
+    const perPhase = getDriverCapacityForPhase(d?.id, phaseId);
+    if (perPhase !== null) return perPhase;
+  }
   const cap = Number(d?.capacity ?? 4);
   return Number.isFinite(cap) && cap > 0 ? cap : 4;
 }
@@ -331,7 +336,7 @@ function renderDrivers(){
     const isActive = d.id === active;
     const isSelected = STATE.ui?.selectedDriverIds instanceof Set && STATE.ui.selectedDriverIds.has(d.id);
     const assigned = (byDriver.get(d.id) || new Set()).size;
-    const capacity = driverCapacity(d);
+    const capacity = driverCapacity(d, phaseId);
     const free = Math.max(capacity - assigned, 0);
     return `
       <div class="row" style="justify-content:space-between; gap:10px; padding:12px; border:1px solid rgba(255,255,255,.08); border-radius:16px;">
@@ -1254,7 +1259,7 @@ async function autoAssignForPhase() {
   for (const passenger of unassigned) {
     const available = driverInfo.filter(d => {
       const used = driverAssignments.get(d.id)?.size ?? 0;
-      return used < driverCapacity(d);
+      return used < driverCapacity(d, phaseId);
     });
     if (!available.length) break;
 
@@ -1277,8 +1282,8 @@ async function autoAssignForPhase() {
       const same = available.filter(d => d.localidadLow && d.localidadLow === passenger.localidad);
       if (same.length) {
         same.sort((a, b) => {
-          const remA = driverCapacity(a) - (driverAssignments.get(a.id)?.size ?? 0);
-          const remB = driverCapacity(b) - (driverAssignments.get(b.id)?.size ?? 0);
+          const remA = driverCapacity(a, phaseId) - (driverAssignments.get(a.id)?.size ?? 0);
+          const remB = driverCapacity(b, phaseId) - (driverAssignments.get(b.id)?.size ?? 0);
           return remB - remA;
         });
         chosen = same[0];
