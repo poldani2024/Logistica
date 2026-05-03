@@ -89,6 +89,22 @@ function wireOnce(){
     }
   });
 
+  $("btnCopyIdaVuelta")?.addEventListener("click", () => openCopyPhaseModal());
+  $("btnCloseCopyPhase")?.addEventListener("click", () => closeCopyPhaseModal());
+  $("btnCloseCopyPhase2")?.addEventListener("click", () => closeCopyPhaseModal());
+  $("btnRunCopyPhase")?.addEventListener("click", async () => {
+    const src = $("copySrcPhase")?.value;
+    const dst = $("copyDstPhase")?.value;
+    if (!src || !dst) return toast("Seleccioná fases origen y destino.");
+    if (src === dst) return toast("La fase origen y destino deben ser distintas.");
+    try {
+      await copyPhaseAssignments(src, dst);
+    } catch (e) {
+      console.error("copyPhase error", e);
+      toast(e?.message || String(e));
+    }
+  });
+
   $("btnSelectedPdf")?.addEventListener("click", ()=>{
     try{
       runForSelectedDrivers((driverId)=>{
@@ -1420,4 +1436,146 @@ async function optimizeRouteForActiveDriver() {
   const d = (STATE.master.drivers || []).find(x => x.id === driverId);
   const dName = d ? `${d.lastName || ""} ${d.firstName || ""}`.trim() : driverId;
   toast(`Ruta optimizada para ${dName}: ${withGeo.length} pasajeros ordenados por proximidad.${withoutGeo.length ? ` (${withoutGeo.length} sin coordenadas al final)` : ""}`);
+}
+
+/* ─── Copiar asignaciones entre fases ──────────────────────────
+ * Abre un modal donde el usuario elige fase origen y destino.
+ * Solo copia pasajeros que requieren transporte en la fase destino.
+ * Choferes no disponibles en destino se informan sin bloquear.
+ * Las asignaciones existentes en destino se mantienen (merge).
+ * ────────────────────────────────────────────────────────────── */
+
+function openCopyPhaseModal() {
+  const modal = document.getElementById("copyPhaseModal");
+  if (!modal) return;
+
+  const phases = STATE.event?.phases || [];
+  if (phases.length < 2) {
+    toast("El evento necesita al menos 2 fases para poder copiar.");
+    return;
+  }
+
+  const srcSel = $("copySrcPhase");
+  const dstSel = $("copyDstPhase");
+  const opts = phases.map(p => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.name || p.id)}</option>`).join("");
+  srcSel.innerHTML = opts;
+  dstSel.innerHTML = opts;
+
+  // Default: src = active phase, dst = next phase
+  const activeId = getActivePhaseId();
+  if (activeId) srcSel.value = activeId;
+  const activeIdx = phases.findIndex(p => p.id === srcSel.value);
+  const nextIdx = (activeIdx + 1) % phases.length;
+  dstSel.value = phases[nextIdx].id;
+
+  const result = $("copyPhaseResult");
+  if (result) { result.textContent = ""; result.style.display = "none"; }
+
+  modal.classList.add("show");
+}
+
+function closeCopyPhaseModal() {
+  document.getElementById("copyPhaseModal")?.classList.remove("show");
+}
+
+async function copyPhaseAssignments(srcPhaseId, dstPhaseId) {
+  const eventId = STATE.event?.id;
+  if (!eventId) return toast("Seleccioná un evento.");
+
+  const { byDriver: srcByDriver } = getPhaseAssignmentsFor(srcPhaseId);
+  const dstDriverIds = new Set((driversForPhase(dstPhaseId) || []).map(d => d.id));
+  const masterDriverMap = new Map((STATE.master?.drivers || []).map(d => [d.id, d]));
+  const masterPassMap = new Map((STATE.master?.passengers || []).map(p => [p.id, p]));
+
+  const driversWithAssignments = [...srcByDriver.entries()]
+    .filter(([, set]) => set.size > 0);
+
+  if (!driversWithAssignments.length) {
+    showCopyResult("No hay asignaciones en la fase origen.");
+    return;
+  }
+
+  const missingDriverNames = [];
+  const skippedPassengerNames = [];
+  const copyMap = new Map(); // driverId -> passengerIds[]
+
+  for (const [driverId, passengerSet] of driversWithAssignments) {
+    if (!dstDriverIds.has(driverId)) {
+      const d = masterDriverMap.get(driverId);
+      missingDriverNames.push(driverLabel(d || { id: driverId }));
+      continue;
+    }
+
+    const toAdd = [];
+    for (const pid of passengerSet) {
+      if (!passengerRequiresTransportForPhase(pid, dstPhaseId)) {
+        const p = masterPassMap.get(pid);
+        skippedPassengerNames.push(passengerLabel(p || { id: pid }));
+        continue;
+      }
+      toAdd.push(pid);
+    }
+    if (toAdd.length) copyMap.set(driverId, toAdd);
+  }
+
+  if (!copyMap.size && !missingDriverNames.length) {
+    showCopyResult("No hay asignaciones para copiar a la fase destino.");
+    return;
+  }
+
+  let copiedNew = 0;
+
+  if (copyMap.size) {
+    const driverIds = [...copyMap.keys()];
+    const docSnaps = await Promise.all(
+      driverIds.map(did => withRetry(() => getDoc(doc(db, "events", eventId, "assignments", did))))
+    );
+
+    const batch = writeBatch(db);
+
+    for (let i = 0; i < driverIds.length; i++) {
+      const driverId = driverIds[i];
+      const snap = docSnaps[i];
+      let data = snap.exists() ? (snap.data() || {}) : {};
+      if (!data.phases || typeof data.phases !== "object") data.phases = {};
+
+      const existing = Array.isArray(data.phases[dstPhaseId]) ? data.phases[dstPhaseId] : [];
+      const merged = Array.from(new Set([...existing, ...copyMap.get(driverId)]).values()).filter(Boolean);
+      copiedNew += merged.length - existing.length;
+
+      data.phases[dstPhaseId] = merged;
+      if (dstPhaseId === "ida") data.passengerIds = merged;
+      data.updatedAt = serverTimestamp();
+
+      batch.set(doc(db, "events", eventId, "assignments", driverId), data, { merge: true });
+    }
+
+    await withRetry(() => batch.commit());
+    await addAssignmentHistory(eventId, "copiar_fase", {
+      srcPhaseId, dstPhaseId, copiedNew,
+      skipped: skippedPassengerNames.length,
+      missing: missingDriverNames.length
+    });
+
+    await loadEventContext(eventId);
+    renderAll();
+  }
+
+  const srcName = phaseLabelById(srcPhaseId);
+  const dstName = phaseLabelById(dstPhaseId);
+  const lines = [];
+  lines.push(`✅ ${copiedNew} asignación(es) nueva(s) copiada(s) de "${srcName}" → "${dstName}".`);
+  if (missingDriverNames.length)
+    lines.push(`⚠ Choferes no disponibles en "${dstName}" (no copiados):\n   • ${missingDriverNames.join("\n   • ")}`);
+  if (skippedPassengerNames.length)
+    lines.push(`⚠ Pasajeros omitidos (no requieren transporte en "${dstName}"):\n   • ${skippedPassengerNames.join("\n   • ")}`);
+
+  showCopyResult(lines.join("\n\n"));
+}
+
+function showCopyResult(text) {
+  const el = $("copyPhaseResult");
+  if (!el) return;
+  el.textContent = text;
+  el.style.display = "";
 }
