@@ -14,7 +14,7 @@ import {
 } from "./core.js";
 
 import { db } from "./firebase-init.js";
-import { doc, getDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.2/firebase-firestore.js";
+import { doc, getDoc, setDoc, serverTimestamp, writeBatch } from "https://www.gstatic.com/firebasejs/10.7.2/firebase-firestore.js";
 
 let clicksWired = false;
 
@@ -76,6 +76,15 @@ function wireOnce(){
       await optimizeRouteForActiveDriver();
     } catch (e) {
       console.error("optimizeRoute error", e);
+      toast(e?.message || String(e));
+    }
+  });
+
+  $("btnAutoAssign")?.addEventListener("click", async () => {
+    try {
+      await autoAssignForPhase();
+    } catch (e) {
+      console.error("autoAssign error", e);
       toast(e?.message || String(e));
     }
   });
@@ -1163,6 +1172,151 @@ const arr = base || [];
 
   await setDoc(ref, data, { merge: true });
   console.log("Grabó ok");
+}
+
+/* ─── Asignación Automática por Proximidad ──────────────────────
+ * Para cada pasajero sin chofer en la fase activa, asigna al chofer
+ * con capacidad disponible más cercano:
+ *   1. Haversine si ambos tienen coordenadas
+ *   2. Misma localidad como fallback
+ *   3. Chofer con más capacidad disponible como último recurso
+ * Guarda todos los cambios en un solo writeBatch.
+ * ────────────────────────────────────────────────────────────── */
+
+async function autoAssignForPhase() {
+  const eventId = STATE.event?.id;
+  if (!eventId) return toast("Seleccioná un evento.");
+  const phaseId = getActivePhaseId();
+  if (!phaseId) return toast("Seleccioná una fase.");
+
+  const drivers = driversForPhase(phaseId) || [];
+  if (!drivers.length) return toast("No hay choferes para esta fase.");
+
+  const { byDriver, assignedAll } = getPhaseAssignments();
+
+  const masterMap = new Map((STATE.master?.passengers || []).map(p => [p.id, p]));
+  const metaByPassenger = STATE.event?.passengersMeta || new Map();
+
+  const unassigned = Array.from(STATE.event?.passengersIds || [])
+    .filter(pid => passengerRequiresTransportForPhase(pid, phaseId) && !assignedAll.has(pid))
+    .map(pid => {
+      const base = masterMap.get(pid) || { id: pid };
+      const meta = metaByPassenger.get(pid) || {};
+      return {
+        id: pid,
+        lat: base.lat ?? null,
+        lng: base.lng ?? null,
+        localidad: (meta.localidad || base.localidad || "").trim().toLowerCase()
+      };
+    });
+
+  if (!unassigned.length) return toast("No hay pasajeros pendientes de asignación en esta fase.");
+
+  // Mutable copy of current assignments per driver
+  const driverAssignments = new Map();
+  for (const d of drivers) {
+    driverAssignments.set(d.id, new Set(byDriver.get(d.id) || []));
+  }
+
+  const driverInfo = drivers.map(d => ({
+    ...d,
+    localidadLow: (d.localidad || "").trim().toLowerCase(),
+    lat: d.lat ?? null,
+    lng: d.lng ?? null
+  }));
+
+  let assignedCount = 0;
+
+  for (const passenger of unassigned) {
+    const available = driverInfo.filter(d => {
+      const used = driverAssignments.get(d.id)?.size ?? 0;
+      return used < driverCapacity(d);
+    });
+    if (!available.length) break;
+
+    let chosen = null;
+
+    // 1. Both have coordinates — nearest by haversine
+    if (passenger.lat != null && passenger.lng != null) {
+      const withCoords = available.filter(d => d.lat != null && d.lng != null);
+      if (withCoords.length) {
+        let minDist = Infinity;
+        for (const d of withCoords) {
+          const dist = haversineKm(passenger.lat, passenger.lng, d.lat, d.lng);
+          if (dist < minDist) { minDist = dist; chosen = d; }
+        }
+      }
+    }
+
+    // 2. Same localidad — pick one with most remaining capacity
+    if (!chosen && passenger.localidad) {
+      const same = available.filter(d => d.localidadLow && d.localidadLow === passenger.localidad);
+      if (same.length) {
+        same.sort((a, b) => {
+          const remA = driverCapacity(a) - (driverAssignments.get(a.id)?.size ?? 0);
+          const remB = driverCapacity(b) - (driverAssignments.get(b.id)?.size ?? 0);
+          return remB - remA;
+        });
+        chosen = same[0];
+      }
+    }
+
+    // 3. Fallback — driver with most remaining capacity
+    if (!chosen) {
+      const sorted = [...available].sort((a, b) => {
+        const remA = driverCapacity(a) - (driverAssignments.get(a.id)?.size ?? 0);
+        const remB = driverCapacity(b) - (driverAssignments.get(b.id)?.size ?? 0);
+        return remB - remA;
+      });
+      chosen = sorted[0];
+    }
+
+    if (chosen) {
+      driverAssignments.get(chosen.id).add(passenger.id);
+      assignedCount++;
+    }
+  }
+
+  if (!assignedCount) return toast("No se realizaron asignaciones.");
+
+  // Determine which drivers got new passengers
+  const modifiedDriverIds = driverInfo
+    .map(d => d.id)
+    .filter(driverId => {
+      const oldSize = byDriver.get(driverId)?.size ?? 0;
+      return (driverAssignments.get(driverId)?.size ?? 0) > oldSize;
+    });
+
+  // Read current Firestore docs before batch write
+  const docSnaps = await Promise.all(
+    modifiedDriverIds.map(driverId =>
+      withRetry(() => getDoc(doc(db, "events", eventId, "assignments", driverId)))
+    )
+  );
+
+  const batch = writeBatch(db);
+
+  for (let i = 0; i < modifiedDriverIds.length; i++) {
+    const driverId = modifiedDriverIds[i];
+    const snap = docSnaps[i];
+    let data = snap.exists() ? (snap.data() || {}) : {};
+    if (!data.phases || typeof data.phases !== "object") data.phases = {};
+
+    const newList = Array.from(driverAssignments.get(driverId)).filter(Boolean);
+    data.phases[phaseId] = newList;
+    if (phaseId === "ida") data.passengerIds = newList;
+    data.updatedAt = serverTimestamp();
+
+    batch.set(doc(db, "events", eventId, "assignments", driverId), data, { merge: true });
+  }
+
+  await withRetry(() => batch.commit());
+
+  await addAssignmentHistory(eventId, "auto_asignacion", { phaseId, assignedCount });
+
+  await loadEventContext(eventId);
+  renderAll();
+  toast(`Asignación automática: ${assignedCount} pasajero(s) asignado(s).`);
 }
 
 /* ─── Optimización de Ruta por Proximidad Geográfica ───────────
