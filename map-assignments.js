@@ -62,11 +62,32 @@ function wire(){
   document.addEventListener("dragend", clearDropHover);
 
   document.addEventListener("click", (ev) => {
+    const infoBtn = ev.target.closest("[data-passenger-info]");
+    if (infoBtn) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      openPassengerInfoModal(infoBtn.dataset.passengerInfo || "");
+      return;
+    }
+
     const phaseBtn = ev.target.closest("[data-phase]");
     if (!phaseBtn) return;
     STATE.ui.activePhase = phaseBtn.dataset.phase || null;
     buildVehicleMapFromAssignments();
     render();
+  });
+
+  document.addEventListener("mousedown", (ev) => {
+    if (ev.target.closest("[data-passenger-info]")) ev.stopPropagation();
+  });
+
+  $("btnClosePassengerInfo")?.addEventListener("click", closePassengerInfoModal);
+  $("passengerInfoModal")?.addEventListener("click", (ev) => {
+    if (ev.target?.id === "passengerInfoModal") closePassengerInfoModal();
+  });
+
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape") closePassengerInfoModal();
   });
 }
 
@@ -191,7 +212,7 @@ function renderVehicles(){
         const meta = STATE.event?.passengersMeta?.get(p.id) || {};
         const time = passengerTimeForPhase(meta, getActivePhaseId());
         const destination = passengerDestinationForPhase(meta, getActivePhaseId());
-        return `<div class="dragItem passenger" draggable="true" data-drag-type="passenger" data-passenger-id="${escapeHtml(p.id)}">${escapeHtml(passengerLabel(p))}<small>Horario: ${escapeHtml(time || "—")}</small><small>Destino: ${escapeHtml(destination || "—")}</small></div>`;
+        return passengerDragItemHtml(p, { time, destination });
       })
       .join("");
 
@@ -249,8 +270,100 @@ function renderPassengerPool(){
   if (count) count.textContent = `${all.length}`;
 
   host.innerHTML = pending.length
-    ? pending.map(p => `<div class="dragItem passenger" draggable="true" data-drag-type="passenger" data-passenger-id="${escapeHtml(p.id)}">${escapeHtml(passengerLabel(p))}<small>Horario: ${escapeHtml(p._time || "—")}</small><small>Destino: ${escapeHtml(p._destination || "—")}</small></div>`).join("")
+    ? pending.map(p => passengerDragItemHtml(p, { time: p._time, destination: p._destination })).join("")
     : '<div class="emptyHint">No hay pasajeros pendientes para esta fase.</div>';
+}
+
+
+function passengerDragItemHtml(p, { time = "", destination = "" } = {}){
+  return `
+    <div class="dragItem passenger passengerItem" draggable="true" data-drag-type="passenger" data-passenger-id="${escapeHtml(p.id)}">
+      <div class="passengerItemHead">
+        <span>${escapeHtml(passengerLabel(p))}</span>
+        <button class="passengerInfoBtn" type="button" data-passenger-info="${escapeHtml(p.id)}" aria-label="Ver información de ${escapeHtml(passengerLabel(p))}" title="Ver información">☰</button>
+      </div>
+      <small>Horario: ${escapeHtml(time || "—")}</small>
+      <small>Destino: ${escapeHtml(destination || "—")}</small>
+    </div>
+  `;
+}
+
+function openPassengerInfoModal(passengerId){
+  const modal = $("passengerInfoModal");
+  const title = $("passengerInfoTitle");
+  const body = $("passengerInfoBody");
+  if (!modal || !title || !body) return;
+
+  const passenger = passengerById(passengerId);
+  if (!passenger) {
+    toast("No se encontró el pasajero.");
+    return;
+  }
+
+  title.textContent = passengerLabel(passenger);
+  body.innerHTML = passengerInfoHtml(passenger);
+  modal.classList.add("show");
+  modal.setAttribute("aria-hidden", "false");
+}
+
+function closePassengerInfoModal(){
+  const modal = $("passengerInfoModal");
+  modal?.classList.remove("show");
+  modal?.setAttribute("aria-hidden", "true");
+}
+
+function passengerInfoHtml(passenger){
+  const meta = STATE.event?.passengersMeta?.get(passenger.id) || {};
+  const phases = STATE.event?.phases || [];
+  const participating = phases.filter(ph => passengerRequiresTransportForPhase(passenger.id, ph.id));
+  const address = String(meta.address || passenger.address || "").trim();
+  const localidad = String(meta.localidad || passenger.localidad || "").trim();
+
+  const phasesHtml = phases.length
+    ? phases.map(ph => passengerPhaseInfoHtml(passenger.id, meta, ph)).join("")
+    : '<div class="emptyHint">Este evento no tiene fases definidas.</div>';
+
+  return `
+    <div class="passengerInfoGrid">
+      <div><span>Nombre</span><strong>${escapeHtml(passenger.firstName || "—")}</strong></div>
+      <div><span>Apellido</span><strong>${escapeHtml(passenger.lastName || "—")}</strong></div>
+      <div><span>Dirección</span><strong>${escapeHtml(address || "—")}</strong></div>
+      <div><span>Localidad</span><strong>${escapeHtml(localidad || "—")}</strong></div>
+      <div class="full"><span>Fases en las que participa</span><strong>${escapeHtml(participating.map(ph => ph.name || ph.id).join(", ") || "Ninguna")}</strong></div>
+    </div>
+    <div class="passengerInfoSectionTitle">Información por fase</div>
+    <div class="passengerPhaseList">${phasesHtml}</div>
+  `;
+}
+
+function passengerPhaseInfoHtml(passengerId, meta, phase){
+  const phaseId = phase.id;
+  const participates = passengerRequiresTransportForPhase(passengerId, phaseId);
+  const note = passengerNoteForPhase(meta, phaseId);
+  const transportType = passengerTransportTypeForPhase(meta, phaseId);
+  const transportCompany = passengerTransportCompanyForPhase(meta, phaseId);
+  const destination = passengerDestinationForPhase(meta, phaseId);
+  const time = passengerTimeForPhase(meta, phaseId);
+  const phaseDate = String(phase.date || "").trim();
+  const origin = String(phase.originAddress || "").trim();
+
+  return `
+    <article class="passengerPhaseCard ${participates ? "" : "mutedPhase"}">
+      <div class="rowBetween" style="gap:8px; align-items:flex-start;">
+        <strong>${escapeHtml(phase.name || phaseId)}</strong>
+        <span class="phaseStatus ${participates ? "yes" : "no"}">${participates ? "Participa" : "No participa"}</span>
+      </div>
+      <dl>
+        <div><dt>Fecha</dt><dd>${escapeHtml(phaseDate || "—")}</dd></div>
+        <div><dt>Horario</dt><dd>${escapeHtml(time || "—")}</dd></div>
+        <div><dt>Origen</dt><dd>${escapeHtml(origin || "—")}</dd></div>
+        <div><dt>Destino</dt><dd>${escapeHtml(destination || "—")}</dd></div>
+        <div><dt>Tipo de transporte</dt><dd>${escapeHtml(transportType || "—")}</dd></div>
+        <div><dt>Empresa</dt><dd>${escapeHtml(transportCompany || "—")}</dd></div>
+        <div class="full"><dt>Observaciones</dt><dd>${escapeHtml(note || "—")}</dd></div>
+      </dl>
+    </article>
+  `;
 }
 
 function onDragStart(ev){
@@ -596,6 +709,25 @@ function passengerDestinationForPhase(meta, phaseId){
   const byPhase = (m.destinationAddressByPhase && typeof m.destinationAddressByPhase === "object") ? m.destinationAddressByPhase : {};
   const phaseDestination = phaseDestinationForPhase(phaseId);
   return String(byPhase[phaseId] || m.destinationAddress || phaseDestination || "").trim();
+}
+
+
+function passengerNoteForPhase(meta, phaseId){
+  const m = (meta && typeof meta === "object") ? meta : {};
+  const byPhase = (m.notesByPhase && typeof m.notesByPhase === "object") ? m.notesByPhase : {};
+  return String(byPhase[phaseId] || m.notes || "").trim();
+}
+
+function passengerTransportTypeForPhase(meta, phaseId){
+  const m = (meta && typeof meta === "object") ? meta : {};
+  const byPhase = (m.transportTypeByPhase && typeof m.transportTypeByPhase === "object") ? m.transportTypeByPhase : {};
+  return String(byPhase[phaseId] || m.transportType || "").trim();
+}
+
+function passengerTransportCompanyForPhase(meta, phaseId){
+  const m = (meta && typeof meta === "object") ? meta : {};
+  const byPhase = (m.transportCompanyByPhase && typeof m.transportCompanyByPhase === "object") ? m.transportCompanyByPhase : {};
+  return String(byPhase[phaseId] || m.transportCompany || "").trim();
 }
 
 function phaseDestinationForPhase(phaseId){

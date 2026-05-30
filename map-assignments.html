@@ -26,6 +26,10 @@
     .dragItem small{ display:block; font-size:11px; color:rgba(234,241,255,.72); font-weight:600; }
     .dragItem.driver{ border-color:rgba(96,165,250,.45); }
     .dragItem.passenger{ border-color:rgba(250,204,21,.45); }
+    .passengerItem{ min-width:160px; }
+    .passengerItemHead{ display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }
+    .passengerInfoBtn{ flex:0 0 auto; border:1px solid rgba(250,204,21,.42); border-radius:8px; background:rgba(250,204,21,.12); color:inherit; min-width:30px; min-height:28px; padding:2px 7px; line-height:1; cursor:pointer; font-size:17px; font-weight:900; }
+    .passengerInfoBtn:hover{ background:rgba(250,204,21,.22); }
 
     .dropHover{ outline:2px solid rgba(96,165,250,.65); outline-offset:1px; }
 
@@ -34,6 +38,30 @@
     .split{ display:grid; gap:12px; }
 
     .emptyHint{ color:rgba(234,241,255,.75); font-size:13px; border:1px dashed rgba(255,255,255,.2); border-radius:10px; padding:10px; }
+
+    .passengerInfoModal{ position:fixed; inset:0; display:none; align-items:center; justify-content:center; padding:16px; background:rgba(0,0,0,.62); z-index:1300; }
+    .passengerInfoModal.show{ display:flex; }
+    .passengerInfoCard{ width:min(820px, 96vw); max-height:88vh; overflow:auto; border:1px solid rgba(255,255,255,.16); border-radius:18px; background:linear-gradient(180deg, var(--bg1), var(--bg0)); box-shadow:var(--shadow); padding:16px; }
+    .passengerInfoGrid{ display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:10px; margin-top:12px; }
+    .passengerInfoGrid > div, .passengerPhaseCard{ border:1px solid rgba(255,255,255,.12); border-radius:12px; background:rgba(255,255,255,.05); padding:10px; }
+    .passengerInfoGrid .full{ grid-column:1/-1; }
+    .passengerInfoGrid span{ display:block; color:rgba(234,241,255,.72); font-size:12px; margin-bottom:4px; }
+    .passengerInfoGrid strong{ overflow-wrap:anywhere; }
+    .passengerInfoSectionTitle{ font-weight:900; margin:16px 0 8px; }
+    .passengerPhaseList{ display:grid; gap:10px; }
+    .passengerPhaseCard.mutedPhase{ opacity:.76; }
+    .phaseStatus{ border-radius:999px; padding:3px 8px; font-size:12px; font-weight:800; white-space:nowrap; }
+    .phaseStatus.yes{ background:rgba(34,197,94,.18); color:#86efac; border:1px solid rgba(34,197,94,.35); }
+    .phaseStatus.no{ background:rgba(148,163,184,.16); color:rgba(234,241,255,.72); border:1px solid rgba(148,163,184,.30); }
+    .passengerPhaseCard dl{ display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:8px 12px; margin:10px 0 0; }
+    .passengerPhaseCard dl div.full{ grid-column:1/-1; }
+    .passengerPhaseCard dt{ color:rgba(234,241,255,.68); font-size:12px; }
+    .passengerPhaseCard dd{ margin:2px 0 0; font-weight:700; overflow-wrap:anywhere; }
+    @media (max-width: 640px){
+      .passengerInfoModal{ align-items:flex-end; padding:10px; }
+      .passengerInfoCard{ width:100%; max-height:90vh; border-radius:16px 16px 0 0; }
+      .passengerInfoGrid, .passengerPhaseCard dl{ grid-template-columns:1fr; }
+    }
   </style>
 </head>
 <body>
@@ -104,7 +132,20 @@
   </section>
 </main>
 
+<div class="passengerInfoModal" id="passengerInfoModal" aria-hidden="true">
+  <div class="passengerInfoCard" role="dialog" aria-modal="true" aria-labelledby="passengerInfoTitle">
+    <div class="rowBetween" style="gap:12px; align-items:flex-start;">
+      <div>
+        <div class="cardTitle" id="passengerInfoTitle">Información del pasajero</div>
+        <div class="subtitle">Datos generales, fases e información registrada por fase.</div>
+      </div>
+      <button class="iconbtn" id="btnClosePassengerInfo" type="button" aria-label="Cerrar información del pasajero">✕</button>
+    </div>
+    <div id="passengerInfoBody"></div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
-<script type="module" src="./map-assignments.js?v=1"></script>
+<script type="module" src="./map-assignments.js?v=2"></script>
 </body>
 </html>
