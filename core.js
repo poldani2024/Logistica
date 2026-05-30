@@ -832,25 +832,39 @@ export async function saveDriverPhase(driverId, phaseId, enabled, capacityForPha
 
   const ref = doc(db, "events", STATE.event.id, "eventDrivers", driverId);
 
-  const update = {
-    phases: { [phaseId]: !!enabled },
+  const cap = Number(capacityForPhase);
+  const hasCap = Number.isFinite(cap) && cap > 0;
+
+  // Dot notation preserves the other phases in Firestore instead of replacing the whole object
+  const updateData = {
+    [`phases.${phaseId}`]: !!enabled,
     updatedAt: serverTimestamp()
   };
+  if (hasCap) updateData[`capacityByPhase.${phaseId}`] = cap;
 
-  const cap = Number(capacityForPhase);
-  if (Number.isFinite(cap) && cap > 0) {
-    update.capacityByPhase = { [phaseId]: cap };
+  try {
+    await updateDoc(ref, updateData);
+  } catch (e) {
+    if (e.code === "not-found") {
+      // Document doesn't exist yet — create it
+      const initData = {
+        phases: { [phaseId]: !!enabled },
+        updatedAt: serverTimestamp()
+      };
+      if (hasCap) initData.capacityByPhase = { [phaseId]: cap };
+      await setDoc(ref, initData);
+    } else {
+      throw e;
+    }
   }
 
-  await setDoc(ref, update, { merge: true });
-
-  // mantener STATE sincronizado en memoria
+  // Sync STATE in memory
   STATE.event.driverPhases = STATE.event.driverPhases || new Map();
   const current = STATE.event.driverPhases.get(driverId) || {};
   current[phaseId] = !!enabled;
   STATE.event.driverPhases.set(driverId, current);
 
-  if (Number.isFinite(cap) && cap > 0) {
+  if (hasCap) {
     STATE.event.driverCapacityByPhase = STATE.event.driverCapacityByPhase || new Map();
     const capCurrent = STATE.event.driverCapacityByPhase.get(driverId) || {};
     capCurrent[phaseId] = cap;
