@@ -10,9 +10,10 @@
   <style>
     .phasebar{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:10px; }
     .assignGrid{ display:grid; grid-template-columns: 1.45fr 1fr; gap:16px; align-items:start; }
+    .scrollPanel{ max-height:calc(100vh - 245px); min-height:260px; overflow:auto; scrollbar-gutter:stable; }
     @media (max-width: 1050px){ .assignGrid{ grid-template-columns:1fr; } }
 
-    .vehicleGrid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:12px; }
+    .vehicleGrid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:12px; padding-right:4px; }
     .vehicleCard{ border:1px solid rgba(255,255,255,.16); border-radius:16px; background:rgba(0,0,0,.18); overflow:hidden; }
     .vehicleHead{ padding:10px 12px; border-bottom:1px solid rgba(255,255,255,.14); font-weight:900; display:flex; justify-content:space-between; gap:8px; }
     .vehicleBody{ padding:10px; display:grid; gap:10px; }
@@ -34,14 +35,14 @@
     .dropHover{ outline:2px solid rgba(96,165,250,.65); outline-offset:1px; }
 
     .listPanel{ border:1px solid rgba(255,255,255,.12); border-radius:16px; background:rgba(0,0,0,.18); padding:12px; }
-    .listStack{ display:flex; flex-direction:column; gap:8px; max-height:420px; overflow:auto; }
+    .listStack{ display:flex; flex-direction:column; gap:8px; max-height:calc((100vh - 345px) / 2); min-height:150px; overflow:auto; scrollbar-gutter:stable; padding-right:4px; }
     .split{ display:grid; gap:12px; }
 
     .emptyHint{ color:rgba(234,241,255,.75); font-size:13px; border:1px dashed rgba(255,255,255,.2); border-radius:10px; padding:10px; }
 
-    .passengerInfoModal{ position:fixed; inset:0; display:none; align-items:center; justify-content:center; padding:16px; background:rgba(0,0,0,.62); z-index:1300; }
-    .passengerInfoModal.show{ display:flex; }
-    .passengerInfoCard{ width:min(820px, 96vw); max-height:88vh; overflow:auto; border:1px solid rgba(255,255,255,.16); border-radius:18px; background:linear-gradient(180deg, var(--bg1), var(--bg0)); box-shadow:var(--shadow); padding:16px; }
+    .passengerInfoModal, .copyAssignmentsModal{ position:fixed; inset:0; display:none; align-items:center; justify-content:center; padding:16px; background:rgba(0,0,0,.62); z-index:1300; }
+    .passengerInfoModal.show, .copyAssignmentsModal.show{ display:flex; }
+    .passengerInfoCard, .copyAssignmentsCard{ width:min(820px, 96vw); max-height:88vh; overflow:auto; border:1px solid rgba(255,255,255,.16); border-radius:18px; background:linear-gradient(180deg, var(--bg1), var(--bg0)); box-shadow:var(--shadow); padding:16px; }
     .passengerInfoGrid{ display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:10px; margin-top:12px; }
     .passengerInfoGrid > div, .passengerPhaseCard{ border:1px solid rgba(255,255,255,.12); border-radius:12px; background:rgba(255,255,255,.05); padding:10px; }
     .passengerInfoGrid .full{ grid-column:1/-1; }
@@ -58,8 +59,10 @@
     .passengerPhaseCard dt{ color:rgba(234,241,255,.68); font-size:12px; }
     .passengerPhaseCard dd{ margin:2px 0 0; font-weight:700; overflow-wrap:anywhere; }
     @media (max-width: 640px){
-      .passengerInfoModal{ align-items:flex-end; padding:10px; }
-      .passengerInfoCard{ width:100%; max-height:90vh; border-radius:16px 16px 0 0; }
+      .scrollPanel{ max-height:52vh; }
+      .listStack{ max-height:32vh; }
+      .passengerInfoModal, .copyAssignmentsModal{ align-items:flex-end; padding:10px; }
+      .passengerInfoCard, .copyAssignmentsCard{ width:100%; max-height:90vh; border-radius:16px 16px 0 0; }
       .passengerInfoGrid, .passengerPhaseCard dl{ grid-template-columns:1fr; }
     }
   </style>
@@ -99,7 +102,10 @@
         <div class="cardTitle">Mapa de Asignaciones</div>
         <div class="subtitle">Arrastrá choferes y pasajeros por fase para armar cada móvil.</div>
       </div>
-      <button class="btn" id="btnRefresh" type="button">↻ Actualizar</button>
+      <div class="row" style="gap:8px; flex-wrap:wrap;">
+        <button class="btnSecondary" id="btnCopyAssignments" type="button">Copiar asignaciones</button>
+        <button class="btn" id="btnRefresh" type="button">↻ Actualizar</button>
+      </div>
     </div>
 
     <div class="phasebar" id="phaseBar"></div>
@@ -107,7 +113,9 @@
     <div class="assignGrid" style="margin-top:14px;">
       <div class="card" style="padding:12px;">
         <div style="font-weight:900; margin-bottom:10px;">Móviles (según choferes disponibles en la fase)</div>
-        <div id="vehiclesGrid" class="vehicleGrid"></div>
+        <div class="scrollPanel">
+          <div id="vehiclesGrid" class="vehicleGrid"></div>
+        </div>
       </div>
 
       <div class="split">
@@ -145,7 +153,37 @@
   </div>
 </div>
 
+<div class="copyAssignmentsModal" id="copyAssignmentsModal" aria-hidden="true">
+  <div class="copyAssignmentsCard" role="dialog" aria-modal="true" aria-labelledby="copyAssignmentsTitle">
+    <div class="rowBetween" style="gap:12px; align-items:flex-start;">
+      <div>
+        <div class="cardTitle" id="copyAssignmentsTitle">Copiar asignaciones entre fases</div>
+        <div class="subtitle">Copia los pasajeros asignados a cada chofer desde una fase origen hacia una fase destino.</div>
+      </div>
+      <button class="iconbtn" id="btnCloseCopyAssignments" type="button" aria-label="Cerrar copia de asignaciones">✕</button>
+    </div>
+
+    <div class="grid2" style="margin-top:14px;">
+      <div class="field">
+        <label>Fase origen</label>
+        <select id="copySourcePhase"></select>
+      </div>
+      <div class="field">
+        <label>Fase destino</label>
+        <select id="copyTargetPhase"></select>
+      </div>
+    </div>
+
+    <p class="muted" style="margin-top:10px;">La fase destino se sobrescribe con las asignaciones de la fase origen.</p>
+
+    <div class="row" style="gap:10px; justify-content:flex-end; margin-top:14px;">
+      <button class="btnSecondary" id="btnCancelCopyAssignments" type="button">Cancelar</button>
+      <button class="btn primary" id="btnConfirmCopyAssignments" type="button">Copiar</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
-<script type="module" src="./map-assignments.js?v=2"></script>
+<script type="module" src="./map-assignments.js?v=3"></script>
 </body>
 </html>

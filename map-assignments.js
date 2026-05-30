@@ -86,8 +86,18 @@ function wire(){
     if (ev.target?.id === "passengerInfoModal") closePassengerInfoModal();
   });
 
+  $("btnCopyAssignments")?.addEventListener("click", openCopyAssignmentsModal);
+  $("btnCloseCopyAssignments")?.addEventListener("click", closeCopyAssignmentsModal);
+  $("btnCancelCopyAssignments")?.addEventListener("click", closeCopyAssignmentsModal);
+  $("btnConfirmCopyAssignments")?.addEventListener("click", copyAssignmentsBetweenPhases);
+  $("copyAssignmentsModal")?.addEventListener("click", (ev) => {
+    if (ev.target?.id === "copyAssignmentsModal") closeCopyAssignmentsModal();
+  });
+
   document.addEventListener("keydown", (ev) => {
-    if (ev.key === "Escape") closePassengerInfoModal();
+    if (ev.key !== "Escape") return;
+    closePassengerInfoModal();
+    closeCopyAssignmentsModal();
   });
 }
 
@@ -115,6 +125,99 @@ function renderPhaseBar(){
     const active = p.id === current;
     return `<button class="btn ${active ? "primary" : ""}" data-phase="${escapeHtml(p.id)}" type="button">${escapeHtml(p.name || p.id)}</button>`;
   }).join(" ");
+}
+
+
+function openCopyAssignmentsModal(){
+  if (!STATE.event?.id) return toast("Seleccioná un evento.");
+  const phases = STATE.event?.phases || [];
+  if (phases.length < 2) return toast("Necesitás al menos dos fases para copiar asignaciones.");
+
+  renderCopyPhaseOptions();
+  const modal = $("copyAssignmentsModal");
+  modal?.classList.add("show");
+  modal?.setAttribute("aria-hidden", "false");
+}
+
+function closeCopyAssignmentsModal(){
+  const modal = $("copyAssignmentsModal");
+  modal?.classList.remove("show");
+  modal?.setAttribute("aria-hidden", "true");
+}
+
+function renderCopyPhaseOptions(){
+  const phases = STATE.event?.phases || [];
+  const active = getActivePhaseId() || phases[0]?.id || "";
+  const firstDifferent = phases.find(ph => ph.id !== active)?.id || phases[1]?.id || "";
+  const options = phases
+    .map(ph => `<option value="${escapeHtml(ph.id)}">${escapeHtml(ph.name || ph.id)}</option>`)
+    .join("");
+
+  const source = $("copySourcePhase");
+  const target = $("copyTargetPhase");
+  if (source) {
+    source.innerHTML = options;
+    source.value = active;
+  }
+  if (target) {
+    target.innerHTML = options;
+    target.value = firstDifferent;
+  }
+}
+
+async function copyAssignmentsBetweenPhases(){
+  const sourcePhaseId = String($("copySourcePhase")?.value || "").trim();
+  const targetPhaseId = String($("copyTargetPhase")?.value || "").trim();
+
+  if (!STATE.event?.id) return toast("Seleccioná un evento.");
+  if (!sourcePhaseId || !targetPhaseId) return toast("Seleccioná fase origen y destino.");
+  if (sourcePhaseId === targetPhaseId) return toast("La fase origen y destino deben ser distintas.");
+
+  const sourceName = phaseLabel(sourcePhaseId);
+  const targetName = phaseLabel(targetPhaseId);
+  const ok = window.confirm(`Esto va a sobrescribir las asignaciones de "${targetName}" con las de "${sourceName}". ¿Querés continuar?`);
+  if (!ok) return;
+
+  if (UI.saving) return;
+  UI.saving = true;
+  try {
+    const writes = [];
+    (STATE.event?.assignments || new Map()).forEach((assignment, driverId) => {
+      const sourcePassengerIds = passengerIdsFromAssignmentForPhase(assignment, sourcePhaseId);
+      const phases = (assignment?.phases && typeof assignment.phases === "object") ? { ...assignment.phases } : {};
+      phases[targetPhaseId] = sourcePassengerIds;
+
+      const payload = {
+        phases,
+        updatedAt: serverTimestamp()
+      };
+      if (targetPhaseId === "ida") payload.passengerIds = sourcePassengerIds;
+
+      writes.push(setDoc(doc(db, "events", STATE.event.id, "assignments", driverId), payload, { merge: true }));
+    });
+
+    await Promise.all(writes);
+    closeCopyAssignmentsModal();
+    STATE.ui.activePhase = targetPhaseId;
+    await reloadAndRender(`Asignaciones copiadas de ${sourceName} a ${targetName}`);
+  } finally {
+    UI.saving = false;
+  }
+}
+
+function passengerIdsFromAssignmentForPhase(assignment, phaseId){
+  const phases = (assignment?.phases && typeof assignment.phases === "object") ? assignment.phases : {};
+  const phasePassengerIds = Array.isArray(phases[phaseId]) ? phases[phaseId] : [];
+  if (phasePassengerIds.length) return Array.from(new Set(phasePassengerIds.filter(Boolean)));
+  if (phaseId === "ida" && Array.isArray(assignment?.passengerIds)) {
+    return Array.from(new Set(assignment.passengerIds.filter(Boolean)));
+  }
+  return [];
+}
+
+function phaseLabel(phaseId){
+  const phase = (STATE.event?.phases || []).find(ph => ph.id === phaseId);
+  return phase?.name || phase?.id || phaseId || "fase";
 }
 
 function getDrivers(){
