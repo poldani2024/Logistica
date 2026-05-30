@@ -151,6 +151,7 @@ function fullName(p){ return `${p.lastName||""} ${p.firstName||""}`.trim() || "(
 
 let currentPassengerId = null;
 let currentPassengerScope = "all"; // all | event
+const DEFAULT_PASSENGER_TRANSPORT_TYPE = "Choche(Soka)";
 const EVENT_PHASES_CACHE = new Map();
 
 function isAdmin(){ return !!STATE.auth.isAdmin; }
@@ -379,7 +380,7 @@ function renderPhaseTransportDetailsControls(phases, meta){
   const legacyCompany = String(meta?.transportCompany || "").trim();
 
   host.innerHTML = phases.map(ph => {
-    const typeVal = String(typeByPhase[ph.id] ?? legacyType ?? "Omnibus").trim() || "Omnibus";
+    const typeVal = String(typeByPhase[ph.id] ?? legacyType ?? DEFAULT_PASSENGER_TRANSPORT_TYPE).trim() || DEFAULT_PASSENGER_TRANSPORT_TYPE;
     const companyVal = String(companyByPhase[ph.id] ?? legacyCompany ?? "");
     return `
       <div class="card" style="padding:10px; border:1px solid rgba(255,255,255,.08);">
@@ -387,6 +388,7 @@ function renderPhaseTransportDetailsControls(phases, meta){
         <div class="grid2">
           <div class="field"><label>Tipo de transporte</label>
             <select data-phase-transport-type="${escapeHtml(ph.id)}">
+              <option value="Choche(Soka)" ${typeVal === "Choche(Soka)" ? "selected" : ""}>Choche(Soka)</option>
               <option value="Omnibus" ${typeVal === "Omnibus" ? "selected" : ""}>Omnibus</option>
               <option value="Avion" ${typeVal === "Avion" ? "selected" : ""}>Avión</option>
               <option value="Tren" ${typeVal === "Tren" ? "selected" : ""}>Tren</option>
@@ -526,7 +528,7 @@ function getPassengerPhaseTransportDetailsInputs(phases){
   (phases || []).forEach(ph => {
     const typeInput = Array.from(document.querySelectorAll("[data-phase-transport-type]")).find(x => (x.dataset.phaseTransportType || "") === ph.id);
     const companyInput = Array.from(document.querySelectorAll("[data-phase-transport-company]")).find(x => (x.dataset.phaseTransportCompany || "") === ph.id);
-    const typeVal = (typeInput?.value || "Omnibus").trim() || "Omnibus";
+    const typeVal = (typeInput?.value || DEFAULT_PASSENGER_TRANSPORT_TYPE).trim() || DEFAULT_PASSENGER_TRANSPORT_TYPE;
     const companyVal = (companyInput?.value || "").trim();
     typeByPhase[ph.id] = typeVal;
     if (companyVal) companyByPhase[ph.id] = companyVal;
