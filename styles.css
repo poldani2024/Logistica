@@ -471,6 +471,7 @@ a.navbtn, .menu a{
   display:inline-flex;
   align-items:center;
   justify-content:center;
+  text-align:center;
   gap:10px;
   padding: 12px 14px;
   border-radius: 14px;
