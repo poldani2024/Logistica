@@ -29,9 +29,13 @@
     .dragItem.driver{ border-color:rgba(96,165,250,.45); }
     .dragItem.passenger{ border-color:rgba(250,204,21,.45); }
     .passengerItem{ min-width:160px; }
-    .passengerItemHead{ display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }
-    .passengerInfoBtn{ flex:0 0 auto; border:1px solid rgba(250,204,21,.42); border-radius:8px; background:rgba(250,204,21,.12); color:inherit; min-width:30px; min-height:28px; padding:2px 7px; line-height:1; cursor:pointer; font-size:17px; font-weight:900; }
+    .passengerItemHead, .assignedItemHead{ display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }
+    .passengerItemActions{ display:inline-flex; gap:6px; flex:0 0 auto; align-items:center; }
+    .passengerInfoBtn, .assignmentRemoveBtn{ flex:0 0 auto; border-radius:8px; color:inherit; min-width:30px; min-height:28px; padding:2px 7px; line-height:1; cursor:pointer; font-size:17px; font-weight:900; }
+    .passengerInfoBtn{ border:1px solid rgba(250,204,21,.42); background:rgba(250,204,21,.12); }
     .passengerInfoBtn:hover{ background:rgba(250,204,21,.22); }
+    .assignmentRemoveBtn{ border:1px solid rgba(248,113,113,.45); background:rgba(248,113,113,.12); font-size:14px; }
+    .assignmentRemoveBtn:hover{ background:rgba(248,113,113,.24); }
 
     .dropHover{ outline:2px solid rgba(96,165,250,.65); outline-offset:1px; }
 
@@ -185,6 +189,6 @@
 </div>
 
 <div class="toast" id="toast"></div>
-<script type="module" src="./map-assignments.js?v=4"></script>
+<script type="module" src="./map-assignments.js?v=5"></script>
 </body>
 </html>

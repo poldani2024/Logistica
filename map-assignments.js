@@ -61,7 +61,15 @@ function wire(){
   document.addEventListener("drop", onDrop);
   document.addEventListener("dragend", clearDropHover);
 
-  document.addEventListener("click", (ev) => {
+  document.addEventListener("click", async (ev) => {
+    const removeBtn = ev.target.closest("[data-assignment-remove]");
+    if (removeBtn) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      await removeAssignmentFromButton(removeBtn);
+      return;
+    }
+
     const infoBtn = ev.target.closest("[data-passenger-info]");
     if (infoBtn) {
       ev.preventDefault();
@@ -78,7 +86,7 @@ function wire(){
   });
 
   document.addEventListener("mousedown", (ev) => {
-    if (ev.target.closest("[data-passenger-info]")) ev.stopPropagation();
+    if (ev.target.closest("[data-passenger-info], [data-assignment-remove]")) ev.stopPropagation();
   });
 
   $("btnClosePassengerInfo")?.addEventListener("click", closePassengerInfoModal);
@@ -343,7 +351,7 @@ function renderVehicles(){
         const meta = STATE.event?.passengersMeta?.get(p.id) || {};
         const time = passengerTimeForPhase(meta, getActivePhaseId());
         const destination = passengerDestinationForPhase(meta, getActivePhaseId(), p);
-        return passengerDragItemHtml(p, { time, destination });
+        return passengerDragItemHtml(p, { time, destination, removable: true });
       })
       .join("");
 
@@ -356,7 +364,7 @@ function renderVehicles(){
         <div class="vehicleBody">
           <div class="driverSlot ${drv ? "filled" : ""}" data-drop-zone="vehicle-driver" data-vehicle="${escapeHtml(vehicleNo)}">
             ${drv
-              ? `<div class="dragItem driver" draggable="true" data-drag-type="driver-assigned" data-vehicle="${escapeHtml(vehicleNo)}" data-driver-id="${escapeHtml(drv.id)}">${escapeHtml(driverLabel(drv))}<small>Puestos: ${cap}</small></div>`
+              ? assignedDriverItemHtml(drv, vehicleNo, cap)
               : "Soltá un chofer aquí"}
           </div>
 
@@ -406,12 +414,31 @@ function renderPassengerPool(){
 }
 
 
-function passengerDragItemHtml(p, { time = "", destination = "" } = {}){
+function assignedDriverItemHtml(driver, vehicleNo, capacity){
+  return `
+    <div class="dragItem driver assignedItem" draggable="true" data-drag-type="driver-assigned" data-vehicle="${escapeHtml(vehicleNo)}" data-driver-id="${escapeHtml(driver.id)}">
+      <div class="assignedItemHead">
+        <span>${escapeHtml(driverLabel(driver))}</span>
+        <button class="assignmentRemoveBtn" type="button" data-assignment-remove="driver" data-vehicle="${escapeHtml(vehicleNo)}" data-driver-id="${escapeHtml(driver.id)}" aria-label="Quitar chofer ${escapeHtml(driverLabel(driver))} del móvil" title="Quitar del móvil">🗑️</button>
+      </div>
+      <small>Puestos: ${capacity}</small>
+    </div>
+  `;
+}
+
+function passengerDragItemHtml(p, { time = "", destination = "", removable = false } = {}){
+  const removeButton = removable
+    ? `<button class="assignmentRemoveBtn" type="button" data-assignment-remove="passenger" data-passenger-id="${escapeHtml(p.id)}" aria-label="Quitar pasajero ${escapeHtml(passengerLabel(p))} del móvil" title="Quitar del móvil">🗑️</button>`
+    : "";
+
   return `
     <div class="dragItem passenger passengerItem" draggable="true" data-drag-type="passenger" data-passenger-id="${escapeHtml(p.id)}">
       <div class="passengerItemHead">
         <span>${escapeHtml(passengerLabel(p))}</span>
-        <button class="passengerInfoBtn" type="button" data-passenger-info="${escapeHtml(p.id)}" aria-label="Ver información de ${escapeHtml(passengerLabel(p))}" title="Ver información">☰</button>
+        <span class="passengerItemActions">
+          <button class="passengerInfoBtn" type="button" data-passenger-info="${escapeHtml(p.id)}" aria-label="Ver información de ${escapeHtml(passengerLabel(p))}" title="Ver información">☰</button>
+          ${removeButton}
+        </span>
       </div>
       <small>Horario: ${escapeHtml(time || "—")}</small>
       <small>Destino: ${escapeHtml(destination || "—")}</small>
@@ -498,7 +525,43 @@ function passengerPhaseInfoHtml(passenger, meta, phase){
   `;
 }
 
+async function removeAssignmentFromButton(btn){
+  const type = btn?.dataset?.assignmentRemove || "";
+  if (type === "passenger") {
+    await removeAssignedPassenger(btn.dataset.passengerId || "");
+    return;
+  }
+  if (type === "driver") {
+    removeAssignedDriver(btn.dataset.vehicle || "", btn.dataset.driverId || "");
+  }
+}
+
+async function removeAssignedPassenger(passengerId){
+  if (!passengerId) return;
+  const currentDriver = currentDriverOfPassenger(passengerId);
+  if (!currentDriver) return toast("El pasajero no está asignado a ningún móvil en esta fase.");
+  await persistMovePassenger(passengerId, currentDriver, null);
+  await reloadAndRender("Pasajero retirado del móvil");
+}
+
+function removeAssignedDriver(vehicleNo, driverId){
+  if (!vehicleNo || !driverId) return;
+  if (vehicleOfDriver(driverId) !== String(vehicleNo)) return;
+
+  const currentPassengers = getPassengersForVehicle(vehicleNo);
+  if (currentPassengers.length) {
+    toast("No podés retirar el chofer si el móvil tiene pasajeros.");
+    return;
+  }
+
+  UI.vehicleDriver.set(String(vehicleNo), null);
+  render();
+  toast("Chofer retirado del móvil");
+}
+
 function onDragStart(ev){
+  if (ev.target.closest("button")) return;
+
   const item = ev.target.closest("[data-drag-type]");
   if (!item) return;
 
