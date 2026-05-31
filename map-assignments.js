@@ -61,12 +61,51 @@ function wire(){
   document.addEventListener("drop", onDrop);
   document.addEventListener("dragend", clearDropHover);
 
-  document.addEventListener("click", (ev) => {
+  document.addEventListener("click", async (ev) => {
+    const removeBtn = ev.target.closest("[data-assignment-remove]");
+    if (removeBtn) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      await removeAssignmentFromButton(removeBtn);
+      return;
+    }
+
+    const infoBtn = ev.target.closest("[data-passenger-info]");
+    if (infoBtn) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      openPassengerInfoModal(infoBtn.dataset.passengerInfo || "");
+      return;
+    }
+
     const phaseBtn = ev.target.closest("[data-phase]");
     if (!phaseBtn) return;
     STATE.ui.activePhase = phaseBtn.dataset.phase || null;
     buildVehicleMapFromAssignments();
     render();
+  });
+
+  document.addEventListener("mousedown", (ev) => {
+    if (ev.target.closest("[data-passenger-info], [data-assignment-remove]")) ev.stopPropagation();
+  });
+
+  $("btnClosePassengerInfo")?.addEventListener("click", closePassengerInfoModal);
+  $("passengerInfoModal")?.addEventListener("click", (ev) => {
+    if (ev.target?.id === "passengerInfoModal") closePassengerInfoModal();
+  });
+
+  $("btnCopyAssignments")?.addEventListener("click", openCopyAssignmentsModal);
+  $("btnCloseCopyAssignments")?.addEventListener("click", closeCopyAssignmentsModal);
+  $("btnCancelCopyAssignments")?.addEventListener("click", closeCopyAssignmentsModal);
+  $("btnConfirmCopyAssignments")?.addEventListener("click", copyAssignmentsBetweenPhases);
+  $("copyAssignmentsModal")?.addEventListener("click", (ev) => {
+    if (ev.target?.id === "copyAssignmentsModal") closeCopyAssignmentsModal();
+  });
+
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key !== "Escape") return;
+    closePassengerInfoModal();
+    closeCopyAssignmentsModal();
   });
 }
 
@@ -96,6 +135,127 @@ function renderPhaseBar(){
   }).join(" ");
 }
 
+
+function openCopyAssignmentsModal(){
+  if (!STATE.event?.id) return toast("Seleccioná un evento.");
+  const phases = STATE.event?.phases || [];
+  if (phases.length < 2) return toast("Necesitás al menos dos fases para copiar asignaciones.");
+
+  renderCopyPhaseOptions();
+  const modal = $("copyAssignmentsModal");
+  modal?.classList.add("show");
+  modal?.setAttribute("aria-hidden", "false");
+}
+
+function closeCopyAssignmentsModal(){
+  const modal = $("copyAssignmentsModal");
+  modal?.classList.remove("show");
+  modal?.setAttribute("aria-hidden", "true");
+}
+
+function renderCopyPhaseOptions(){
+  const phases = STATE.event?.phases || [];
+  const active = getActivePhaseId() || phases[0]?.id || "";
+  const firstDifferent = phases.find(ph => ph.id !== active)?.id || phases[1]?.id || "";
+  const options = phases
+    .map(ph => `<option value="${escapeHtml(ph.id)}">${escapeHtml(ph.name || ph.id)}</option>`)
+    .join("");
+
+  const source = $("copySourcePhase");
+  const target = $("copyTargetPhase");
+  if (source) {
+    source.innerHTML = options;
+    source.value = active;
+  }
+  if (target) {
+    target.innerHTML = options;
+    target.value = firstDifferent;
+  }
+}
+
+async function copyAssignmentsBetweenPhases(){
+  const sourcePhaseId = String($("copySourcePhase")?.value || "").trim();
+  const targetPhaseId = String($("copyTargetPhase")?.value || "").trim();
+
+  if (!STATE.event?.id) return toast("Seleccioná un evento.");
+  if (!sourcePhaseId || !targetPhaseId) return toast("Seleccioná fase origen y destino.");
+  if (sourcePhaseId === targetPhaseId) return toast("La fase origen y destino deben ser distintas.");
+
+  const sourceName = phaseLabel(sourcePhaseId);
+  const targetName = phaseLabel(targetPhaseId);
+  const ok = window.confirm(`Esto va a sobrescribir las asignaciones de "${targetName}" con las de "${sourceName}". ¿Querés continuar?`);
+  if (!ok) return;
+
+  if (UI.saving) return;
+  UI.saving = true;
+  try {
+    const writes = [];
+    const copiedPassengerIds = new Set();
+
+    (STATE.event?.assignments || new Map()).forEach((assignment, driverId) => {
+      const sourcePassengerIds = passengerIdsFromAssignmentForPhase(assignment, sourcePhaseId);
+      sourcePassengerIds.forEach(pid => copiedPassengerIds.add(pid));
+
+      const phases = (assignment?.phases && typeof assignment.phases === "object") ? { ...assignment.phases } : {};
+      phases[targetPhaseId] = sourcePassengerIds;
+
+      const payload = {
+        phases,
+        updatedAt: serverTimestamp()
+      };
+      if (targetPhaseId === "ida") payload.passengerIds = sourcePassengerIds;
+
+      writes.push(setDoc(doc(db, "events", STATE.event.id, "assignments", driverId), payload, { merge: true }));
+    });
+
+    copiedPassengerIds.forEach(passengerId => {
+      writes.push(setDoc(
+        doc(db, "events", STATE.event.id, "eventPassengers", passengerId),
+        passengerPhaseAddressPayload(passengerId, sourcePhaseId, targetPhaseId),
+        { merge: true }
+      ));
+    });
+
+    await Promise.all(writes);
+    closeCopyAssignmentsModal();
+    STATE.ui.activePhase = targetPhaseId;
+    await reloadAndRender(`Asignaciones copiadas de ${sourceName} a ${targetName}`);
+  } finally {
+    UI.saving = false;
+  }
+}
+
+function passengerIdsFromAssignmentForPhase(assignment, phaseId){
+  const phases = (assignment?.phases && typeof assignment.phases === "object") ? assignment.phases : {};
+  const phasePassengerIds = Array.isArray(phases[phaseId]) ? phases[phaseId] : [];
+  if (phasePassengerIds.length) return Array.from(new Set(phasePassengerIds.filter(Boolean)));
+  if (phaseId === "ida" && Array.isArray(assignment?.passengerIds)) {
+    return Array.from(new Set(assignment.passengerIds.filter(Boolean)));
+  }
+  return [];
+}
+
+function phaseLabel(phaseId){
+  const phase = (STATE.event?.phases || []).find(ph => ph.id === phaseId);
+  return phase?.name || phase?.id || phaseId || "fase";
+}
+
+function passengerPhaseAddressPayload(passengerId, sourcePhaseId, targetPhaseId){
+  const passenger = passengerById(passengerId) || { id: passengerId };
+  const meta = STATE.event?.passengersMeta?.get(passengerId) || {};
+  const originAddress = phaseDestinationForPhase(sourcePhaseId);
+  const destinationAddress = passengerDeclaredAddressForPhase(meta, targetPhaseId, passenger);
+
+  const payload = {
+    updatedAt: serverTimestamp()
+  };
+
+  if (originAddress) payload.originAddressByPhase = { [targetPhaseId]: originAddress };
+  if (destinationAddress) payload.destinationAddressByPhase = { [targetPhaseId]: destinationAddress };
+
+  return payload;
+}
+
 function getDrivers(){
   return driversForPhase(getActivePhaseId()) || [];
 }
@@ -115,7 +275,7 @@ function getPassengersInPhase(){
         ...base,
         id: pid,
         _time: passengerTimeForPhase(meta, phaseId),
-        _destination: passengerDestinationForPhase(meta, phaseId)
+        _destination: passengerDestinationForPhase(meta, phaseId, base)
       };
     })
     .sort((a, b) => passengerLabel(a).localeCompare(passengerLabel(b), "es", { sensitivity: "base" }));
@@ -190,8 +350,8 @@ function renderVehicles(){
       .map(p => {
         const meta = STATE.event?.passengersMeta?.get(p.id) || {};
         const time = passengerTimeForPhase(meta, getActivePhaseId());
-        const destination = passengerDestinationForPhase(meta, getActivePhaseId());
-        return `<div class="dragItem passenger" draggable="true" data-drag-type="passenger" data-passenger-id="${escapeHtml(p.id)}">${escapeHtml(passengerLabel(p))}<small>Horario: ${escapeHtml(time || "—")}</small><small>Destino: ${escapeHtml(destination || "—")}</small></div>`;
+        const destination = passengerDestinationForPhase(meta, getActivePhaseId(), p);
+        return passengerDragItemHtml(p, { time, destination, removable: true });
       })
       .join("");
 
@@ -204,7 +364,7 @@ function renderVehicles(){
         <div class="vehicleBody">
           <div class="driverSlot ${drv ? "filled" : ""}" data-drop-zone="vehicle-driver" data-vehicle="${escapeHtml(vehicleNo)}">
             ${drv
-              ? `<div class="dragItem driver" draggable="true" data-drag-type="driver-assigned" data-vehicle="${escapeHtml(vehicleNo)}" data-driver-id="${escapeHtml(drv.id)}">${escapeHtml(driverLabel(drv))}<small>Puestos: ${cap}</small></div>`
+              ? assignedDriverItemHtml(drv, vehicleNo, cap)
               : "Soltá un chofer aquí"}
           </div>
 
@@ -249,11 +409,159 @@ function renderPassengerPool(){
   if (count) count.textContent = `${all.length}`;
 
   host.innerHTML = pending.length
-    ? pending.map(p => `<div class="dragItem passenger" draggable="true" data-drag-type="passenger" data-passenger-id="${escapeHtml(p.id)}">${escapeHtml(passengerLabel(p))}<small>Horario: ${escapeHtml(p._time || "—")}</small><small>Destino: ${escapeHtml(p._destination || "—")}</small></div>`).join("")
+    ? pending.map(p => passengerDragItemHtml(p, { time: p._time, destination: p._destination })).join("")
     : '<div class="emptyHint">No hay pasajeros pendientes para esta fase.</div>';
 }
 
+
+function assignedDriverItemHtml(driver, vehicleNo, capacity){
+  return `
+    <div class="dragItem driver assignedItem" draggable="true" data-drag-type="driver-assigned" data-vehicle="${escapeHtml(vehicleNo)}" data-driver-id="${escapeHtml(driver.id)}">
+      <div class="assignedItemHead">
+        <span>${escapeHtml(driverLabel(driver))}</span>
+        <button class="assignmentRemoveBtn" type="button" data-assignment-remove="driver" data-vehicle="${escapeHtml(vehicleNo)}" data-driver-id="${escapeHtml(driver.id)}" aria-label="Quitar chofer ${escapeHtml(driverLabel(driver))} del móvil" title="Quitar del móvil">🗑️</button>
+      </div>
+      <small>Puestos: ${capacity}</small>
+    </div>
+  `;
+}
+
+function passengerDragItemHtml(p, { time = "", destination = "", removable = false } = {}){
+  const removeButton = removable
+    ? `<button class="assignmentRemoveBtn" type="button" data-assignment-remove="passenger" data-passenger-id="${escapeHtml(p.id)}" aria-label="Quitar pasajero ${escapeHtml(passengerLabel(p))} del móvil" title="Quitar del móvil">🗑️</button>`
+    : "";
+
+  return `
+    <div class="dragItem passenger passengerItem" draggable="true" data-drag-type="passenger" data-passenger-id="${escapeHtml(p.id)}">
+      <div class="passengerItemHead">
+        <span>${escapeHtml(passengerLabel(p))}</span>
+        <span class="passengerItemActions">
+          <button class="passengerInfoBtn" type="button" data-passenger-info="${escapeHtml(p.id)}" aria-label="Ver información de ${escapeHtml(passengerLabel(p))}" title="Ver información">☰</button>
+          ${removeButton}
+        </span>
+      </div>
+      <small>Horario: ${escapeHtml(time || "—")}</small>
+      <small>Destino: ${escapeHtml(destination || "—")}</small>
+    </div>
+  `;
+}
+
+function openPassengerInfoModal(passengerId){
+  const modal = $("passengerInfoModal");
+  const title = $("passengerInfoTitle");
+  const body = $("passengerInfoBody");
+  if (!modal || !title || !body) return;
+
+  const passenger = passengerById(passengerId);
+  if (!passenger) {
+    toast("No se encontró el pasajero.");
+    return;
+  }
+
+  title.textContent = passengerLabel(passenger);
+  body.innerHTML = passengerInfoHtml(passenger);
+  modal.classList.add("show");
+  modal.setAttribute("aria-hidden", "false");
+}
+
+function closePassengerInfoModal(){
+  const modal = $("passengerInfoModal");
+  modal?.classList.remove("show");
+  modal?.setAttribute("aria-hidden", "true");
+}
+
+function passengerInfoHtml(passenger){
+  const meta = STATE.event?.passengersMeta?.get(passenger.id) || {};
+  const phases = STATE.event?.phases || [];
+  const participating = phases.filter(ph => passengerRequiresTransportForPhase(passenger.id, ph.id));
+  const address = String(meta.address || passenger.address || "").trim();
+  const localidad = String(meta.localidad || passenger.localidad || "").trim();
+
+  const phasesHtml = phases.length
+    ? phases.map(ph => passengerPhaseInfoHtml(passenger, meta, ph)).join("")
+    : '<div class="emptyHint">Este evento no tiene fases definidas.</div>';
+
+  return `
+    <div class="passengerInfoGrid">
+      <div><span>Nombre</span><strong>${escapeHtml(passenger.firstName || "—")}</strong></div>
+      <div><span>Apellido</span><strong>${escapeHtml(passenger.lastName || "—")}</strong></div>
+      <div><span>Dirección</span><strong>${escapeHtml(address || "—")}</strong></div>
+      <div><span>Localidad</span><strong>${escapeHtml(localidad || "—")}</strong></div>
+      <div class="full"><span>Fases en las que participa</span><strong>${escapeHtml(participating.map(ph => ph.name || ph.id).join(", ") || "Ninguna")}</strong></div>
+    </div>
+    <div class="passengerInfoSectionTitle">Información por fase</div>
+    <div class="passengerPhaseList">${phasesHtml}</div>
+  `;
+}
+
+function passengerPhaseInfoHtml(passenger, meta, phase){
+  const phaseId = phase.id;
+  const passengerId = passenger?.id || "";
+  const participates = passengerRequiresTransportForPhase(passengerId, phaseId);
+  const note = passengerNoteForPhase(meta, phaseId);
+  const transportType = passengerTransportTypeForPhase(meta, phaseId);
+  const transportCompany = passengerTransportCompanyForPhase(meta, phaseId);
+  const destination = passengerDestinationForPhase(meta, phaseId, passenger);
+  const time = passengerTimeForPhase(meta, phaseId);
+  const phaseDate = String(phase.date || "").trim();
+  const origin = passengerOriginForPhase(meta, phaseId);
+
+  return `
+    <article class="passengerPhaseCard ${participates ? "" : "mutedPhase"}">
+      <div class="rowBetween" style="gap:8px; align-items:flex-start;">
+        <strong>${escapeHtml(phase.name || phaseId)}</strong>
+        <span class="phaseStatus ${participates ? "yes" : "no"}">${participates ? "Participa" : "No participa"}</span>
+      </div>
+      <dl>
+        <div><dt>Fecha</dt><dd>${escapeHtml(phaseDate || "—")}</dd></div>
+        <div><dt>Horario</dt><dd>${escapeHtml(time || "—")}</dd></div>
+        <div><dt>Origen</dt><dd>${escapeHtml(origin || "—")}</dd></div>
+        <div><dt>Destino</dt><dd>${escapeHtml(destination || "—")}</dd></div>
+        <div><dt>Tipo de transporte</dt><dd>${escapeHtml(transportType || "—")}</dd></div>
+        <div><dt>Empresa</dt><dd>${escapeHtml(transportCompany || "—")}</dd></div>
+        <div class="full"><dt>Observaciones</dt><dd>${escapeHtml(note || "—")}</dd></div>
+      </dl>
+    </article>
+  `;
+}
+
+async function removeAssignmentFromButton(btn){
+  const type = btn?.dataset?.assignmentRemove || "";
+  if (type === "passenger") {
+    await removeAssignedPassenger(btn.dataset.passengerId || "");
+    return;
+  }
+  if (type === "driver") {
+    removeAssignedDriver(btn.dataset.vehicle || "", btn.dataset.driverId || "");
+  }
+}
+
+async function removeAssignedPassenger(passengerId){
+  if (!passengerId) return;
+  const currentDriver = currentDriverOfPassenger(passengerId);
+  if (!currentDriver) return toast("El pasajero no está asignado a ningún móvil en esta fase.");
+  await persistMovePassenger(passengerId, currentDriver, null);
+  await reloadAndRender("Pasajero retirado del móvil");
+}
+
+function removeAssignedDriver(vehicleNo, driverId){
+  if (!vehicleNo || !driverId) return;
+  if (vehicleOfDriver(driverId) !== String(vehicleNo)) return;
+
+  const currentPassengers = getPassengersForVehicle(vehicleNo);
+  if (currentPassengers.length) {
+    toast("No podés retirar el chofer si el móvil tiene pasajeros.");
+    return;
+  }
+
+  UI.vehicleDriver.set(String(vehicleNo), null);
+  render();
+  toast("Chofer retirado del móvil");
+}
+
 function onDragStart(ev){
+  if (ev.target.closest("button")) return;
+
   const item = ev.target.closest("[data-drag-type]");
   if (!item) return;
 
@@ -591,16 +899,62 @@ function passengerTimeForPhase(meta, phaseId){
   return String(((m.timeByPhase && m.timeByPhase[phaseId]) || m.time || "")).trim();
 }
 
-function passengerDestinationForPhase(meta, phaseId){
+function passengerDestinationForPhase(meta, phaseId, passenger = null){
   const m = (meta && typeof meta === "object") ? meta : {};
   const byPhase = (m.destinationAddressByPhase && typeof m.destinationAddressByPhase === "object") ? m.destinationAddressByPhase : {};
-  const phaseDestination = phaseDestinationForPhase(phaseId);
-  return String(byPhase[phaseId] || m.destinationAddress || phaseDestination || "").trim();
+  return String(
+    byPhase[phaseId]
+    || m.destinationAddress
+    || phaseDestinationForPhase(phaseId)
+    || passengerDeclaredAddressForPhase(m, phaseId, passenger)
+    || ""
+  ).trim();
+}
+
+function passengerOriginForPhase(meta, phaseId){
+  const m = (meta && typeof meta === "object") ? meta : {};
+  const byPhase = (m.originAddressByPhase && typeof m.originAddressByPhase === "object") ? m.originAddressByPhase : {};
+  const phase = (STATE.event?.phases || []).find(p => p.id === phaseId) || {};
+  return String(byPhase[phaseId] || addressWithLocality(phase.originAddress, phase.localidad || STATE.event?.localidad) || "").trim();
+}
+
+function passengerDeclaredAddressForPhase(meta, phaseId, passenger = null){
+  const m = (meta && typeof meta === "object") ? meta : {};
+  const byPhase = (m.destinationAddressByPhase && typeof m.destinationAddressByPhase === "object") ? m.destinationAddressByPhase : {};
+  return String(
+    byPhase[phaseId]
+    || m.destinationAddress
+    || addressWithLocality(m.address, m.localidad)
+    || addressWithLocality(passenger?.address, passenger?.localidad)
+    || ""
+  ).trim();
+}
+
+function addressWithLocality(address, locality){
+  return [address, locality].map(v => String(v || "").trim()).filter(Boolean).join(" · ");
+}
+
+function passengerNoteForPhase(meta, phaseId){
+  const m = (meta && typeof meta === "object") ? meta : {};
+  const byPhase = (m.notesByPhase && typeof m.notesByPhase === "object") ? m.notesByPhase : {};
+  return String(byPhase[phaseId] || m.notes || "").trim();
+}
+
+function passengerTransportTypeForPhase(meta, phaseId){
+  const m = (meta && typeof meta === "object") ? meta : {};
+  const byPhase = (m.transportTypeByPhase && typeof m.transportTypeByPhase === "object") ? m.transportTypeByPhase : {};
+  return String(byPhase[phaseId] || m.transportType || "").trim();
+}
+
+function passengerTransportCompanyForPhase(meta, phaseId){
+  const m = (meta && typeof meta === "object") ? meta : {};
+  const byPhase = (m.transportCompanyByPhase && typeof m.transportCompanyByPhase === "object") ? m.transportCompanyByPhase : {};
+  return String(byPhase[phaseId] || m.transportCompany || "").trim();
 }
 
 function phaseDestinationForPhase(phaseId){
   const phase = (STATE.event?.phases || []).find(p => p.id === phaseId) || {};
-  return String(phase.destinationAddress || phase.address || "").trim();
+  return addressWithLocality(phase.destinationAddress || phase.address || STATE.event?.address, phase.localidad || STATE.event?.localidad);
 }
 
 function parseClockToMinutes(value){
