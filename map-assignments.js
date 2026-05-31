@@ -889,25 +889,6 @@ function passengerTransportCompanyForPhase(meta, phaseId){
   return String(byPhase[phaseId] || m.transportCompany || "").trim();
 }
 
-
-function passengerNoteForPhase(meta, phaseId){
-  const m = (meta && typeof meta === "object") ? meta : {};
-  const byPhase = (m.notesByPhase && typeof m.notesByPhase === "object") ? m.notesByPhase : {};
-  return String(byPhase[phaseId] || m.notes || "").trim();
-}
-
-function passengerTransportTypeForPhase(meta, phaseId){
-  const m = (meta && typeof meta === "object") ? meta : {};
-  const byPhase = (m.transportTypeByPhase && typeof m.transportTypeByPhase === "object") ? m.transportTypeByPhase : {};
-  return String(byPhase[phaseId] || m.transportType || "").trim();
-}
-
-function passengerTransportCompanyForPhase(meta, phaseId){
-  const m = (meta && typeof meta === "object") ? meta : {};
-  const byPhase = (m.transportCompanyByPhase && typeof m.transportCompanyByPhase === "object") ? m.transportCompanyByPhase : {};
-  return String(byPhase[phaseId] || m.transportCompany || "").trim();
-}
-
 function phaseDestinationForPhase(phaseId){
   const phase = (STATE.event?.phases || []).find(p => p.id === phaseId) || {};
   return addressWithLocality(phase.destinationAddress || phase.address || STATE.event?.address, phase.localidad || STATE.event?.localidad);

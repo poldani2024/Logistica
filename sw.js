@@ -109,8 +109,8 @@ self.addEventListener("push", (event) => {
   const title = payload.title || "Logística SGI";
   const options = {
     body: payload.body || "",
-    icon: "./icons/icon-192.png",
-    badge: "./icons/icon-192.png",
+    icon: "./icons/icon.svg",
+    badge: "./icons/icon.svg",
     data: payload.data || {},
     tag: payload.tag || "logistica-notif",
     renotify: true,

@@ -187,7 +187,7 @@ La app puede instalarse en el dispositivo del usuario.
 
 - **Service Worker** (`sw.js`): cachea assets estáticos, soporta modo offline básico
 - **Manifest** (`manifest.json`): define nombre, íconos, colores y shortcuts
-- **Iconos**: crear carpeta `icons/` con `icon-192.png` e `icon-512.png`
+- **Iconos**: usar `icons/icon.svg` como ícono PWA y favicon
 
 ---
 
